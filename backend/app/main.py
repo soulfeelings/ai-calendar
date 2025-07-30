@@ -1,10 +1,9 @@
 import uvicorn
 from fastapi import FastAPI
-
 app = FastAPI()
 
 @app.get("/healthcheck")
-def healthcheck():
+async def healthcheck():
     return True
 
 if __name__ == "__main__":

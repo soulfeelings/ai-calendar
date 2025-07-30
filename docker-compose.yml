@@ -1,10 +1,8 @@
-version: '3.8'
-
 
 services:
   mongodb:
     image: mongo:latest
-    container_name: mongodb
+    container_name: mongodbe
     restart: always
     ports:
       - "27017:27017"
@@ -16,14 +14,22 @@ services:
     volumes:
       - mongodb_data:/data/db
 
-  cache:
-    image: redis:latest
-    container_name: redis
-    restart: always
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
 
     ports:
-      - "6379:6379"
-
+      - "8000:8000"
+    env_file:
+      - ./backend/app/.env
+    volumes:
+      - ./backend/app:/app/app  # Ключевое изменение
+    environment:
+      - UVICORN_RELOAD=true
+    depends_on:
+      - mongodb
 
 volumes:
   mongodb_data:
