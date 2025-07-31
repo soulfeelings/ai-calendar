@@ -1,6 +1,10 @@
 import uvicorn
 from fastapi import FastAPI
+from api import routers
 app = FastAPI()
+
+for i in routers:
+    app.include_router(i)
 
 @app.get("/healthcheck")
 async def healthcheck():

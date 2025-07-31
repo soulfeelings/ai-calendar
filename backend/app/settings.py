@@ -7,6 +7,8 @@ class Settings(BaseSettings):
     MONGO_PASSWORD: str = 'password'
     MONGO_DB: str = 'db'
 
+    CLIENT_ID: str = 'client_id'
+    CLIENT_SECRET: str = 'client_secret'
 
     class Config:
         env_file = ".env"
