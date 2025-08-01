@@ -13,6 +13,7 @@ class MongoDB:
         self.db = self.client[db]
 
         #Инициализация коллекц
+        self.users = self.db.users
         self.goals = self.db.goals
         self.suggestions = self.db.suggestions
 

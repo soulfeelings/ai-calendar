@@ -1,8 +1,15 @@
+from datetime import datetime
+
 from settings import settings
 import urllib.parse
 import aiohttp
 from fastapi import HTTPException, status
 import jwt
+import secrets
+from repository import GoogleOauthRepo
+
+google_oauth_repo = GoogleOauthRepo()
+
 
 class GoogleOauthService:
     google_token_url: str = "https://oauth2.googleapis.com/token"
@@ -19,7 +26,7 @@ class GoogleOauthService:
                 "email",
             ]),
             "access_type": "offline",
-            #state ...
+            #TODO: "state": ,
         }
 
         query_string = urllib.parse.urlencode(query_params, quote_via=urllib.parse.quote)
@@ -47,8 +54,26 @@ class GoogleOauthService:
 
                 user_data = self.decode_id_token(res["id_token"])
 
+                await google_oauth_repo.add_user(
+                    {
+                        "user_sub": user_data["sub"],
+                        "access_token": res["access_token"],
+                        "refresh_token": res["refresh_token"],
+                        "expires_in": res["expires_in"],
+                        "refresh_token_expires_in": res["refresh_token_expires_in"],
+                        "user_data": {
+                            "email": user_data["email"],
+                            "name": user_data["name"],
+                            "picture": user_data["picture"],
+                        },
+                        "updated_at": datetime.now()
+                    }
+                )
+
                 return {
-                    "user": user_data,
+                    "email": user_data["email"],
+                    "name": user_data["name"],
+                    "picture": user_data["picture"],
                 }
 
     def decode_id_token(self, id_token: str):
