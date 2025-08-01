@@ -1,8 +1,10 @@
 from datetime import datetime, timedelta, timezone
 import jwt
+from fastapi import HTTPException, status
 from settings import settings
 from exception import TokenNotCorrectError, TokenExpiredError
 from repository import AuthRepo
+import aiohttp
 
 auth_repo = AuthRepo()
 
@@ -45,3 +47,7 @@ class AuthService:
 
         except ValueError:
             raise
+
+    async def logout(self, user_id):
+        return await auth_repo.update_revoked_and_google_tokens(user_id)
+

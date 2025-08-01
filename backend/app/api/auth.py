@@ -71,3 +71,15 @@ async def validate_access(
 
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post(
+    "/logout",
+    status_code=status.HTTP_200_OK,
+)
+async def logout_profile(
+    user_id: Annotated[str, Depends(get_user_request_id)],
+):
+    return await auth_service.logout(user_id)
+
+

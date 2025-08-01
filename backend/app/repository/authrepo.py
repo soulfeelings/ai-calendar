@@ -1,9 +1,12 @@
 from datetime import datetime
+
+from fastapi import HTTPException
+
 from exception import RefreshTokenExpiredError, TokenNotCorrectError
 from database import mongodb
 
 class AuthRepo:
-    async def get_info_from_sub(self, sub):
+    async def get_info_from_sub(self, sub: str):
         user_info = await mongodb.users.find_one({"user_sub": sub})
         if not user_info:
             raise ValueError("Неправильное id или не зарегистрирован")
@@ -14,7 +17,7 @@ class AuthRepo:
             "picture": user_info["user_data"]["picture"],
             }
 
-    async def get_info_from_refresh(self, refresh_token):
+    async def get_info_from_refresh(self, refresh_token: str):
         refresh_info = await mongodb.refresh_tokens.find_one({"refresh_token": refresh_token})
         if not refresh_info:
             raise ValueError("Неверный токен")
@@ -23,3 +26,20 @@ class AuthRepo:
             raise RefreshTokenExpiredError
 
         return refresh_info['sub']
+
+
+    async def update_revoked_and_google_tokens(self, user_id):
+        res = await mongodb.refresh_tokens.update_one(
+            {"sub": user_id},
+            {"$set": {"is_revoked": True}},
+        )
+
+        res1 = await mongodb.users.update_one(
+            {"user_sub": user_id},
+            {"$set": {"access_token": "",
+                      "refresh_token": ""}},)
+
+        if res.modified_count + res1.modified_count != 2:
+            raise HTTPException(status_code=404, detail="Not Found. Check token")
+
+        return True
