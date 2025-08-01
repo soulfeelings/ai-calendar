@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 import jwt
 from settings import settings
 from exception import TokenNotCorrectError, TokenExpiredError
@@ -27,3 +27,24 @@ class AuthService:
         except ValueError:
             raise
 
+    async def update_refresh_token(self, refresh_token: str):
+        try:
+            user_id = await auth_repo.get_info_from_refresh(refresh_token=refresh_token)
+            access_payload = {
+                    "sub": user_id,
+                    "exp": datetime.now() + timedelta(minutes=40),
+            }
+
+            access_token = jwt.encode(access_payload, settings.SECRET_JWT_KEY, algorithm="HS256")
+
+            return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "expires_in": 2400,
+        }
+
+        except ValueError:
+            raise
+
+        except Exception:
+            raise

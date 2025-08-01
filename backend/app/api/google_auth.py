@@ -5,10 +5,10 @@ from fastapi import status
 from service import GoogleOauthService
 
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = APIRouter(prefix="/google", tags=["google"])
 google_service = GoogleOauthService()
 
-@router.get("/google")
+@router.get("/")
 def get_google_oauth_redirect_uri():
     """
     :return: редиректит пользователя на страницу регистарции гугла с правильной ссылкой
@@ -17,7 +17,7 @@ def get_google_oauth_redirect_uri():
     return RedirectResponse(url=uri, status_code=status.HTTP_302_FOUND)
 
 
-@router.post("/google/callback")
+@router.post("/callback")
 async def handle_code(
     code: Annotated[str, Body(embed=True)],
 ):

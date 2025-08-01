@@ -72,9 +72,6 @@ class GoogleOauthService:
 
                 return await self.generate_jwt_token(
                     sub=user_data["sub"],
-                    email=user_data["email"],
-                    name=user_data["name"],
-                    picture=user_data["picture"],
                 )
 
     @staticmethod
@@ -85,7 +82,7 @@ class GoogleOauthService:
 
 
     @staticmethod
-    async def generate_jwt_token(sub, email, name, picture):
+    async def generate_jwt_token(sub):
         refresh_token = secrets.token_urlsafe(64)
         refresh_expires = datetime.now() + timedelta(days=90)
 

@@ -4,3 +4,6 @@ class TokenExpiredError(Exception):
 
 class TokenNotCorrectError(Exception):
     detail = 'Token not correct'
+
+class RefreshTokenExpiredError(Exception):
+    detail = 'Refresh token expired'
