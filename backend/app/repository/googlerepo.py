@@ -13,3 +13,8 @@ class GoogleOauthRepo:
         except Exception as e:
             print(f"Ошибка при работе с MongoDB: {e}")
             raise
+
+    @staticmethod
+    async def add_refresh(refresh_data: dict):
+        await mongodb.refresh_tokens.insert_one(refresh_data)
+        return True

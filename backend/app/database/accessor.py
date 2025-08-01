@@ -14,6 +14,7 @@ class MongoDB:
 
         #Инициализация коллекц
         self.users = self.db.users
+        self.refresh_tokens = self.db.refresh_tokens
         self.goals = self.db.goals
         self.suggestions = self.db.suggestions
 

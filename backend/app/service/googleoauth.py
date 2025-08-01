@@ -1,5 +1,4 @@
-from datetime import datetime
-
+from datetime import datetime, timedelta
 from settings import settings
 import urllib.parse
 import aiohttp
@@ -14,7 +13,8 @@ google_oauth_repo = GoogleOauthRepo()
 class GoogleOauthService:
     google_token_url: str = "https://oauth2.googleapis.com/token"
 
-    def generate_google_oauth_redirect_uri(self):
+    @staticmethod
+    def generate_google_oauth_redirect_uri():
         query_params = {
             "client_id": settings.CLIENT_ID,
             "redirect_uri": "http://localhost:8000/",
@@ -70,13 +70,47 @@ class GoogleOauthService:
                     }
                 )
 
-                return {
-                    "email": user_data["email"],
-                    "name": user_data["name"],
-                    "picture": user_data["picture"],
-                }
+                return await self.generate_jwt_token(
+                    sub=user_data["sub"],
+                    email=user_data["email"],
+                    name=user_data["name"],
+                    picture=user_data["picture"],
+                )
 
-    def decode_id_token(self, id_token: str):
+    @staticmethod
+    def decode_id_token(id_token: str):
         return jwt.decode(id_token,
                           algorithms=["RS256"],
                           options={"verify_signature": False})
+
+
+    @staticmethod
+    async def generate_jwt_token(sub, email, name, picture):
+        refresh_token = secrets.token_urlsafe(64)
+        refresh_expires = datetime.now() + timedelta(days=90)
+
+        access_payload = {
+            "sub": sub,
+            "exp": datetime.now() + timedelta(minutes=40),
+            "email": email,
+            "name": name,
+            "picture": picture,
+        }
+
+        access_token = jwt.encode(access_payload, settings.SECRET_JWT_KEY, algorithm="HS256")
+
+        await google_oauth_repo.add_refresh(
+            {
+                "sub": sub,
+                "refresh_token": refresh_token,
+                "refresh_expires_in": refresh_expires,
+                'access_expitres_in': datetime.now() + timedelta(minutes=40),
+                "is_revoked": False
+            }
+        )
+
+        return {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "expires_in": 2400,
+        }

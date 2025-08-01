@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     CLIENT_ID: str = 'client_id'
     CLIENT_SECRET: str = 'client_secret'
 
+    SECRET_JWT_KEY: str = 'secret'
+
     class Config:
         env_file = ".env"
         extra = 'allow'
