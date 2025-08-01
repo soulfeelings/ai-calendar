@@ -16,5 +16,9 @@ class GoogleOauthRepo:
 
     @staticmethod
     async def add_refresh(refresh_data: dict):
-        await mongodb.refresh_tokens.insert_one(refresh_data)
+        await mongodb.refresh_tokens.replace_one(
+            {"sub": refresh_data["sub"]},
+            refresh_data,
+            upsert=True
+        )
         return True

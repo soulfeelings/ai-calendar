@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from settings import settings
 import urllib.parse
 import aiohttp
@@ -84,7 +84,7 @@ class GoogleOauthService:
     @staticmethod
     async def generate_jwt_token(sub):
         refresh_token = secrets.token_urlsafe(64)
-        refresh_expires = datetime.now() + timedelta(days=90)
+        refresh_expires = datetime.now(timezone(timedelta(hours=3))) + timedelta(days=90)
 
         access_payload = {
             "sub": sub,
@@ -98,7 +98,7 @@ class GoogleOauthService:
                 "sub": sub,
                 "refresh_token": refresh_token,
                 "refresh_expires_in": refresh_expires,
-                'access_expitres_in': datetime.now() + timedelta(minutes=40),
+                'access_expitres_in': datetime.now(timezone(timedelta(hours=3))) + timedelta(minutes=40),
                 "is_revoked": False
             }
         )
