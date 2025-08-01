@@ -92,9 +92,6 @@ class GoogleOauthService:
         access_payload = {
             "sub": sub,
             "exp": datetime.now() + timedelta(minutes=40),
-            "email": email,
-            "name": name,
-            "picture": picture,
         }
 
         access_token = jwt.encode(access_payload, settings.SECRET_JWT_KEY, algorithm="HS256")

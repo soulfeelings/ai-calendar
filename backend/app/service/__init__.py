@@ -1,3 +1,4 @@
 from .googleoauth import GoogleOauthService
+from .authservice import AuthService
 
-__all__ = ["GoogleOauthService"]
+__all__ = ["GoogleOauthService", "AuthService"]
