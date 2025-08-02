@@ -15,12 +15,14 @@ class AuthService:
     def get_user_id_from_access_token(access_token: str):
         try:
             payload = jwt.decode(access_token, settings.SECRET_JWT_KEY, algorithms="HS256")
+        except jwt.exceptions.ExpiredSignatureError:
+            raise TokenExpiredError
         except jwt.InvalidTokenError:
             raise TokenNotCorrectError
 
-        print(payload["exp"])
-        if payload["exp"] < time.time():
-            raise TokenExpiredError
+        #
+        # if payload["exp"] < time.time():
+        #     raise TokenExpiredError
 
         return payload["sub"]
 

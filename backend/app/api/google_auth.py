@@ -36,6 +36,11 @@ async def handle_code(
 async def refreshing_access_token(
     user_id: Annotated[str, Depends(get_user_request_id)],
 ):
+    """
+
+    :param user_id: id добывает из access token из bearer
+    :return:
+    """
     return await google_service.refresh_access_token(user_id)
 
 
