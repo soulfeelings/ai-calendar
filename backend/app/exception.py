@@ -7,3 +7,7 @@ class TokenNotCorrectError(Exception):
 
 class RefreshTokenExpiredError(Exception):
     detail = 'Refresh token expired'
+
+class RevokedError(Exception):
+    detail = 'You are already logout. Please login again'
+

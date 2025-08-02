@@ -16,7 +16,7 @@ def get_user_request_id(
     except TokenExpiredError as e:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Not authenticated: detail {str(e)}",
+            detail=f"Not authenticated: {e.detail}",
         )
     except TokenNotCorrectError as e:
         raise HTTPException(

@@ -1,7 +1,9 @@
 from typing import Annotated
-from fastapi import APIRouter, Body, HTTPException
+from fastapi import APIRouter, Body, HTTPException, Depends
 from fastapi.responses import RedirectResponse
 from fastapi import status
+
+from dependencies import get_user_request_id
 from service import GoogleOauthService
 
 
@@ -28,6 +30,12 @@ async def handle_code(
     try:
         return await google_service.get_user_info(code)
     except HTTPException as e:
-        raise e
+        raise e 
+
+@router.post("/refresh_access_token")
+async def refreshing_access_token(
+    user_id: Annotated[str, Depends(get_user_request_id)],
+):
+    return await google_service.refresh_access_token(user_id)
 
 

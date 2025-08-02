@@ -1,8 +1,9 @@
+import time
 from datetime import datetime, timedelta, timezone
 import jwt
 from fastapi import HTTPException, status
 from settings import settings
-from exception import TokenNotCorrectError, TokenExpiredError
+from exception import TokenNotCorrectError, TokenExpiredError, RevokedError
 from repository import AuthRepo
 import aiohttp
 
@@ -17,7 +18,8 @@ class AuthService:
         except jwt.InvalidTokenError:
             raise TokenNotCorrectError
 
-        if payload["exp"] < datetime.now().timestamp():
+        print(payload["exp"])
+        if payload["exp"] < time.time():
             raise TokenExpiredError
 
         return payload["sub"]
@@ -26,8 +28,12 @@ class AuthService:
         try:
             res = await auth_repo.get_info_from_sub(sub)
             return res
+
         except ValueError:
             raise
+
+        except RevokedError:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="You are already logout. Please login again")
 
     async def update_refresh_token(self, refresh_token: str):
         try:

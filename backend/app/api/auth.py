@@ -1,3 +1,4 @@
+from dulwich.client import default_local_git_client_cls
 from fastapi import APIRouter, Depends, status, HTTPException, Body
 from dependencies import get_user_request_id
 from typing import Annotated
@@ -20,8 +21,6 @@ async def get_my_info(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
 
 @router.post(

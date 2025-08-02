@@ -2,7 +2,7 @@ from datetime import datetime
 
 from fastapi import HTTPException
 
-from exception import RefreshTokenExpiredError, TokenNotCorrectError
+from exception import RefreshTokenExpiredError, TokenNotCorrectError, RevokedError
 from database import mongodb
 
 class AuthRepo:
@@ -10,6 +10,11 @@ class AuthRepo:
         user_info = await mongodb.users.find_one({"user_sub": sub})
         if not user_info:
             raise ValueError("Неправильное id или не зарегистрирован")
+
+        user_refresh = await mongodb.refresh_tokens.find_one({"sub": sub})
+
+        if user_refresh['is_revoked']:
+            raise RevokedError
 
         return {
             "email": user_info["user_data"]["email"],

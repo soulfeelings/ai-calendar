@@ -22,3 +22,27 @@ class GoogleOauthRepo:
             upsert=True
         )
         return True
+
+    async def get_user_refresh_token(self, user_id):
+        user_refresh = await mongodb.users.find_one({"user_sub": user_id})
+
+        if not user_refresh:
+            raise ValueError("User not found")
+
+        return user_refresh["refresh_token"]
+
+    async def update_user_success(self, user_id, data: dict):
+        res = await mongodb.users.update_one(
+            {"user_sub": user_id},
+            {"$set": {
+                "access_token": data["access_token"],
+                "expires_in": data["expires_in"],
+                "scope": data["scope"],
+                "token_type": data["token_type"],
+            }}
+        )
+
+        if res.modified_count != 1:
+            raise ValueError("Not user is found")
+
+        return True

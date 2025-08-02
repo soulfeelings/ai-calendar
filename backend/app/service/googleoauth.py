@@ -50,9 +50,10 @@ class GoogleOauthService:
                 if response.status != 200:
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res)
 
-
+                print(res)
 
                 user_data = self.decode_id_token(res["id_token"])
+                print(user_data)
 
                 await google_oauth_repo.add_user(
                     {
@@ -61,6 +62,7 @@ class GoogleOauthService:
                         "refresh_token": res["refresh_token"],
                         "expires_in": res["expires_in"],
                         "refresh_token_expires_in": res["refresh_token_expires_in"],
+                        "scope": res["scope"],
                         "user_data": {
                             "email": user_data["email"],
                             "name": user_data["name"],
@@ -108,3 +110,33 @@ class GoogleOauthService:
             "refresh_token": refresh_token,
             "expires_in": 2400,
         }
+
+    async def refresh_access_token(self, user_id):
+        try:
+            user_refresh = await google_oauth_repo.get_user_refresh_token(user_id)
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    url="https://oauth2.googleapis.com/token",
+                    headers = {
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    },
+                    data={
+                        "client_id": settings.CLIENT_ID,
+                        "client_secret": settings.CLIENT_SECRET,
+                        "refresh_token": user_refresh,
+                        "grant_type": "refresh_token",
+                    }
+                ) as response:
+                    res = await response.json()
+
+                    if response.status != 200:
+                        raise HTTPException(status_code=400, detail=res)
+
+                    return await google_oauth_repo.update_user_success(user_id, res)
+
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=str(e))
