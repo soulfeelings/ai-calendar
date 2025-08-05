@@ -17,6 +17,7 @@ class MongoDB:
         self.refresh_tokens = self.db.refresh_tokens
         self.goals = self.db.goals
         self.suggestions = self.db.suggestions
+        self.calendarlist = self.db.calendarlist
 
 
 mongodb = MongoDB(

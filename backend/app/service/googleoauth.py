@@ -50,10 +50,8 @@ class GoogleOauthService:
                 if response.status != 200:
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res)
 
-                print(res)
 
                 user_data = self.decode_id_token(res["id_token"])
-                print(user_data)
 
                 await google_oauth_repo.add_user(
                     {
