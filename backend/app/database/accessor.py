@@ -18,6 +18,7 @@ class MongoDB:
         self.goals = self.db.goals
         self.suggestions = self.db.suggestions
         self.calendarlist = self.db.calendarlist
+        self.calendarevents = self.db.calendar_events
 
 
 mongodb = MongoDB(
