@@ -12,7 +12,7 @@ cp backend/app/.env.example backend/app/.env
 ```
 
 Далее заполните данные
-CLIENT_ID, CLIENT_SECRET - Данные которые предоставляет гугл при включении Oauth(За ранее настройте его)
+CLIENT_ID, CLIENT_SECRET - Данные которые предоставляет гугл при включении Oauth(Заранее настройте его)
 
 3. Запустите проект
 
