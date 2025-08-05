@@ -9,8 +9,9 @@ class CalendarService:
     calendar_repo = CalendarRepo()
     google_token_url: str = "https://oauth2.googleapis.com/token"
     calendat_list: str = "https://www.googleapis.com/calendar/v3/users/me/calendarList"
-    calendar_events: str = "https://www.googleapis.com/calendar/v3/calendars/{calendar_id}/events?syncToken={syncToken}"
-    all_event: str = "https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events"
+    all_event: str = "https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events" #TODO: syncTOKEN
+    specific_event: str = all_event+"/{eventId}"
+
 
     async def get_calendar_list(self, user_id):
         try:
@@ -103,6 +104,29 @@ class CalendarService:
                         raise HTTPException(status_code=response.status, detail=res)
 
                     await self.calendar_repo.insert_events(user_id=user_id, data=res)
+
+                    return res
+
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+
+    async def get_event_from_id(self, user_id, event_id):
+        try:
+            email_and_access = await self.calendar_repo.get_events_synct_and_email(user_id=user_id)
+
+            async with aiohttp.ClientSession() as session:
+                async with session.get(
+                    url=f"{self.specific_event.format(calendarId=email_and_access[0],eventId=event_id)}",
+                    headers={
+                        "Authorization": f"Bearer {email_and_access[1]}",
+                        #TODO: "If-None-Match"
+                    }
+                ) as response:
+
+                    res = await response.json()
+
+                    if response.status != 200:
+                        raise HTTPException(status_code=response.status, detail=res)
 
                     return res
 
