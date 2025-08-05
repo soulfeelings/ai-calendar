@@ -1,4 +1,3 @@
-from dulwich.client import default_local_git_client_cls
 from fastapi import APIRouter, Depends, status, HTTPException, Body
 from dependencies import get_user_request_id
 from typing import Annotated
