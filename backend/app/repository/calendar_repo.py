@@ -43,7 +43,7 @@ class CalendarRepo:
 
         return True
 
-    async def get_events_synct_and_email(self, user_id):
+    async def get_access_and_email(self, user_id):
         res1 = await mongodb.users.find_one({"user_sub": user_id})
         res2 = await self.get_access_token(user_id)
 
@@ -62,3 +62,45 @@ class CalendarRepo:
             raise ValueError("Вставка данных произашла с ошибкой")
 
         return True
+
+    async def get_etag_from_id(self, user_id, event_id):
+        res: dict = await mongodb.calendarevents.find_one({"user_sub": user_id})
+
+        if not res:
+            raise ValueError("Не найдены подхадящие события. Для начало поулчите все сообщения")
+
+        items = res["data"]["items"]
+
+        for k, v in enumerate(items):
+            if v["id"] == event_id:
+                return v["etag"], k
+
+
+        raise ValueError("Не найден событий, обновите события")
+
+    async def update_items(self, user_id, key, data: dict):
+        res: dict = await mongodb.calendarevents.update_one(
+            {"user_sub": user_id, 'data.items.id': data["id"]},
+            {"$set":
+                    {
+                        f"data.items.$": data
+                    }
+            })
+
+        return True
+
+    async def get_event_from_id(self, user_id, event_id):
+        print(event_id)
+        res: dict = await mongodb.calendarevents.find_one({"user_sub": user_id})
+
+        if not res:
+            raise ValueError("Не найдены подхадящие события. Для начало поулчите все сообщения")
+
+        items = res["data"]["items"]
+
+        for i in items:
+            if i["id"] == event_id:
+                print(i)
+                return i
+
+        raise ValueError("Не найден событий, обновите события")

@@ -89,7 +89,7 @@ class CalendarService:
 
     async def get_all_user_calendar_events(self, user_id):
         try:
-            email_and_access = await self.calendar_repo.get_events_synct_and_email(user_id=user_id)
+            email_and_access = await self.calendar_repo.get_access_and_email(user_id=user_id)
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(
@@ -112,23 +112,31 @@ class CalendarService:
 
     async def get_event_from_id(self, user_id, event_id):
         try:
-            email_and_access = await self.calendar_repo.get_events_synct_and_email(user_id=user_id)
+            email_and_access = await self.calendar_repo.get_access_and_email(user_id=user_id)
+            etag = await self.calendar_repo.get_etag_from_id(user_id, event_id)
 
             async with aiohttp.ClientSession() as session:
                 async with session.get(
                     url=f"{self.specific_event.format(calendarId=email_and_access[0],eventId=event_id)}",
                     headers={
                         "Authorization": f"Bearer {email_and_access[1]}",
-                        #TODO: "If-None-Match"
+                        "If-None-Match": etag[0]
                     }
                 ) as response:
 
+                    if response.status == 304:
+                        return dict({"status": "not changed"}, **(await self.calendar_repo.get_event_from_id(user_id, event_id)))
+
                     res = await response.json()
 
-                    if response.status != 200:
+                    if response.status == 401:
                         raise HTTPException(status_code=response.status, detail=res)
 
-                    return res
+                    elif response.status == 200:
+                        await self.calendar_repo.update_items(user_id=user_id, key=etag[1], data=res)
+
+
+                    return dict({"status": "not changed"}, **res)
 
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
