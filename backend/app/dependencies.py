@@ -1,10 +1,18 @@
 from fastapi import security, Security, Depends, HTTPException, status
 from service import AuthService
 from exception import TokenExpiredError, TokenNotCorrectError
+from cache import AsyncRedisManager
 
 def get_auth_service() -> AuthService:
     return AuthService()
 
+
+async def get_redis():
+    redis = AsyncRedisManager()
+    try:
+        yield redis
+    finally:
+        await redis.pool.close()
 
 def get_user_request_id(
         auth_service: AuthService = Depends(get_auth_service),
