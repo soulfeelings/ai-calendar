@@ -90,13 +90,17 @@ class CalendarService:
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
 
-    async def get_all_user_calendar_events(self, user_id):
+    async def get_all_user_calendar_events(self, user_id, forceFullSync, fullResponse):
         try:
             email_and_access = await self.calendar_repo.get_access_and_email(user_id=user_id)
+            token = await self.calendar_repo.get_synctoken_if_exists(user_id=user_id)
 
             async with aiohttp.ClientSession() as session:
+                if forceFullSync:
+                    token = None
+
                 async with session.get(
-                    url=f"{self.all_event.format(calendarId=email_and_access[0])}",
+                    url=f"{self.all_event.format(calendarId=email_and_access[0])}{"?syncToken="+token if token else ""}",
                     headers={
                         "Authorization": f"Bearer {email_and_access[1]}"
                     }
@@ -106,7 +110,19 @@ class CalendarService:
                     if response.status != 200:
                         raise HTTPException(status_code=response.status, detail=res)
 
-                    await self.calendar_repo.insert_events(user_id=user_id, data=res)
+
+                    await self.calendar_repo.update_synctoken(user_id, res["nextSyncToken"])
+
+                    if not token:
+                        await self.calendar_repo.insert_events(user_id=user_id, data=res)
+                        return res
+
+                    if res["items"]:
+                        await self.calendar_repo.update_items(user_id=user_id, items=res["items"])
+                        return res
+
+                    if fullResponse:
+                        return await self.calendar_repo.get_all_event(user_id=user_id)
 
                     return res
 
@@ -136,7 +152,7 @@ class CalendarService:
                         raise HTTPException(status_code=response.status, detail=res)
 
                     elif response.status == 200:
-                        await self.calendar_repo.update_items(user_id=user_id, key=etag[1], data=res)
+                        await self.calendar_repo.update_item(user_id=user_id, data=res)
 
 
                     return dict({"status": "not changed"}, **res)

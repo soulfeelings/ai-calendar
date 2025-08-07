@@ -1,4 +1,5 @@
 from database import mongodb
+from pymongo import UpdateOne
 
 class CalendarRepo:
     async def get_user_scope(self, user_id):
@@ -58,7 +59,7 @@ class CalendarRepo:
             "data": data
         }, upsert=True)
 
-        if res.modified_count != 1:
+        if res.modified_count == 0 and not res.upserted_id:
             raise ValueError("Вставка данных произашла с ошибкой")
 
         return True
@@ -78,7 +79,7 @@ class CalendarRepo:
 
         raise ValueError("Не найден событий, обновите события")
 
-    async def update_items(self, user_id, key, data: dict):
+    async def update_item(self, user_id, data: dict):
         res: dict = await mongodb.calendarevents.update_one(
             {"user_sub": user_id, 'data.items.id': data["id"]},
             {"$set":
@@ -90,7 +91,6 @@ class CalendarRepo:
         return True
 
     async def get_event_from_id(self, user_id, event_id):
-        print(event_id)
         res: dict = await mongodb.calendarevents.find_one({"user_sub": user_id})
 
         if not res:
@@ -100,7 +100,41 @@ class CalendarRepo:
 
         for i in items:
             if i["id"] == event_id:
-                print(i)
                 return i
 
         raise ValueError("Не найден событий, обновите события")
+
+    async def get_synctoken_if_exists(self, user_id):
+        res = await mongodb.calendarevents.find_one({"user_sub": user_id})
+
+        if not res:
+            return None
+
+        return res["data"]["nextSyncToken"]
+
+    async def update_synctoken(self, user_id, next_sync_token):
+        await mongodb.calendarevents.update_one({"user_sub": user_id},
+                                                {"$set": {"data.nextSyncToken": next_sync_token}})
+
+        return True
+
+    async def update_items(self, user_id, items: list):
+        operations = []
+        for update in items:
+            operations.append(
+                UpdateOne(
+                    {"user_sub": user_id, "data.items.id": update["id"]},
+                    {"$set": {"data.items.$[elem]": update}},
+                    array_filters=[{"elem.id": update["id"]}]
+                )
+            )
+
+        await mongodb.calendarevents.bulk_write(operations)
+
+    async def get_all_event(self, user_id):
+        res = await mongodb.calendarevents.find_one({"user_sub": user_id})
+
+        if not res:
+            raise ValueError("Данные не найдены, отправьте заного запрос без параметров")
+
+        return res["data"]
