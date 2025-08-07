@@ -94,11 +94,10 @@ class CalendarService:
         try:
             email_and_access = await self.calendar_repo.get_access_and_email(user_id=user_id)
             token = await self.calendar_repo.get_synctoken_if_exists(user_id=user_id)
+            if forceFullSync:
+                token = None
 
             async with aiohttp.ClientSession() as session:
-                if forceFullSync:
-                    token = None
-
                 async with session.get(
                     url=f"{self.all_event.format(calendarId=email_and_access[0])}{"?syncToken="+token if token else ""}",
                     headers={
@@ -110,16 +109,17 @@ class CalendarService:
                     if response.status != 200:
                         raise HTTPException(status_code=response.status, detail=res)
 
+                    if response.status == 410:
+                         return await self.get_all_user_calendar_events(user_id, True, fullResponse)
+
 
                     await self.calendar_repo.update_synctoken(user_id, res["nextSyncToken"])
 
                     if not token:
                         await self.calendar_repo.insert_events(user_id=user_id, data=res)
-                        return res
 
-                    if res["items"]:
+                    if res["items"] and token:
                         await self.calendar_repo.update_items(user_id=user_id, items=res["items"])
-                        return res
 
                     if fullResponse:
                         return await self.calendar_repo.get_all_event(user_id=user_id)
