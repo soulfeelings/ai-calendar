@@ -1,10 +1,33 @@
 from fastapi import security, Security, Depends, HTTPException, status
-from service import AuthService
+from service import AuthService, GoogleOauthService, CalendarService
 from exception import TokenExpiredError, TokenNotCorrectError
 from cache import AsyncRedisManager
+from repository import AuthRepo, GoogleOauthRepo, CalendarRepo
 
-def get_auth_service() -> AuthService:
-    return AuthService()
+def get_auth_repo() -> AuthRepo:
+    return AuthRepo()
+
+def get_auth_service(
+        auth_repo : AuthRepo = Depends(get_auth_repo),
+) -> AuthService:
+    return AuthService(auth_repo=auth_repo)
+
+def get_google_oauth_repo() -> GoogleOauthRepo:
+    return GoogleOauthRepo()
+
+def get_google_oauth_service(
+ google_oauth_repo: GoogleOauthRepo = Depends(get_google_oauth_repo),
+) -> GoogleOauthService:
+    return GoogleOauthService(google_oauth_repo=google_oauth_repo)
+
+def get_calendar_repo() -> CalendarRepo:
+    return CalendarRepo()
+
+def get_calendar_service(
+    calendar_repo: CalendarRepo = Depends(get_calendar_repo),
+) -> CalendarService:
+    return CalendarService(calendar_repo=calendar_repo)
+
 
 
 async def get_redis():

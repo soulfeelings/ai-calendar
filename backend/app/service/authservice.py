@@ -1,16 +1,15 @@
-import time
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import jwt
 from fastapi import HTTPException, status
 from settings import settings
 from exception import TokenNotCorrectError, TokenExpiredError, RevokedError
 from repository import AuthRepo
-import aiohttp
 
-auth_repo = AuthRepo()
-
-
+@dataclass
 class AuthService:
+    auth_repo: AuthRepo
+    
     @staticmethod
     def get_user_id_from_access_token(access_token: str):
         try:
@@ -28,7 +27,7 @@ class AuthService:
 
     async def get_user_info_from_sub(self, sub):
         try:
-            res = await auth_repo.get_info_from_sub(sub)
+            res = await self.auth_repo.get_info_from_sub(sub)
             return res
 
         except ValueError:
@@ -39,7 +38,7 @@ class AuthService:
 
     async def update_refresh_token(self, refresh_token: str):
         try:
-            user_id = await auth_repo.get_info_from_refresh(refresh_token=refresh_token)
+            user_id = await self.auth_repo.get_info_from_refresh(refresh_token=refresh_token)
             access_payload = {
                     "sub": user_id,
                     "exp": datetime.now(timezone(timedelta(hours=3))) + timedelta(minutes=40),
@@ -57,5 +56,5 @@ class AuthService:
             raise
 
     async def logout(self, user_id):
-        return await auth_repo.update_revoked_and_google_tokens(user_id)
+        return await self.auth_repo.update_revoked_and_google_tokens(user_id)
 

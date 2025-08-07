@@ -3,15 +3,15 @@ from fastapi import APIRouter, Body, HTTPException, Depends
 from fastapi.responses import RedirectResponse
 from fastapi import status
 
-from dependencies import get_user_request_id
+from dependencies import get_user_request_id, get_google_oauth_service
 from service import GoogleOauthService
 
 
 router = APIRouter(prefix="/google", tags=["google"])
-google_service = GoogleOauthService()
-
 @router.get("/")
-def get_google_oauth_redirect_uri():
+def get_google_oauth_redirect_uri(
+    google_service: Annotated[GoogleOauthService, Depends(get_google_oauth_service)]
+):
     """
     :return: редиректит пользователя на страницу регистарции гугла с правильной ссылкой
     """
@@ -21,9 +21,11 @@ def get_google_oauth_redirect_uri():
 
 @router.post("/callback")
 async def handle_code(
+    google_service: Annotated[GoogleOauthService, Depends(get_google_oauth_service)],
     code: Annotated[str, Body(embed=True)],
 ):
     """
+    :param google_service:
     :param code: квери параметр который гугл вставляет в ссылку при редиректе, нужно для получения данных пользователя
     :return: Возвращает данные пользователя, такие как, имя, емаил, фото. Так же данные хранит в базу данных
     """
@@ -35,9 +37,11 @@ async def handle_code(
 @router.post("/refresh_access_token")
 async def refreshing_access_token(
     user_id: Annotated[str, Depends(get_user_request_id)],
+    google_service: Annotated[GoogleOauthService, Depends(get_google_oauth_service)]
 ):
     """
 
+    :param google_service:
     :param user_id: id добывает из access token из bearer
     :return:
     """

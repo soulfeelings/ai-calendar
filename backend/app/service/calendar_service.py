@@ -1,12 +1,15 @@
 import urllib.parse
+from dataclasses import dataclass
+
 from fastapi import HTTPException, status
 from repository.calendar_repo import CalendarRepo
 import aiohttp
 from fastapi.responses import RedirectResponse
 from settings import settings
 
+@dataclass
 class CalendarService:
-    calendar_repo = CalendarRepo()
+    calendar_repo: CalendarRepo
     google_token_url: str = "https://oauth2.googleapis.com/token"
     calendat_list: str = "https://www.googleapis.com/calendar/v3/users/me/calendarList"
     all_event: str = "https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events" #TODO: syncTOKEN
