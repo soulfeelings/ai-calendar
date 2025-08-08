@@ -7,9 +7,8 @@ class AsyncRedisManager:
         self.pool = redis.ConnectionPool(
             host=settings.REDIS_HOST,
             port=settings.REDIS_PORT,
-            password=settings.REDIS_PASSWORD,
             decode_responses=True,
-            max_connections=25
+            max_connections=25,
         )
 
     @asynccontextmanager

@@ -1,5 +1,6 @@
 from database import mongodb
 from pymongo import UpdateOne
+from datetime import datetime
 
 class CalendarRepo:
     async def get_user_scope(self, user_id):
@@ -138,3 +139,119 @@ class CalendarRepo:
             raise ValueError("Данные не найдены, отправьте заного запрос без параметров")
 
         return res["data"]
+
+    async def save_webhook_subscription(self, user_id: str, channel_id: str, resource_id: str, expiration: int):
+        """
+        Сохраняет информацию о подписке на вебхук в БД.
+        """
+        subscription_data = {
+            "user_id": user_id,
+            "channel_id": channel_id,
+            "resource_id": resource_id,
+            "expiration": expiration,
+            "created_at": int(datetime.now().timestamp() * 1000),
+            "last_sync": None
+        }
+
+        res = await mongodb.webhook_subscriptions.insert_one(subscription_data)
+
+        if not res.inserted_id:
+            raise ValueError("Failed to save webhook subscription")
+
+        return True
+
+    async def get_webhook_subscription(self, channel_id: str):
+        """
+        Получает информацию о подписке по channel_id.
+        """
+        res = await mongodb.webhook_subscriptions.find_one({"channel_id": channel_id})
+        return res
+
+    async def get_user_webhook_subscriptions(self, user_id: str):
+        """
+        Получает все подписки пользователя.
+        """
+        cursor = mongodb.webhook_subscriptions.find({"user_id": user_id})
+        subscriptions = await cursor.to_list(length=None)
+        return subscriptions
+
+    async def delete_webhook_subscription(self, channel_id: str):
+        """
+        Удаляет подписку из БД.
+        """
+        res = await mongodb.webhook_subscriptions.delete_one({"channel_id": channel_id})
+
+        if res.deleted_count != 1:
+            raise ValueError("Failed to delete webhook subscription")
+
+        return True
+
+    async def update_webhook_last_sync(self, channel_id: str):
+        """
+        Обновляет timestamp последней синхронизации для подписки.
+        """
+        current_time = int(datetime.now().timestamp() * 1000)
+
+        res = await mongodb.webhook_subscriptions.update_one(
+            {"channel_id": channel_id},
+            {"$set": {"last_sync": current_time}}
+        )
+
+        if res.modified_count != 1:
+            raise ValueError("Failed to update webhook last sync")
+
+        return True
+
+    async def cleanup_expired_webhook_subscriptions(self):
+        """
+        Удаляет истекшие подписки из БД.
+        """
+        current_time = int(datetime.now().timestamp() * 1000)
+
+        res = await mongodb.webhook_subscriptions.delete_many(
+            {"expiration": {"$lt": current_time}}
+        )
+
+        return res.deleted_count
+
+    async def remove_event_from_cache(self, user_id: str, event_id: str):
+        """
+        Удаляет событие из кэша (БД) когда оно было удалено в Google Calendar.
+        """
+        res = await mongodb.calendarevents.update_one(
+            {"user_sub": user_id},
+            {"$pull": {"data.items": {"id": event_id}}}
+        )
+
+        if res.modified_count != 1:
+            raise ValueError("Failed to remove event from cache")
+
+        return True
+
+    async def get_user_tokens(self, user_id: str):
+        """
+        Получает токены пользователя (access_token и refresh_token).
+        """
+        res = await mongodb.users.find_one({"user_sub": user_id})
+
+        if not res:
+            raise ValueError("User not found")
+
+        return {
+            "access_token": res.get("access_token"),
+            "refresh_token": res.get("refresh_token")
+        }
+
+    async def update_access_token(self, user_id: str, access_token: str):
+        """
+        Обновляет только access_token пользователя.
+        """
+        res = await mongodb.users.update_one(
+            {"user_sub": user_id},
+            {"$set": {"access_token": access_token}}
+        )
+
+        if res.modified_count != 1:
+            raise ValueError("Failed to update access token")
+
+        return True

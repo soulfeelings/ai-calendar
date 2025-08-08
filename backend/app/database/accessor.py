@@ -19,6 +19,7 @@ class MongoDB:
         self.suggestions = self.db.suggestions
         self.calendarlist = self.db.calendarlist
         self.calendarevents = self.db.calendar_events
+        self.webhook_subscriptions = self.db.webhook_subscriptions
 
 
 mongodb = MongoDB(

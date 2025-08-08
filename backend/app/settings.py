@@ -16,6 +16,9 @@ class Settings(BaseSettings):
 
     SECRET_JWT_KEY: str = 'secret'
 
+    # Webhook settings
+    WEBHOOK_BASE_URL: str = 'https://your-domain.com'
+
     class Config:
         env_file = ".env"
         extra = 'allow'
