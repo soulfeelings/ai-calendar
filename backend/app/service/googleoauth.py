@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from settings import settings
 import urllib.parse
@@ -7,10 +8,11 @@ import jwt
 import secrets
 from repository import GoogleOauthRepo
 
-google_oauth_repo = GoogleOauthRepo()
 
 
+@dataclass
 class GoogleOauthService:
+    google_oauth_repo: GoogleOauthRepo
     google_token_url: str = "https://oauth2.googleapis.com/token"
 
     @staticmethod
@@ -50,12 +52,10 @@ class GoogleOauthService:
                 if response.status != 200:
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res)
 
-                print(res)
 
                 user_data = self.decode_id_token(res["id_token"])
-                print(user_data)
 
-                await google_oauth_repo.add_user(
+                await self.google_oauth_repo.add_user(
                     {
                         "user_sub": user_data["sub"],
                         "access_token": res["access_token"],
@@ -83,8 +83,7 @@ class GoogleOauthService:
                           options={"verify_signature": False})
 
 
-    @staticmethod
-    async def generate_jwt_token(sub):
+    async def generate_jwt_token(self, sub):
         refresh_token = secrets.token_urlsafe(64)
         refresh_expires = datetime.now(timezone(timedelta(hours=3))) + timedelta(days=90)
 
@@ -95,7 +94,7 @@ class GoogleOauthService:
 
         access_token = jwt.encode(access_payload, settings.SECRET_JWT_KEY, algorithm="HS256")
 
-        await google_oauth_repo.add_refresh(
+        await self.google_oauth_repo.add_refresh(
             {
                 "sub": sub,
                 "refresh_token": refresh_token,
@@ -113,7 +112,7 @@ class GoogleOauthService:
 
     async def refresh_access_token(self, user_id):
         try:
-            user_refresh = await google_oauth_repo.get_user_refresh_token(user_id)
+            user_refresh = await self.google_oauth_repo.get_user_refresh_token(user_id)
 
             async with aiohttp.ClientSession() as session:
                 async with session.post(
@@ -133,7 +132,7 @@ class GoogleOauthService:
                     if response.status != 200:
                         raise HTTPException(status_code=400, detail=res)
 
-                    return await google_oauth_repo.update_user_success(user_id, res)
+                    return await self.google_oauth_repo.update_user_success(user_id, res)
 
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))

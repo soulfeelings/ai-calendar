@@ -1,12 +1,11 @@
-from dulwich.client import default_local_git_client_cls
 from fastapi import APIRouter, Depends, status, HTTPException, Body
-from dependencies import get_user_request_id
+from dependencies import get_user_request_id, get_auth_service
 from typing import Annotated
 from service import AuthService
 from exception import RefreshTokenExpiredError, TokenNotCorrectError, TokenExpiredError
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-auth_service = AuthService()
+
 
 @router.get(
     "/me",
@@ -14,6 +13,7 @@ auth_service = AuthService()
 )
 async def get_my_info(
     user_id: Annotated[str, Depends(get_user_request_id)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
 ):
     try:
         return await auth_service.get_user_info_from_sub(user_id)
@@ -28,7 +28,8 @@ async def get_my_info(
     status_code=status.HTTP_200_OK,
 )
 async def update_access(
-        refresh_token: str = Body(embed=True)
+    auth_service: Annotated[AuthService, Depends(get_auth_service)],
+    refresh_token: str = Body(embed=True),
 ):
     try:
         new_access_token = await auth_service.update_refresh_token(refresh_token)
@@ -50,20 +51,11 @@ async def update_access(
 )
 async def validate_access(
     user_id: Annotated[str, Depends(get_user_request_id)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)]
 ):
     try:
         return True
 
-    except TokenExpiredError as e:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Not authenticated: detail {str(e)}",
-        )
-    except TokenNotCorrectError as e:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=e.detail,
-        )
 
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -78,6 +70,7 @@ async def validate_access(
 )
 async def logout_profile(
     user_id: Annotated[str, Depends(get_user_request_id)],
+    auth_service: Annotated[AuthService, Depends(get_auth_service)]
 ):
     return await auth_service.logout(user_id)
 
