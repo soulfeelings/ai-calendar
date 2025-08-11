@@ -35,10 +35,13 @@ def get_calendar_cache_service(
 def get_calendar_service(
     calendar_repo: CalendarRepo = Depends(get_calendar_repo),
     cache_service: CalendarCacheService = Depends(get_calendar_cache_service),
+    google_oauth_service: GoogleOauthService = Depends(get_google_oauth_service),
 ) -> CalendarService:
-    return CalendarService(calendar_repo=calendar_repo, cache_service=cache_service)
-
-
+    return CalendarService(
+        calendar_repo=calendar_repo,
+        cache_service=cache_service,
+        google_oauth_service=google_oauth_service
+    )
 
 async def get_redis():
     redis = AsyncRedisManager()
