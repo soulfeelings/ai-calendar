@@ -350,135 +350,203 @@ class CalendarService:
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
 
-    async def setup_calendar_webhook(self, user_id: str):
+    async def get_user_by_channel_id(self, channel_id: str) -> Optional[str]:
         """
-        Настройка подписки на вебхуки для календаря пользователя.
+        Получает user_id по channel_id из вебхука.
+        """
+        try:
+            subscription = await self.calendar_repo.get_webhook_subscription(channel_id)
+            if subscription:
+                return subscription.get("user_id")
+            return None
+        except Exception as e:
+            print(f"Error getting user by channel ID: {str(e)}")
+            return None
+
+    async def handle_calendar_change_notification(
+        self,
+        user_id: str,
+        channel_id: str,
+        resource_id: Optional[str] = None,
+        resource_uri: Optional[str] = None
+    ):
+        """
+        Обрабатывает уведомление об изменении календаря от Google.
+        Выполняет инкрементальную синхронизацию и обновляет кеш.
+        """
+        try:
+            # Получаем sync token из кеша или БД
+            sync_token = await self.cache_service.get_sync_token(user_id)
+            if not sync_token:
+                sync_token = await self.calendar_repo.get_synctoken_if_exists(user_id)
+            
+            # Если нет sync token, выполняем полную синхронизацию
+            if not sync_token:
+                await self._perform_full_sync(user_id)
+                return
+            
+            # Выполняем инкрементальную синхронизацию
+            await self._perform_incremental_sync(user_id, sync_token)
+            
+        except Exception as e:
+            print(f"Error handling calendar change notification: {str(e)}")
+            # При ошибке инкрементальной синхронизации выполняем полную
+            await self._perform_full_sync(user_id)
+
+    async def _perform_full_sync(self, user_id: str):
+        """
+        Выполняет полную синхронизацию календаря пользователя.
+        """
+        try:
+            # Инвалидируем кеш
+            await self.cache_service.invalidate_user_cache(user_id)
+            
+            # Получаем все события без sync token
+            await self.get_all_user_calendar_events(user_id, forceFullSync=True, fullResponse=False)
+            
+        except Exception as e:
+            print(f"Error in full sync: {str(e)}")
+            raise
+
+    async def _perform_incremental_sync(self, user_id: str, sync_token: str):
+        """
+        Выполняет инкрементальную синхронизацию календаря.
         """
         try:
             email_and_access = await self.calendar_repo.get_access_and_email(user_id)
+            
+            # Запрашиваем изменения с момента последнего sync token
+            url = f"{self.all_event.format(calendarId=email_and_access[0])}?syncToken={sync_token}"
+            
+            res = await self._make_google_api_request(
+                user_id=user_id,
+                url=url,
+                method=HttpMethod.GET
+            )
+            
+            # Если sync token недействителен (410 ошибка), выполняем полную синхронизацию
+            if res.get("status_code") == 410:
+                await self._perform_full_sync(user_id)
+                return
+            
+            # Сохраняем новый sync token
+            if res.get("nextSyncToken"):
+                await self.calendar_repo.update_synctoken(user_id, res["nextSyncToken"])
+                await self.cache_service.cache_sync_token(user_id, res["nextSyncToken"])
+            
+            # Обрабатываем измененные события
+            if res.get("items"):
+                await self._process_changed_events(user_id, res["items"])
+                
+        except Exception as e:
+            print(f"Error in incremental sync: {str(e)}")
+            raise
 
+    async def _process_changed_events(self, user_id: str, events: List[Dict[str, Any]]):
+        """
+        Обрабатывает список измененных событий.
+        """
+        try:
+            for event in events:
+                event_id = event.get("id")
+                if not event_id:
+                    continue
+                
+                if event.get("status") == "cancelled":
+                    # Удаляем отмененное событие из БД и кеша
+                    await self.calendar_repo.remove_event_from_cache(user_id, event_id)
+                    await self.cache_service.remove_event_from_cache(user_id, event_id)
+                else:
+                    # Обновляем измененное событие в БД и кеше
+                    await self.calendar_repo.update_item(user_id, event)
+                    await self.cache_service.update_event_in_cache(user_id, event)
+            
+            # Инвалидируем общий кеш событий пользователя для обновления при следующем запросе
+            await self.cache_service.invalidate_user_cache(user_id)
+            
+        except Exception as e:
+            print(f"Error processing changed events: {str(e)}")
+            raise
+
+    async def setup_calendar_webhook(self, user_id: str) -> Dict[str, Any]:
+        """
+        Настраивает вебхук для получения уведомлений об изменениях в календаре.
+        """
+        try:
+            email_and_access = await self.calendar_repo.get_access_and_email(user_id)
+            
             # Генерируем уникальный channel_id
             channel_id = str(uuid.uuid4())
-
-            # Время жизни подписки (максимум 7 дней для Google Calendar)
-            expiration = int((datetime.now() + timedelta(days=6)).timestamp() * 1000)
-
+            
+            # Настраиваем webhook
             webhook_payload = {
                 "id": channel_id,
                 "type": "web_hook",
                 "address": f"{settings.WEBHOOK_BASE_URL}/webhook/google-calendar",
-                "expiration": expiration
+                "token": f"user_{user_id}",  # Токен для верификации
+                "expiration": int((datetime.now() + timedelta(days=7)).timestamp() * 1000)  # 7 дней
             }
-
-            # Используем универсальный метод с обработкой 401
+            
             url = self.watch_url.format(calendarId=email_and_access[0])
+            
             res = await self._make_google_api_request(
                 user_id=user_id,
                 url=url,
                 method=HttpMethod.POST,
                 json_data=webhook_payload
             )
-
+            
             # Сохраняем информацию о подписке в БД
-            await self.calendar_repo.save_webhook_subscription(
-                user_id=user_id,
-                channel_id=channel_id,
-                resource_id=res.get("resourceId"),
-                expiration=expiration
-            )
-
+            subscription_data = {
+                "user_id": user_id,
+                "channel_id": channel_id,
+                "resource_id": res.get("resourceId"),
+                "resource_uri": res.get("resourceUri"),
+                "expiration": webhook_payload["expiration"],
+                "created_at": datetime.now()
+            }
+            
+            await self.calendar_repo.save_webhook_subscription(subscription_data)
+            
             return {
                 "channel_id": channel_id,
                 "resource_id": res.get("resourceId"),
-                "expiration": expiration
+                "expiration": webhook_payload["expiration"]
             }
+            
+        except Exception as e:
+            print(f"Error setting up webhook: {str(e)}")
+            raise
 
-        except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
-
-    async def unsubscribe_calendar_webhook(self, channel_id: str):
+    async def get_webhook_status(self, user_id: str) -> Dict[str, Any]:
         """
-        Отписка от вебхука по channel_id.
+        Получает статус вебхука для пользователя.
         """
         try:
-            # Получаем информацию о подписке
-            subscription = await self.calendar_repo.get_webhook_subscription(channel_id)
-            if not subscription:
-                raise ValueError("Subscription not found")
-
-            user_id = subscription["user_id"]
-            resource_id = subscription["resource_id"]
-
-            # Отправляем запрос на отписку в Google
-            stop_payload = {
-                "id": channel_id,
-                "resourceId": resource_id
-            }
-
-            # Используем универсальный метод с обработкой 401
-            await self._make_google_api_request(
-                user_id=user_id,
-                url=self.stop_watch_url,
-                method=HttpMethod.POST,
-                json_data=stop_payload
-            )
-
-            # Удаляем подписку из БД
-            await self.calendar_repo.delete_webhook_subscription(channel_id)
-
-        except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
-
-    async def update_event_from_webhook(self, user_id: str, event_id: str):
-        """
-        Обновляет конкретное событие по ID с использованием etag.
-        Вызывается при получении вебхука об изменении события.
-        """
-        try:
-            email_and_access = await self.calendar_repo.get_access_and_email(user_id)
-            etag = await self.calendar_repo.get_etag_from_id(user_id, event_id)
-
-            # Используем универсальный метод с обработкой 401
-            url = self.specific_event.format(calendarId=email_and_access[0], eventId=event_id)
-            headers = {"If-None-Match": etag[0]} if etag else None
-
-            res = await self._make_google_api_request(
-                user_id=user_id,
-                url=url,
-                method=HttpMethod.GET,
-                headers=headers
-            )
-
-            if res.get("status_code") == 304:
-                # Событие не изменилось
-                event_data = await self.calendar_repo.get_event_from_id(user_id, event_id)
-                return {
-                    "status": "not_changed",
-                    "message": "Event has not been modified",
-                    "event": event_data
-                }
-
-            if res.get("status_code") == 404:
-                # Событие было удалено - удаляем из БД и кеша
-                await self.calendar_repo.remove_event_from_cache(user_id, event_id)
-                await self.cache_service.remove_event_from_cache(user_id, event_id)
-                return {
-                    "status": "deleted",
-                    "message": "Event was deleted",
-                    "event_id": event_id
-                }
-
-            # Обновляем событие в БД и кеше
-            await self.calendar_repo.update_item(user_id=user_id, data=res)
-            await self.cache_service.update_event_in_cache(user_id, res)
+            subscriptions = await self.calendar_repo.get_user_webhook_subscriptions(user_id)
+            
+            active_subscriptions = []
+            expired_subscriptions = []
+            
+            current_time = datetime.now().timestamp() * 1000
+            
+            for sub in subscriptions:
+                if sub.get("expiration", 0) > current_time:
+                    active_subscriptions.append(sub)
+                else:
+                    expired_subscriptions.append(sub)
+            
             return {
-                "status": "updated",
-                "message": "Event updated successfully",
-                "event": res
+                "user_id": user_id,
+                "active_subscriptions": active_subscriptions,
+                "expired_subscriptions": expired_subscriptions,
+                "total_active": len(active_subscriptions),
+                "total_expired": len(expired_subscriptions)
             }
-
-        except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            
+        except Exception as e:
+            print(f"Error getting webhook status: {str(e)}")
+            raise
 
     async def update_event(self, user_id: str, event_id: str, update_data: UpdateEventRequest) -> EventUpdateResponse:
         """
@@ -775,132 +843,200 @@ class CalendarService:
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
 
-    async def setup_calendar_webhook(self, user_id: str):
+    async def get_user_by_channel_id(self, channel_id: str) -> Optional[str]:
         """
-        Настройка подписки на вебхуки для календаря пользователя.
+        Получает user_id по channel_id из вебхука.
+        """
+        try:
+            subscription = await self.calendar_repo.get_webhook_subscription(channel_id)
+            if subscription:
+                return subscription.get("user_id")
+            return None
+        except Exception as e:
+            print(f"Error getting user by channel ID: {str(e)}")
+            return None
+
+    async def handle_calendar_change_notification(
+        self,
+        user_id: str,
+        channel_id: str,
+        resource_id: Optional[str] = None,
+        resource_uri: Optional[str] = None
+    ):
+        """
+        Обрабатывает уведомление об изменении календаря от Google.
+        Выполняет инкрементальную синхронизацию и обновляет кеш.
+        """
+        try:
+            # Получаем sync token из кеша или БД
+            sync_token = await self.cache_service.get_sync_token(user_id)
+            if not sync_token:
+                sync_token = await self.calendar_repo.get_synctoken_if_exists(user_id)
+            
+            # Если нет sync token, выполняем полную синхронизацию
+            if not sync_token:
+                await self._perform_full_sync(user_id)
+                return
+            
+            # Выполняем инкрементальную синхронизацию
+            await self._perform_incremental_sync(user_id, sync_token)
+            
+        except Exception as e:
+            print(f"Error handling calendar change notification: {str(e)}")
+            # При ошибке инкрементальной синхронизации выполняем полную
+            await self._perform_full_sync(user_id)
+
+    async def _perform_full_sync(self, user_id: str):
+        """
+        Выполняет полную синхронизацию календаря пользователя.
+        """
+        try:
+            # Инвалидируем кеш
+            await self.cache_service.invalidate_user_cache(user_id)
+            
+            # Получаем все события без sync token
+            await self.get_all_user_calendar_events(user_id, forceFullSync=True, fullResponse=False)
+            
+        except Exception as e:
+            print(f"Error in full sync: {str(e)}")
+            raise
+
+    async def _perform_incremental_sync(self, user_id: str, sync_token: str):
+        """
+        Выполняет инкрементальную синхронизацию календаря.
         """
         try:
             email_and_access = await self.calendar_repo.get_access_and_email(user_id)
+            
+            # Запрашиваем изменения с момента последнего sync token
+            url = f"{self.all_event.format(calendarId=email_and_access[0])}?syncToken={sync_token}"
+            
+            res = await self._make_google_api_request(
+                user_id=user_id,
+                url=url,
+                method=HttpMethod.GET
+            )
+            
+            # Если sync token недействителен (410 ошибка), выполняем полную синхронизацию
+            if res.get("status_code") == 410:
+                await self._perform_full_sync(user_id)
+                return
+            
+            # Сохраняем новый sync token
+            if res.get("nextSyncToken"):
+                await self.calendar_repo.update_synctoken(user_id, res["nextSyncToken"])
+                await self.cache_service.cache_sync_token(user_id, res["nextSyncToken"])
+            
+            # Обрабатываем измененные события
+            if res.get("items"):
+                await self._process_changed_events(user_id, res["items"])
+                
+        except Exception as e:
+            print(f"Error in incremental sync: {str(e)}")
+            raise
 
+    async def _process_changed_events(self, user_id: str, events: List[Dict[str, Any]]):
+        """
+        Обрабатывает список измененных событий.
+        """
+        try:
+            for event in events:
+                event_id = event.get("id")
+                if not event_id:
+                    continue
+                
+                if event.get("status") == "cancelled":
+                    # Удаляем отмененное событие из БД и кеша
+                    await self.calendar_repo.remove_event_from_cache(user_id, event_id)
+                    await self.cache_service.remove_event_from_cache(user_id, event_id)
+                else:
+                    # Обновляем измененное событие в БД и кеше
+                    await self.calendar_repo.update_item(user_id, event)
+                    await self.cache_service.update_event_in_cache(user_id, event)
+            
+            # Инвалидируем общий кеш событий пользователя для обновления при следующем запросе
+            await self.cache_service.invalidate_user_cache(user_id)
+            
+        except Exception as e:
+            print(f"Error processing changed events: {str(e)}")
+            raise
+
+    async def setup_calendar_webhook(self, user_id: str) -> Dict[str, Any]:
+        """
+        Настраивает вебхук для получения уведомлений об изменениях в календаре.
+        """
+        try:
+            email_and_access = await self.calendar_repo.get_access_and_email(user_id)
+            
             # Генерируем уникальный channel_id
             channel_id = str(uuid.uuid4())
-
-            # Время жизни подписки (максимум 7 дней для Google Calendar)
-            expiration = int((datetime.now() + timedelta(days=6)).timestamp() * 1000)
-
+            
+            # Настраиваем webhook
             webhook_payload = {
                 "id": channel_id,
                 "type": "web_hook",
                 "address": f"{settings.WEBHOOK_BASE_URL}/webhook/google-calendar",
-                "expiration": expiration
+                "token": f"user_{user_id}",  # Токен для верификации
+                "expiration": int((datetime.now() + timedelta(days=7)).timestamp() * 1000)  # 7 дней
             }
-
-            # Используем универсальный метод с обработкой 401
+            
             url = self.watch_url.format(calendarId=email_and_access[0])
+            
             res = await self._make_google_api_request(
                 user_id=user_id,
                 url=url,
                 method=HttpMethod.POST,
                 json_data=webhook_payload
             )
-
+            
             # Сохраняем информацию о подписке в БД
-            await self.calendar_repo.save_webhook_subscription(
-                user_id=user_id,
-                channel_id=channel_id,
-                resource_id=res.get("resourceId"),
-                expiration=expiration
-            )
-
+            subscription_data = {
+                "user_id": user_id,
+                "channel_id": channel_id,
+                "resource_id": res.get("resourceId"),
+                "resource_uri": res.get("resourceUri"),
+                "expiration": webhook_payload["expiration"],
+                "created_at": datetime.now()
+            }
+            
+            await self.calendar_repo.save_webhook_subscription(subscription_data)
+            
             return {
                 "channel_id": channel_id,
                 "resource_id": res.get("resourceId"),
-                "expiration": expiration
+                "expiration": webhook_payload["expiration"]
             }
+            
+        except Exception as e:
+            print(f"Error setting up webhook: {str(e)}")
+            raise
 
-        except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
-
-    async def unsubscribe_calendar_webhook(self, channel_id: str):
+    async def get_webhook_status(self, user_id: str) -> Dict[str, Any]:
         """
-        Отписка от вебхука по channel_id.
+        Получает статус вебхука для пользователя.
         """
         try:
-            # Получаем информацию о подписке
-            subscription = await self.calendar_repo.get_webhook_subscription(channel_id)
-            if not subscription:
-                raise ValueError("Subscription not found")
-
-            user_id = subscription["user_id"]
-            resource_id = subscription["resource_id"]
-
-            # Отправляем запрос на отписку в Google
-            stop_payload = {
-                "id": channel_id,
-                "resourceId": resource_id
-            }
-
-            # Используем универсальный метод с обработкой 401
-            await self._make_google_api_request(
-                user_id=user_id,
-                url=self.stop_watch_url,
-                method=HttpMethod.POST,
-                json_data=stop_payload
-            )
-
-            # Удаляем подписку из БД
-            await self.calendar_repo.delete_webhook_subscription(channel_id)
-
-        except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
-
-    async def update_event_from_webhook(self, user_id: str, event_id: str):
-        """
-        Обновляет конкретное событие по ID с использованием etag.
-        Вызывается при получении вебхука об изменении события.
-        """
-        try:
-            email_and_access = await self.calendar_repo.get_access_and_email(user_id)
-            etag = await self.calendar_repo.get_etag_from_id(user_id, event_id)
-
-            # Используем универсальный метод с обработкой 401
-            url = self.specific_event.format(calendarId=email_and_access[0], eventId=event_id)
-            headers = {"If-None-Match": etag[0]} if etag else None
-
-            res = await self._make_google_api_request(
-                user_id=user_id,
-                url=url,
-                method=HttpMethod.GET,
-                headers=headers
-            )
-
-            if res.get("status_code") == 304:
-                # Событие не изменилось
-                event_data = await self.calendar_repo.get_event_from_id(user_id, event_id)
-                return {
-                    "status": "not_changed",
-                    "message": "Event has not been modified",
-                    "event": event_data
-                }
-
-            if res.get("status_code") == 404:
-                # Событие было удалено - удаляем из БД и кеша
-                await self.calendar_repo.remove_event_from_cache(user_id, event_id)
-                await self.cache_service.remove_event_from_cache(user_id, event_id)
-                return {
-                    "status": "deleted",
-                    "message": "Event was deleted",
-                    "event_id": event_id
-                }
-
-            # Обновляем событие в БД и кеше
-            await self.calendar_repo.update_item(user_id=user_id, data=res)
-            await self.cache_service.update_event_in_cache(user_id, res)
+            subscriptions = await self.calendar_repo.get_user_webhook_subscriptions(user_id)
+            
+            active_subscriptions = []
+            expired_subscriptions = []
+            
+            current_time = datetime.now().timestamp() * 1000
+            
+            for sub in subscriptions:
+                if sub.get("expiration", 0) > current_time:
+                    active_subscriptions.append(sub)
+                else:
+                    expired_subscriptions.append(sub)
+            
             return {
-                "status": "updated",
-                "message": "Event updated successfully",
-                "event": res
+                "user_id": user_id,
+                "active_subscriptions": active_subscriptions,
+                "expired_subscriptions": expired_subscriptions,
+                "total_active": len(active_subscriptions),
+                "total_expired": len(expired_subscriptions)
             }
-
-        except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
+            
+        except Exception as e:
+            print(f"Error getting webhook status: {str(e)}")
+            raise

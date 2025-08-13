@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     # Webhook settings
     WEBHOOK_BASE_URL: str = 'https://your-domain.com'
 
+    # Celery settings
+    CELERY_BROKER_URL: str = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
+    CELERY_RESULT_BACKEND: str = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/0"
+
+    # Cache settings
+    CACHE_TTL_SECONDS: int = 360  # 6 минут
+
     class Config:
         env_file = ".env"
         extra = 'allow'

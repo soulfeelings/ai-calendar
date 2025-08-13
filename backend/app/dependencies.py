@@ -4,6 +4,8 @@ from service.calendar_cache_service import CalendarCacheService
 from exception import TokenExpiredError, TokenNotCorrectError
 from cache import AsyncRedisManager
 from repository import AuthRepo, GoogleOauthRepo, CalendarRepo
+from database.accessor import MongoDB
+from settings import settings
 
 def get_auth_repo() -> AuthRepo:
     return AuthRepo()
@@ -49,6 +51,21 @@ async def get_redis():
         yield redis
     finally:
         await redis.pool.close()
+
+def get_cache_accessor() -> AsyncRedisManager:
+    """Получение аксессора кеша для Celery"""
+    return AsyncRedisManager()
+
+def get_database_accessor():
+    """Получение аксессора базы данных для Celery"""
+    from database.accessor import MongoDB
+    return MongoDB(
+        host=settings.MONGO_HOST,
+        port=settings.MONGO_PORT,
+        username=settings.MONGO_USERNAME,
+        password=settings.MONGO_PASSWORD,
+        db=settings.MONGO_DB
+    )
 
 def get_user_request_id(
         auth_service: AuthService = Depends(get_auth_service),

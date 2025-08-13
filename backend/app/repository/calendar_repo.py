@@ -40,8 +40,8 @@ class CalendarRepo:
             },
             upsert=True)
 
-        if res.modified_count != 1:
-            raise ValueError("Update user calendars list failed")
+        if res.modified_count == 0 and res.upserted_id is None:
+            raise ValueError("Update user calendars list failed: no changes made and no upsert")
 
         return True
 
