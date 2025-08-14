@@ -62,8 +62,7 @@ def process_calendar_webhook(
         calendar_service = get_services()
 
         # Выполняем асинхронную обработку
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        loop = asyncio.get_event_loop()
 
         try:
             result = loop.run_until_complete(
@@ -76,9 +75,9 @@ def process_calendar_webhook(
             )
             logger.info(f"Successfully processed webhook for channel {channel_id}")
             return result
-
-        finally:
-            loop.close()
+        except:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
     except Exception as exc:
         logger.error(f"Error processing webhook for channel {channel_id}: {str(exc)}")
@@ -104,10 +103,11 @@ async def _process_webhook_async(
     """
     # Получаем user_id по channel_id
     user_id = await calendar_service.get_user_by_channel_id(channel_id)
+    print(user_id, channel_id)
 
     if not user_id:
         logger.warning(f"User not found for channel {channel_id}")
-        raise ValueError(f"Channel {channel_id} not found")
+        raise ValueError(f"Channel {channel_id} not found, {user_id} user_id")
 
     # Обновляем события календаря
     await calendar_service.handle_calendar_change_notification(

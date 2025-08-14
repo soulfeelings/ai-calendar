@@ -357,7 +357,7 @@ class CalendarService:
         try:
             subscription = await self.calendar_repo.get_webhook_subscription(channel_id)
             if subscription:
-                return subscription.get("user_id")
+                return subscription["user_id"]
             return None
         except Exception as e:
             print(f"Error getting user by channel ID: {str(e)}")
@@ -505,8 +505,13 @@ class CalendarService:
                 "expiration": webhook_payload["expiration"],
                 "created_at": datetime.now()
             }
-            
-            await self.calendar_repo.save_webhook_subscription(subscription_data)
+
+            await self.calendar_repo.save_webhook_subscription(
+                user_id=user_id,
+                channel_id=channel_id,
+                resource_id=res.get("resourceId"),
+                expiration=webhook_payload["expiration"]
+            )
             
             return {
                 "channel_id": channel_id,
@@ -999,7 +1004,12 @@ class CalendarService:
                 "created_at": datetime.now()
             }
             
-            await self.calendar_repo.save_webhook_subscription(subscription_data)
+            await self.calendar_repo.save_webhook_subscription(
+                user_id=user_id,
+                channel_id=channel_id,
+                resource_id=res.get("resourceId"),
+                expiration=webhook_payload["expiration"]
+            )
             
             return {
                 "channel_id": channel_id,
