@@ -51,7 +51,7 @@ class UpdateEventRequest(BaseModel):
     colorId: Optional[str] = None
     conferenceData: Optional[EventConferenceData] = None
     recurrence: Optional[List[str]] = None  # RRULE строки для повторяющихся событий
-
+    
     class Config:
         # Исключаем None значения при сериализации
         exclude_none = True

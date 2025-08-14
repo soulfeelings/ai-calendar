@@ -95,17 +95,17 @@ async def update_event(
 ) -> EventUpdateResponse:
     """
     Обновляет существующее событие в Google Calendar.
-
+    
     Поддерживает частичное обновление - передавайте только те поля, которые нужно изменить.
     Все поля в запросе опциональные.
-
+    
     Args:
         event_id: ID события для обновления
         update_data: Данные для обновления (все поля опциональные)
-
+    
     Returns:
         EventUpdateResponse: Результат обновления события
-
+        
     Example:
         PATCH /calendar/event/abc123
         {
@@ -131,13 +131,13 @@ async def bulk_update_events(
 ) -> List[EventUpdateResponse]:
     """
     Массовое обновление нескольких событий.
-
+    
     Args:
         event_updates: Список объектов с event_id и update_data
-
+    
     Returns:
         List[EventUpdateResponse]: Результаты обновления каждого события
-
+        
     Example:
         PATCH /calendar/events/bulk
         [
@@ -149,7 +149,7 @@ async def bulk_update_events(
                 }
             },
             {
-                "event_id": "def456",
+                "event_id": "def456", 
                 "update_data": {
                     "description": "Новое описание для встречи 2"
                 }

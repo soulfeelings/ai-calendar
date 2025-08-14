@@ -193,7 +193,7 @@ class CalendarCacheService:
         try:
             if "id" not in event_data:
                 return False
-
+                
             async with self.redis_manager.get_client() as client:
                 event_key = f"{self.PREFIX_EVENT}{user_id}:{event_data['id']}"
                 serialized_event = json.dumps(event_data, ensure_ascii=False)

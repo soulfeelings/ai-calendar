@@ -4,12 +4,6 @@ Celery worker для обработки задач AI календаря.
 Запуск: python celery_worker.py
 """
 
-import sys
-import os
-
-# Добавляем текущую директорию в PATH для импорта модулей
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
 from celery_app import celery_app
 
 if __name__ == '__main__':

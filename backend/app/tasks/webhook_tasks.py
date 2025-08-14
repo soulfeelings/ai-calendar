@@ -5,6 +5,7 @@ import logging
 from celery_app import celery_app
 from cache import AsyncRedisManager
 from repository.calendar_repo import CalendarRepo
+from repository.googlerepo import GoogleOauthRepo
 from service.calendar_cache_service import CalendarCacheService
 from service.googleoauth import GoogleOauthService
 from service.calendar_service import CalendarService
@@ -17,10 +18,10 @@ logger = logging.getLogger(__name__)
 def get_services():
     """Получение сервисов для Celery задач"""
     cache_accessor = AsyncRedisManager()
-
+    google_repo = GoogleOauthRepo()
     calendar_repo = CalendarRepo()
     cache_service = CalendarCacheService(cache_accessor)
-    google_oauth_service = GoogleOauthService()
+    google_oauth_service = GoogleOauthService(google_oauth_repo=google_repo)
     calendar_service = CalendarService(
         calendar_repo=calendar_repo,
         cache_service=cache_service,
