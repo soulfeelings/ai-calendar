@@ -16,8 +16,21 @@ class Settings(BaseSettings):
 
     SECRET_JWT_KEY: str = 'secret'
 
+    # OpenAI settings
+    OPENAI_API_KEY: str = 'your-openai-api-key'
+    OPENAI_MODEL: str = 'gpt-4'
+    OPENAI_MAX_TOKENS: int = 4000
+    OPENAI_TEMPERATURE: float = 0.7
+
     # Webhook settings
     WEBHOOK_BASE_URL: str = 'https://your-domain.com'
+
+    # Celery settings
+    CELERY_BROKER_URL: str = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
+    CELERY_RESULT_BACKEND: str = f"redis://{REDIS_HOST}:{REDIS_PORT}/0"
+
+    # Cache settings
+    CACHE_TTL_SECONDS: int = 360  # 6 минут
 
     class Config:
         env_file = ".env"

@@ -1,8 +1,9 @@
 from fastapi import Depends, APIRouter, Body, Query
 from dependencies import get_user_request_id, get_calendar_service, get_calendar_cache_service
-from typing import Annotated, Optional
+from typing import Annotated, Optional, List, Dict, Any
 from service import CalendarService
 from service.calendar_cache_service import CalendarCacheService
+from schemas.event_schemas import UpdateEventRequest, EventUpdateResponse
 
 router = APIRouter(prefix="/calendar", tags=["google_calendar"])
 
@@ -84,3 +85,75 @@ async def clear_user_cache(
         "status": "success" if success else "error",
         "message": "User cache cleared successfully" if success else "Failed to clear cache"
     }
+
+@router.patch("/event/{event_id}")
+async def update_event(
+    user_id: Annotated[str, Depends(get_user_request_id)],
+    event_id: str,
+    update_data: UpdateEventRequest,
+    calendar_service: Annotated[CalendarService, Depends(get_calendar_service)]
+) -> EventUpdateResponse:
+    """
+    Обновляет существующее событие в Google Calendar.
+    
+    Поддерживает частичное обновление - передавайте только те поля, которые нужно изменить.
+    Все поля в запросе опциональные.
+    
+    Args:
+        event_id: ID события для обновления
+        update_data: Данные для обновления (все поля опциональные)
+    
+    Returns:
+        EventUpdateResponse: Результат обновления события
+        
+    Example:
+        PATCH /calendar/event/abc123
+        {
+            "summary": "Новое название встречи",
+            "description": "Обновленное описание",
+            "start": {
+                "dateTime": "2025-01-15T10:00:00+03:00",
+                "timeZone": "Europe/Moscow"
+            },
+            "end": {
+                "dateTime": "2025-01-15T11:00:00+03:00",
+                "timeZone": "Europe/Moscow"
+            }
+        }
+    """
+    return await calendar_service.update_event(user_id, event_id, update_data)
+
+@router.patch("/events/bulk")
+async def bulk_update_events(
+    user_id: Annotated[str, Depends(get_user_request_id)],
+    event_updates: List[Dict[str, Any]],
+    calendar_service: Annotated[CalendarService, Depends(get_calendar_service)]
+) -> List[EventUpdateResponse]:
+    """
+    Массовое обновление нескольких событий.
+    
+    Args:
+        event_updates: Список объектов с event_id и update_data
+    
+    Returns:
+        List[EventUpdateResponse]: Результаты обновления каждого события
+        
+    Example:
+        PATCH /calendar/events/bulk
+        [
+            {
+                "event_id": "abc123",
+                "update_data": {
+                    "summary": "Встреча 1 - обновлено",
+                    "location": "Офис А"
+                }
+            },
+            {
+                "event_id": "def456", 
+                "update_data": {
+                    "description": "Новое описание для встречи 2"
+                }
+            }
+        ]
+    """
+    return await calendar_service.bulk_update_events(user_id, event_updates)

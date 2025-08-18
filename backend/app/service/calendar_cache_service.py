@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from cache.accessor import AsyncRedisManager
 import redis.asyncio as redis
 
+
 class CalendarCacheService:
     """
     Сервис для кеширования календарных данных в Redis.
@@ -71,10 +72,11 @@ class CalendarCacheService:
                 if not event_id:
                     return False
 
-                key = f"{self.PREFIX_EVENT}{user_id}:{event_id}"
-                serialized_data = json.dumps(event_data, ensure_ascii=False)
+                # Кешируем отдельное событие
+                event_key = f"{self.PREFIX_EVENT}{user_id}:{event_id}"
+                serialized_event = json.dumps(event_data, ensure_ascii=False)
+                await client.setex(event_key, self.ttl_seconds, serialized_event)
 
-                await client.setex(key, self.ttl_seconds, serialized_data)
                 return True
         except Exception as e:
             print(f"Error caching single event: {str(e)}")

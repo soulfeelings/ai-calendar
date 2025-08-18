@@ -1,9 +1,12 @@
 from fastapi import security, Security, Depends, HTTPException, status
-from service import AuthService, GoogleOauthService, CalendarService
+from service import AuthService, GoogleOauthService, CalendarService, OpenAIService
 from service.calendar_cache_service import CalendarCacheService
 from exception import TokenExpiredError, TokenNotCorrectError
 from cache import AsyncRedisManager
 from repository import AuthRepo, GoogleOauthRepo, CalendarRepo
+from repository.goals_repo import GoalsRepository
+from database.accessor import MongoDB
+from settings import settings
 
 def get_auth_repo() -> AuthRepo:
     return AuthRepo()
@@ -35,10 +38,13 @@ def get_calendar_cache_service(
 def get_calendar_service(
     calendar_repo: CalendarRepo = Depends(get_calendar_repo),
     cache_service: CalendarCacheService = Depends(get_calendar_cache_service),
+    google_oauth_service: GoogleOauthService = Depends(get_google_oauth_service),
 ) -> CalendarService:
-    return CalendarService(calendar_repo=calendar_repo, cache_service=cache_service)
-
-
+    return CalendarService(
+        calendar_repo=calendar_repo,
+        cache_service=cache_service,
+        google_oauth_service=google_oauth_service
+    )
 
 async def get_redis():
     redis = AsyncRedisManager()
@@ -46,6 +52,27 @@ async def get_redis():
         yield redis
     finally:
         await redis.pool.close()
+
+def get_cache_accessor() -> AsyncRedisManager:
+    """Получение аксессора кеша для Celery"""
+    return AsyncRedisManager()
+
+def get_database_accessor():
+    """Получение аксессора базы данных для Celery"""
+    from database.accessor import MongoDB
+    return MongoDB(
+        host=settings.MONGO_HOST,
+        port=settings.MONGO_PORT,
+        username=settings.MONGO_USERNAME,
+        password=settings.MONGO_PASSWORD,
+        db=settings.MONGO_DB
+    )
+
+def get_goals_repo() -> GoalsRepository:
+    return GoalsRepository()
+
+def get_openai_service() -> OpenAIService:
+    return OpenAIService()
 
 def get_user_request_id(
         auth_service: AuthService = Depends(get_auth_service),
@@ -66,3 +93,11 @@ def get_user_request_id(
         )
 
     return user_id
+
+def get_current_user(
+        user_id: str = Depends(get_user_request_id)
+) -> dict:
+    """
+    Возвращает текущего пользователя в виде словаря с user_id
+    """
+    return {"user_id": user_id}

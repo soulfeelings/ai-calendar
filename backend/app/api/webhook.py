@@ -2,10 +2,7 @@ from fastapi import APIRouter, Request, HTTPException, Depends, Header
 from typing import Annotated, Optional
 from service import CalendarService
 from dependencies import get_calendar_service
-import json
-import hmac
-import hashlib
-from settings import settings
+from tasks.webhook_tasks import process_calendar_webhook
 
 router = APIRouter(prefix="/webhook", tags=["webhook"])
 
@@ -23,7 +20,7 @@ async def google_calendar_webhook(
 ):
     """
     Обработчик вебхука от Google Calendar.
-    Получает уведомления об изменениях в календаре и обновляет данные в БД.
+    Получает уведомления об изменениях в календаре и отправляет задачу в Celery для асинхронной обработки.
     """
     try:
         # Проверяем обязательные заголовки
@@ -34,21 +31,21 @@ async def google_calendar_webhook(
         if x_goog_resource_state not in ["exists", "sync"]:
             return {"status": "ignored", "reason": f"Resource state {x_goog_resource_state} not processed"}
 
-        # Получаем user_id по channel_id
-        user_id = await calendar_service.get_user_by_channel_id(x_goog_channel_id)
-        
-        if not user_id:
-            raise HTTPException(status_code=404, detail="Channel not found")
-
-        # Обновляем события календаря с использованием incremental sync
-        await calendar_service.handle_calendar_change_notification(
-            user_id=user_id,
+        # Отправляем задачу в Celery для асинхронной обработки
+        task = process_calendar_webhook.delay(
             channel_id=x_goog_channel_id,
+            resource_state=x_goog_resource_state,
             resource_id=x_goog_resource_id,
-            resource_uri=x_goog_resource_uri
+            resource_uri=x_goog_resource_uri,
+            message_number=x_goog_message_number
         )
 
-        return {"status": "success", "message": "Webhook processed successfully"}
+        return {
+            "status": "accepted",
+            "message": "Webhook queued for processing",
+            "task_id": task.id,
+            "channel_id": x_goog_channel_id
+        }
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Webhook processing failed: {str(e)}")
@@ -65,7 +62,7 @@ async def setup_webhook_subscription(
     try:
         subscription_info = await calendar_service.setup_calendar_webhook(user_id)
         return {
-            "status": "success", 
+            "status": "success",
             "message": "Webhook subscription created",
             "subscription": subscription_info
         }
@@ -101,3 +98,23 @@ async def get_webhook_status(
         return {"status": "success", "webhook_status": status}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get webhook status: {str(e)}")
+
+
+@router.get("/task-status/{task_id}")
+async def get_task_status(task_id: str):
+    """
+    Получение статуса выполнения Celery задачи.
+    """
+    try:
+        from celery_app import celery_app
+
+        result = celery_app.AsyncResult(task_id)
+
+        return {
+            "task_id": task_id,
+            "status": result.status,
+            "result": result.result if result.ready() else None,
+            "info": result.info
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get task status: {str(e)}")

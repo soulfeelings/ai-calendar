@@ -6,6 +6,8 @@ from api import routers
 from service.webhook_maintenance import WebhookMaintenanceService
 from service.calendar_service import CalendarService
 from service.calendar_cache_service import CalendarCacheService
+from service.googleoauth import GoogleOauthService
+from repository import GoogleOauthRepo
 from repository.calendar_repo import CalendarRepo
 from cache import AsyncRedisManager
 
@@ -21,9 +23,11 @@ async def lifespan(app: FastAPI):
 
     # Startup
     calendar_repo = CalendarRepo()
+    google_oauth_repo = GoogleOauthRepo()
     redis_manager = AsyncRedisManager()
     calendar_cache_service = CalendarCacheService(redis_manager=redis_manager)
-    calendar_service = CalendarService(calendar_repo=calendar_repo, cache_service=calendar_cache_service)
+    google_oauth_service = GoogleOauthService(google_oauth_repo=google_oauth_repo)
+    calendar_service = CalendarService(calendar_repo=calendar_repo, cache_service=calendar_cache_service, google_oauth_service=google_oauth_service)
     maintenance_service = WebhookMaintenanceService(calendar_service)
 
     # Запускаем фоновую задачу для обслуживания вебхуков
