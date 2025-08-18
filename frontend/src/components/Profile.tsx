@@ -14,6 +14,7 @@ const Profile: React.FC = () => {
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<ActiveSection>('calendar');
+  const [sidebarVisible, setSidebarVisible] = useState(true);
 
   useEffect(() => {
     const loadUserAndCalendars = async () => {
@@ -151,6 +152,10 @@ const Profile: React.FC = () => {
     }
   };
 
+  const toggleSidebar = () => {
+    setSidebarVisible(!sidebarVisible);
+  };
+
   if (loading) {
     return (
       <div className="profile-loading">
@@ -176,7 +181,16 @@ const Profile: React.FC = () => {
   return (
     <div className="profile-container">
       <header className="profile-header">
-        <h1>AI Calendar</h1>
+        <div className="header-left">
+          <button className="toggle-sidebar" onClick={toggleSidebar}>
+            <span className="hamburger-icon">
+              <span></span>
+              <span></span>
+              <span></span>
+            </span>
+          </button>
+          <h1>AI Calendar</h1>
+        </div>
         <div className="user-info">
           <img src={user.picture} alt={user.name} className="user-avatar" />
           <span>{user.name}</span>
@@ -187,33 +201,35 @@ const Profile: React.FC = () => {
       </header>
 
       <div className="profile-layout">
-        <aside className="profile-sidebar">
-          <nav className="sidebar-nav">
-            <button
-              className={`nav-item ${activeSection === 'calendar' ? 'active' : ''}`}
-              onClick={() => setActiveSection('calendar')}
-            >
-              <span className="nav-icon">📅</span>
-              <span className="nav-text">Календари</span>
-            </button>
-            
-            <button
-              className={`nav-item ${activeSection === 'events' ? 'active' : ''}`}
-              onClick={() => setActiveSection('events')}
-            >
-              <span className="nav-icon">🗓️</span>
-              <span className="nav-text">События</span>
-            </button>
-            
-            <button
-              className={`nav-item ${activeSection === 'recommendations' ? 'active' : ''}`}
-              onClick={() => setActiveSection('recommendations')}
-            >
-              <span className="nav-icon">🤖</span>
-              <span className="nav-text">ИИ Рекомендации</span>
-            </button>
-          </nav>
-        </aside>
+        {sidebarVisible && (
+          <aside className="profile-sidebar">
+            <nav className="sidebar-nav">
+              <button
+                className={`nav-item ${activeSection === 'calendar' ? 'active' : ''}`}
+                onClick={() => setActiveSection('calendar')}
+              >
+                <span className="nav-icon">📅</span>
+                <span className="nav-text">Календари</span>
+              </button>
+
+              <button
+                className={`nav-item ${activeSection === 'events' ? 'active' : ''}`}
+                onClick={() => setActiveSection('events')}
+              >
+                <span className="nav-icon">🗓️</span>
+                <span className="nav-text">События</span>
+              </button>
+
+              <button
+                className={`nav-item ${activeSection === 'recommendations' ? 'active' : ''}`}
+                onClick={() => setActiveSection('recommendations')}
+              >
+                <span className="nav-icon">🤖</span>
+                <span className="nav-text">ИИ Рекомендации</span>
+              </button>
+            </nav>
+          </aside>
+        )}
 
         <main className="profile-main">
           {renderSectionContent()}
