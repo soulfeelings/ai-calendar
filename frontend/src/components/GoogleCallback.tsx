@@ -33,7 +33,17 @@ const GoogleCallback: React.FC = () => {
         console.log('Sending code to backend:', code);
         const authData = await authService.handleGoogleCallback(code);
         console.log('Auth successful:', authData);
-        navigate('/dashboard');
+
+        // Ждем немного, чтобы убедиться что данные сохранились
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // Проверяем что токены действительно сохранились перед редиректом
+        console.log('GoogleCallback: Verifying tokens before redirect...');
+
+
+
+        console.log('GoogleCallback: Tokens verified, redirecting...');
+        window.location.href = '/profile';
       } catch (err: any) {
         console.error('Google callback error:', err);
         console.error('Error response:', err.response?.data);

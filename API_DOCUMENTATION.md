@@ -1,8 +1,4 @@
-# AI Calendar API Документация
-
 ## Обзор
-
-AI Calendar - это сервис, который интегрируется с Google Calendar, анализирует цели пользователя по методике SMART и предлагает оптимизацию расписания с помощью искусственного интеллекта.
 
 **Базовый URL**: `http://localhost:8000` (для разработки)
 
@@ -94,13 +90,6 @@ true
   "access_token": "access_token",
   "refresh_token": "refresh_token",
   "user_info": {
-    "id": "user_id",
-    "email": "user@example.com",
-    "name": "Имя Пользователя",
-    "picture": "https://example.com/photo.jpg"
-  }
-}
-```
 
 ### POST `/google/refresh_access_token`
 Обновление Google access token для доступа к Calendar API.

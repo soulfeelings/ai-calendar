@@ -18,6 +18,57 @@ export interface CalendarListResponse {
   message?: string;
 }
 
+export interface CalendarEvent {
+  id: string;
+  summary: string;
+  description?: string;
+  start: {
+    dateTime?: string;
+    date?: string;
+    timeZone?: string;
+  };
+  end: {
+    dateTime?: string;
+    date?: string;
+    timeZone?: string;
+  };
+  location?: string;
+  status: string;
+  htmlLink: string;
+  created: string;
+  updated: string;
+  creator: {
+    email: string;
+    displayName?: string;
+  };
+  organizer: {
+    email: string;
+    displayName?: string;
+  };
+  attendees?: Array<{
+    email: string;
+    displayName?: string;
+    responseStatus: string;
+  }>;
+  calendarId: string;
+}
+
+export interface CalendarEventsResponse {
+  kind?: string;
+  etag?: string;
+  summary?: string;
+  description?: string;
+  updated?: string;
+  timeZone?: string;
+  accessRole?: string;
+  defaultReminders?: any[];
+  nextSyncToken?: string;
+  items?: CalendarEvent[];
+  // Для совместимости со старым форматом
+  events?: CalendarEvent[];
+  totalCount?: number;
+}
+
 class CalendarService {
   // Получить список календарей пользователя
   async getCalendarList(): Promise<CalendarListResponse> {
@@ -47,6 +98,21 @@ class CalendarService {
   getCalendarAuthUrl(): string {
     const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
     return `${baseUrl}/google/calendar`;
+  }
+
+  // Получить события календаря
+  async getCalendarEvents(forcefullsync: boolean = false, fullresponse: boolean = false): Promise<CalendarEventsResponse> {
+    const params = new URLSearchParams();
+    if (forcefullsync) params.append('forcefullsync', 'true');
+    if (fullresponse) params.append('fullresponse', 'true');
+
+    const response = await api.get(`/calendar/events?${params.toString()}`);
+    return response.data;
+  }
+
+  // Настройка подписки на вебхуки
+  async setupWebhook(): Promise<void> {
+    await api.post('/calendar/webhook-setup');
   }
 }
 

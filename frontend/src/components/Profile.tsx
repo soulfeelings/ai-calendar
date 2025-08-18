@@ -1,20 +1,50 @@
 import React, { useEffect, useState } from 'react';
 import { authService, User } from '../services/authService';
-import { calendarService, Calendar } from '../services/calendarService';
-import { useNavigate } from 'react-router-dom';
+import { calendarService, Calendar, CalendarEvent } from '../services/calendarService';
+import { useNavigate, useLocation } from 'react-router-dom';
 import './Profile.css';
 
 type ActiveSection = 'calendar' | 'events' | 'recommendations';
 
-const Profile: React.FC = () => {
+interface ProfileProps {
+  activeSection?: ActiveSection;
+}
+
+const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState<User | null>(null);
   const [calendars, setCalendars] = useState<Calendar[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [eventsLoaded, setEventsLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [calendarLoading, setCalendarLoading] = useState(false);
+  const [eventsLoading, setEventsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<ActiveSection>('calendar');
+  const [eventsError, setEventsError] = useState<string | null>(null);
   const [sidebarVisible, setSidebarVisible] = useState(true);
+
+  // Определяем активную секцию на основе URL или prop
+  const getActiveSectionFromUrl = (): ActiveSection => {
+    if (propActiveSection) return propActiveSection;
+    if (location.pathname === '/events') return 'events';
+    if (location.pathname === '/recommendations') return 'recommendations';
+    return 'calendar';
+  };
+
+  const [activeSection, setActiveSection] = useState<ActiveSection>(getActiveSectionFromUrl());
+
+  // Обновляем активную секцию при изменении URL
+  useEffect(() => {
+    setActiveSection(getActiveSectionFromUrl());
+  }, [location.pathname, propActiveSection]);
+
+  // Автоматически загружаем события с fullresponse=true при переходе на страницу событий
+  useEffect(() => {
+    if (activeSection === 'events' && !eventsLoaded) {
+      loadEventsWithFullResponse();
+    }
+  }, [activeSection, eventsLoaded]);
 
   useEffect(() => {
     const loadUserAndCalendars = async () => {
@@ -57,6 +87,15 @@ const Profile: React.FC = () => {
       if (response.items) {
         setCalendars(response.items);
         console.log('Calendars loaded successfully:', response.items);
+
+        // Подписываемся на вебхук после успешной загрузки календарей
+        try {
+          await calendarService.setupWebhook();
+          console.log('Webhook setup successful');
+        } catch (webhookError) {
+          console.warn('Webhook setup failed, but continuing:', webhookError);
+          // Не показываем ошибку пользователю, так как это не критично
+        }
       }
 
     } catch (error: any) {
@@ -65,6 +104,103 @@ const Profile: React.FC = () => {
     } finally {
       setCalendarLoading(false);
     }
+  };
+
+  const loadEvents = async () => {
+    try {
+      setEventsLoading(true);
+      setEventsError(null);
+      console.log('Attempting to load events...');
+
+      const response = await calendarService.getCalendarEvents();
+
+      // Проверяем оба возможных поля для событий
+      const eventsList = response.items || response.events || [];
+
+      if (eventsList.length > 0) {
+        setEvents(eventsList);
+        console.log('Events loaded successfully:', eventsList);
+      } else {
+        setEvents([]);
+        console.log('No events found in response:', response);
+      }
+
+    } catch (error: any) {
+      console.error('Error loading events:', error);
+      setEventsError('Ошибка при загрузке событий');
+    } finally {
+      setEventsLoading(false);
+    }
+  };
+
+  // Загружаем события с полным ответом (включая детали) при первом загрузке страницы событий
+  const loadEventsWithFullResponse = async () => {
+    try {
+      setEventsLoading(true);
+      setEventsError(null);
+      console.log('Attempting to load events with full response...');
+
+      const response = await calendarService.getCalendarEvents(false, true);
+
+      // Проверяем оба возможных поля для событий
+      const eventsList = response.items || response.events || [];
+
+      if (eventsList.length > 0) {
+        setEvents(eventsList);
+        console.log('Events with full response loaded successfully:', eventsList);
+      } else {
+        setEvents([]);
+        console.log('No events found in response:', response);
+      }
+
+    } catch (error: any) {
+      console.error('Error loading events with full response:', error);
+      setEventsError('Ошибка при загрузке событий');
+    } finally {
+      setEventsLoading(false);
+      setEventsLoaded(true); // Помечаем, что события загружены
+    }
+  };
+
+  const formatEventDate = (event: CalendarEvent) => {
+    const startDate = event.start.dateTime || event.start.date;
+    const endDate = event.end.dateTime || event.end.date;
+
+    if (!startDate) return 'Дата не указана';
+
+    const start = new Date(startDate);
+    const end = new Date(endDate || startDate);
+
+    const isAllDay = !event.start.dateTime;
+
+    if (isAllDay) {
+      return start.toLocaleDateString('ru-RU', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+    }
+
+    const isSameDay = start.toDateString() === end.toDateString();
+
+    if (isSameDay) {
+      return `${start.toLocaleDateString('ru-RU')} с ${start.toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit'
+      })} до ${end.toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit'
+      })}`;
+    }
+
+    return `${start.toLocaleDateString('ru-RU')} ${start.toLocaleTimeString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit'
+    })} - ${end.toLocaleDateString('ru-RU')} ${end.toLocaleTimeString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit'
+    })}`;
   };
 
   const handleLogout = async () => {
@@ -128,11 +264,96 @@ const Profile: React.FC = () => {
       case 'events':
         return (
           <div className="events-section">
-            <h2>События календаря</h2>
-            <div className="coming-soon">
-              <p>🗓️ Раздел с событиями календаря</p>
-              <p>Здесь будут отображаться ваши события</p>
+            <div className="section-header">
+              <h2>События календаря</h2>
+              <button
+                onClick={loadEvents}
+                className="refresh-button"
+                disabled={eventsLoading}
+              >
+                {eventsLoading ? 'Загрузка...' : 'Загрузить события'}
+              </button>
             </div>
+
+            {eventsError && (
+              <div className="error-banner">
+                <p>{eventsError}</p>
+              </div>
+            )}
+
+            {eventsLoading && (
+              <div className="calendar-loading">
+                <div className="spinner small"></div>
+                <p>Загружаем события...</p>
+              </div>
+            )}
+
+            {events.length > 0 && (
+              <div className="events-list">
+                <h3>Ваши события:</h3>
+                {events.map((event) => (
+                  <div key={event.id} className="event-item">
+                    <div className="event-header">
+                      <h4 className="event-title">{event.summary || 'Без названия'}</h4>
+                      <span className={`event-status ${event.status}`}>
+                        {event.status === 'confirmed' ? 'Подтверждено' : event.status}
+                      </span>
+                    </div>
+
+                    <div className="event-details">
+                      <div className="event-time">
+                        <span className="event-icon">🕒</span>
+                        <span>{formatEventDate(event)}</span>
+                      </div>
+
+                      {event.location && (
+                        <div className="event-location">
+                          <span className="event-icon">📍</span>
+                          <span>{event.location}</span>
+                        </div>
+                      )}
+
+                      {event.description && (
+                        <div className="event-description">
+                          <span className="event-icon">📝</span>
+                          <span>{event.description}</span>
+                        </div>
+                      )}
+
+                      <div className="event-organizer">
+                        <span className="event-icon">👤</span>
+                        <span>{event.organizer.displayName || event.organizer.email}</span>
+                      </div>
+
+                      {event.attendees && event.attendees.length > 0 && (
+                        <div className="event-attendees">
+                          <span className="event-icon">👥</span>
+                          <span>{event.attendees.length} участник(ов)</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="event-actions">
+                      <a
+                        href={event.htmlLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="event-link"
+                      >
+                        Открыть в Google Calendar
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {events.length === 0 && !eventsLoading && !eventsError && (
+              <div className="no-events">
+                <p>События не найдены</p>
+                <p>Нажмите "Загрузить события" чтобы получить ваши события из Google Calendar</p>
+              </div>
+            )}
           </div>
         );
 
@@ -206,7 +427,7 @@ const Profile: React.FC = () => {
             <nav className="sidebar-nav">
               <button
                 className={`nav-item ${activeSection === 'calendar' ? 'active' : ''}`}
-                onClick={() => setActiveSection('calendar')}
+                onClick={() => navigate('/profile')}
               >
                 <span className="nav-icon">📅</span>
                 <span className="nav-text">Календари</span>
@@ -214,7 +435,7 @@ const Profile: React.FC = () => {
 
               <button
                 className={`nav-item ${activeSection === 'events' ? 'active' : ''}`}
-                onClick={() => setActiveSection('events')}
+                onClick={() => navigate('/events')}
               >
                 <span className="nav-icon">🗓️</span>
                 <span className="nav-text">События</span>
@@ -222,7 +443,7 @@ const Profile: React.FC = () => {
 
               <button
                 className={`nav-item ${activeSection === 'recommendations' ? 'active' : ''}`}
-                onClick={() => setActiveSection('recommendations')}
+                onClick={() => navigate('/recommendations')}
               >
                 <span className="nav-icon">🤖</span>
                 <span className="nav-text">ИИ Рекомендации</span>
