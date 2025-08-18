@@ -71,7 +71,8 @@ class OpenAIService:
                 async with session.post(
                     f"{self.base_url}/chat/completions",
                     headers=self._get_headers(),
-                    json=payload
+                    json=payload,
+                    proxy="socks5://127.0.0.1:1080"
                 ) as response:
                     response_data = await response.json()
 
