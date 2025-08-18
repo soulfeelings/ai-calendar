@@ -16,6 +16,12 @@ class Settings(BaseSettings):
 
     SECRET_JWT_KEY: str = 'secret'
 
+    # OpenAI settings
+    OPENAI_API_KEY: str = 'your-openai-api-key'
+    OPENAI_MODEL: str = 'gpt-4'
+    OPENAI_MAX_TOKENS: int = 4000
+    OPENAI_TEMPERATURE: float = 0.7
+
     # Webhook settings
     WEBHOOK_BASE_URL: str = 'https://your-domain.com'
 

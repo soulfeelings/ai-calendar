@@ -1,6 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
 from datetime import datetime
+from enum import Enum
 
 
 class EventDateTime(BaseModel):
@@ -63,3 +64,59 @@ class EventUpdateResponse(BaseModel):
     event_id: str
     updated_fields: List[str]
     message: str
+
+
+class SmartGoalCreate(BaseModel):
+    title: str = Field(..., description="Название цели")
+    description: Optional[str] = Field(None, description="Описание цели")
+    specific: str = Field(..., description="Конкретность цели")
+    measurable: str = Field(..., description="Измеримость цели")
+    achievable: str = Field(..., description="Достижимость цели")
+    relevant: str = Field(..., description="Релевантность цели")
+    time_bound: datetime = Field(..., description="Временные рамки цели")
+    priority: int = Field(default=1, ge=1, le=5, description="Приоритет от 1 до 5")
+
+
+class SmartGoal(BaseModel):
+    id: str
+    user_id: str
+    title: str
+    description: Optional[str]
+    specific: str
+    measurable: str
+    achievable: str
+    relevant: str
+    time_bound: datetime
+    priority: int
+    created_at: datetime
+    updated_at: datetime
+    is_completed: bool = False
+
+
+class RecommendationAction(str, Enum):
+    CREATE_EVENT = "create_event"
+    UPDATE_EVENT = "update_event"
+    DELETE_EVENT = "delete_event"
+    RESCHEDULE_EVENT = "reschedule_event"
+
+
+class EventRecommendation(BaseModel):
+    action: RecommendationAction
+    event_id: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    start_time: datetime
+    end_time: datetime
+    reason: str = Field(..., description="Обоснование рекомендации")
+
+
+class AIRecommendationResponse(BaseModel):
+    recommendations: List[EventRecommendation]
+    analysis: str = Field(..., description="Анализ календаря и целей")
+    productivity_score: int = Field(ge=1, le=10, description="Оценка продуктивности от 1 до 10")
+
+
+class RecommendationDecision(BaseModel):
+    recommendation_id: str
+    action: str  # "accept" or "reject"
+    user_comment: Optional[str] = None

@@ -1,9 +1,10 @@
 from fastapi import security, Security, Depends, HTTPException, status
-from service import AuthService, GoogleOauthService, CalendarService
+from service import AuthService, GoogleOauthService, CalendarService, OpenAIService
 from service.calendar_cache_service import CalendarCacheService
 from exception import TokenExpiredError, TokenNotCorrectError
 from cache import AsyncRedisManager
 from repository import AuthRepo, GoogleOauthRepo, CalendarRepo
+from repository.goals_repo import GoalsRepository
 from database.accessor import MongoDB
 from settings import settings
 
@@ -67,6 +68,12 @@ def get_database_accessor():
         db=settings.MONGO_DB
     )
 
+def get_goals_repo() -> GoalsRepository:
+    return GoalsRepository()
+
+def get_openai_service() -> OpenAIService:
+    return OpenAIService()
+
 def get_user_request_id(
         auth_service: AuthService = Depends(get_auth_service),
         token: security.http.HTTPAuthorizationCredentials = Security(security.HTTPBearer())
@@ -86,3 +93,11 @@ def get_user_request_id(
         )
 
     return user_id
+
+def get_current_user(
+        user_id: str = Depends(get_user_request_id)
+) -> dict:
+    """
+    Возвращает текущего пользователя в виде словаря с user_id
+    """
+    return {"user_id": user_id}
