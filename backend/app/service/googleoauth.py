@@ -19,7 +19,7 @@ class GoogleOauthService:
     def generate_google_oauth_redirect_uri():
         query_params = {
             "client_id": settings.CLIENT_ID,
-            "redirect_uri": "http://localhost:8000/",
+            "redirect_uri": "http://localhost:3000/auth/callback",
             "response_type": "code",
             "scope": " ".join([
                 "https://www.googleapis.com/auth/calendar",
@@ -43,7 +43,7 @@ class GoogleOauthService:
                     "client_id": settings.CLIENT_ID,
                     "client_secret": settings.CLIENT_SECRET,
                     "grant_type": "authorization_code",
-                    "redirect_uri": "http://localhost:8000/",
+                    "redirect_uri": "http://localhost:3000/auth/callback",
                     "code": code,
                 }
             ) as response:

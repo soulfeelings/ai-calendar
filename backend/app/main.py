@@ -10,6 +10,7 @@ from service.googleoauth import GoogleOauthService
 from repository import GoogleOauthRepo
 from repository.calendar_repo import CalendarRepo
 from cache import AsyncRedisManager
+from fastapi.middleware.cors import CORSMiddleware
 
 # Глобальная переменная для задач
 maintenance_task = None
@@ -46,6 +47,14 @@ async def lifespan(app: FastAPI):
             pass
 
 app = FastAPI(lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 for i in routers:
     app.include_router(i)
