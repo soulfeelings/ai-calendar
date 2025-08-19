@@ -1,6 +1,6 @@
-# AI Calendar Backend - Руководство по деплою
+# AI Calendar - Руководство по деплою
 
-Этот документ содержит пошаговые инструкции по развертыванию бэкенда ИИ календаря на производственном сервере.
+Этот документ содержит пошаговые инструкции по развертыванию полного стека AI Calendar (фронтенд + бэкенд) на производственном сервере.
 
 ## 📋 Содержание
 
@@ -18,16 +18,17 @@
 
 ### Минимальные требования:
 - **ОС**: Ubuntu 20.04+ / CentOS 8+ / Debian 11+
-- **RAM**: 2GB (рекомендуется 4GB+)
-- **CPU**: 1 ядро (рекомендуется 2+)
-- **Диск**: 20GB свободного места
-- **Порты**: 80, 443, 8000, 27017, 6379
+- **RAM**: 4GB (рекомендуется 8GB+)
+- **CPU**: 2 ядра (рекомендуется 4+)
+- **Диск**: 30GB свободного места
+- **Порты**: 80, 443, 3000, 8000, 27017, 6379
 
 ### Необходимое ПО:
 - Docker Engine 20.10+
 - Docker Compose 2.0+
 - Git
 - Nginx (для проксирования)
+- Node.js 18+ (для локальной разработки)
 
 ## 🚀 Подготовка сервера
 
@@ -246,6 +247,28 @@ services:
     networks:
       - ai-calendar-network
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ai-calendar-frontend
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file:
+      - .env
+    depends_on:
+      - backend
+    networks:
+      - ai-calendar-network
+    volumes:
+      - ./logs:/app/logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "3"
+
 volumes:
   mongodb_data:
     driver: local
@@ -270,6 +293,7 @@ docker-compose -f docker-compose.prod.yml ps
 
 # Просмотр логов
 docker-compose -f docker-compose.prod.yml logs -f backend
+docker-compose -f docker-compose.prod.yml logs -f frontend
 ```
 
 ## 🌐 Настройка Nginx
@@ -313,18 +337,47 @@ server {
     ssl_prefer_server_ciphers off;
     ssl_session_cache shared:SSL:10m;
 
-    # Основное приложение
+    # Фронтенд приложение (React)
     location / {
-        proxy_pass http://127.0.0.1:8000;
+        proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         
-        # WebSocket поддержка
+        # WebSocket поддержка для React dev server
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
+        
+        # Таймауты
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+
+    # API бэкенда
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # CORS заголовки
+        add_header Access-Control-Allow-Origin "*" always;
+        add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" always;
+        add_header Access-Control-Allow-Headers "Authorization, Content-Type, Accept" always;
+        
+        # Обработка preflight запросов
+        if ($request_method = 'OPTIONS') {
+            add_header Access-Control-Allow-Origin "*";
+            add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS";
+            add_header Access-Control-Allow-Headers "Authorization, Content-Type, Accept";
+            add_header Content-Length 0;
+            add_header Content-Type text/plain;
+            return 204;
+        }
         
         # Таймауты
         proxy_connect_timeout 60s;
@@ -405,6 +458,7 @@ sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
 ```bash
 # Логи контейнеров
 docker-compose -f docker-compose.prod.yml logs -f backend
+docker-compose -f docker-compose.prod.yml logs -f frontend
 docker-compose -f docker-compose.prod.yml logs -f celery-worker
 
 # Логи Nginx
@@ -444,6 +498,10 @@ docker-compose -f docker-compose.prod.yml ps
 echo ""
 echo "Backend Health:"
 curl -s http://localhost:8000/health || echo "Backend is down!"
+
+echo ""
+echo "Frontend Health:"
+curl -s http://localhost:3000 | grep -q "<!DOCTYPE html>" && echo "Frontend is running" || echo "Frontend is down!"
 
 echo ""
 echo "MongoDB Status:"
@@ -576,6 +634,7 @@ sudo truncate -s 0 /var/lib/docker/containers/*/*-json.log
 ```bash
 # Проверка логов
 docker-compose -f docker-compose.prod.yml logs backend
+docker-compose -f docker-compose.prod.yml logs frontend
 
 # Проверка переменных окружения
 docker-compose -f docker-compose.prod.yml config
@@ -588,6 +647,45 @@ docker exec -it ai-calendar-mongodb mongosh
 
 # Проверка подключения к Redis
 docker exec -it ai-calendar-redis redis-cli ping
+```
+
+### Проблема: Фронтенд недоступен или показывает ошибки
+```bash
+# Проверка статуса контейнера фронтенда
+docker-compose -f docker-compose.prod.yml ps frontend
+
+# Проверка логов фронтенда
+docker-compose -f docker-compose.prod.yml logs frontend
+
+# Проверка доступности порта
+netstat -tulpn | grep :3000
+
+# Перезапуск только фронтенда
+docker-compose -f docker-compose.prod.yml restart frontend
+```
+
+### Проблема: CORS ошибки между фронтендом и API
+```bash
+# Проверка конфигурации Nginx
+sudo nginx -t
+
+# Проверка CORS заголовков
+curl -I -X OPTIONS http://localhost:8000/api/health
+
+# Перезапуск Nginx
+sudo systemctl restart nginx
+```
+
+### Проблема: API недоступен из фронтенда
+```bash
+# Проверка маршрутизации в Nginx
+sudo tail -f /var/log/nginx/ai-calendar-error.log
+
+# Тест прямого обращения к API
+curl http://localhost:8000/health
+
+# Проверка связи между контейнерами
+docker exec ai-calendar-frontend ping backend
 ```
 
 ### Проблема: Высокое потребление ресурсов
@@ -604,18 +702,27 @@ services:
         limits:
           memory: 512M
           cpus: '0.5'
+  frontend:
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.3'
 ```
 
-## 📞 Поддержка
-
-При возникновении проблем:
-1. Проверьте логи контейнеров
-2. Убедитесь в правильности переменных окружения
-3. Проверьте доступность портов
-4. Обратитесь к документации или создайте issue в репозитории
-
----
-
-**Автор**: AI Calendar Team  
-**Версия**: 1.0  
-**Последнее обновление**: $(date)
+### Проблема: Медленная загрузка фронтенда
+```bash
+# Очистка кэша браузера и проверка сжатия в Nginx
+# Добавьте в конфигурацию Nginx:
+gzip on;
+gzip_vary on;
+gzip_min_length 1024;
+gzip_types
+    text/plain
+    text/css
+    text/xml
+    text/javascript
+    application/javascript
+    application/xml+rss
+    application/json;
+```
