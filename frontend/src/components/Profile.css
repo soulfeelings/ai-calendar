@@ -424,7 +424,6 @@
   font-size: 0.9rem;
   transition: color 0.3s ease;
 }
-
 .event-link:hover {
   color: #0056b3;
   text-decoration: underline;
