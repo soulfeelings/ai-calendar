@@ -27,7 +27,7 @@ async def update_scope(
 async def get_all_calendar_events(
     user_id: Annotated[str, Depends(get_user_request_id)],
     calendar_service: Annotated[CalendarService, Depends(get_calendar_service)],
-    forcefullsync: Optional[bool] = Query(default=False),
+    forcefullsync: Optional[bool] = Query(default=True),
     fullresponse: Optional[bool] = Query(default=False),
 ):
     return await calendar_service.get_all_user_calendar_events(user_id, forcefullsync, fullresponse)

@@ -15,7 +15,7 @@ class CalendarCacheService:
     def __init__(self, redis_manager: AsyncRedisManager):
         self.redis_manager = redis_manager
         self.ttl_seconds = 360  # 6 минут
-
+        
         # Префиксы для разных типов данных
         self.PREFIX_EVENTS = "calendar:events:"
         self.PREFIX_EVENT = "calendar:event:"

@@ -54,8 +54,7 @@ async def validate_access(
     auth_service: Annotated[AuthService, Depends(get_auth_service)]
 ):
     try:
-        return True
-
+        return {"valid": True, "user_id": user_id}
 
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
@@ -73,5 +72,3 @@ async def logout_profile(
     auth_service: Annotated[AuthService, Depends(get_auth_service)]
 ):
     return await auth_service.logout(user_id)
-
-

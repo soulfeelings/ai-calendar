@@ -64,7 +64,21 @@ services:
       - celery-worker
 
     restart: always
+    
+    
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
 
 volumes:
   mongodb_data:
   redis_data:
+

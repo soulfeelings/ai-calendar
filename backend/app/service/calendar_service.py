@@ -183,7 +183,7 @@ class CalendarService:
             if "https://www.googleapis.com/auth/calendar" not in user_scope[0].split():
                 query_params = {
                     "client_id": settings.CLIENT_ID,
-                    "redirect_uri": "http://localhost:8000/",
+                    "redirect_uri": "http://localhost:3000/calendar/callback",
                     "response_type": "code",
                     "scope": " ".join([
                         "https://www.googleapis.com/auth/calendar",
@@ -195,7 +195,14 @@ class CalendarService:
 
                 query_string = urllib.parse.urlencode(query_params, quote_via=urllib.parse.quote)
                 base_url = "https://accounts.google.com/o/oauth2/v2/auth"
-                return RedirectResponse(url=f'{base_url}?{query_string}', status_code=status.HTTP_302_FOUND)
+                auth_url = f'{base_url}?{query_string}'
+
+                # Возвращаем JSON с URL для авторизации вместо редиректа
+                return {
+                    "requires_authorization": True,
+                    "authorization_url": auth_url,
+                    "message": "Calendar access not granted. Please authorize."
+                }
 
             # Используем универсальный метод с обработкой 401
             res = await self._make_google_api_request(
@@ -222,7 +229,7 @@ class CalendarService:
                             "client_id": settings.CLIENT_ID,
                             "client_secret": settings.CLIENT_SECRET,
                             "grant_type": "authorization_code",
-                            "redirect_uri": "http://localhost:8000/",
+                            "redirect_uri": "http://localhost:3000/calendar/callback",
                             "code": code,
                         }
                 ) as response:
@@ -231,16 +238,14 @@ class CalendarService:
                     if response.status != 200:
                         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res)
 
-
                     user_sub = await self.calendar_repo.get_user_scope(user_id)
 
                     await self.calendar_repo.update_user_scope(
                         user_id,
-                        scope=f"{user_sub[0]} {res["scope"]}",
+                        scope=f"{user_sub[0]} {res['scope']}",
                         access_token=res["access_token"],
                         refresh_token=res["refresh_token"],
                     )
-
 
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
@@ -681,7 +686,7 @@ class CalendarService:
             if "https://www.googleapis.com/auth/calendar" not in user_scope[0].split():
                 query_params = {
                     "client_id": settings.CLIENT_ID,
-                    "redirect_uri": "http://localhost:8000/",
+                    "redirect_uri": "http://localhost:3000/calendar/callback",
                     "response_type": "code",
                     "scope": " ".join([
                         "https://www.googleapis.com/auth/calendar",
@@ -693,7 +698,14 @@ class CalendarService:
 
                 query_string = urllib.parse.urlencode(query_params, quote_via=urllib.parse.quote)
                 base_url = "https://accounts.google.com/o/oauth2/v2/auth"
-                return RedirectResponse(url=f'{base_url}?{query_string}', status_code=status.HTTP_302_FOUND)
+                auth_url = f'{base_url}?{query_string}'
+
+                # Возвращаем JSON с URL для авторизации вместо редиректа
+                return {
+                    "requires_authorization": True,
+                    "authorization_url": auth_url,
+                    "message": "Calendar access not granted. Please authorize."
+                }
 
             # Используем универсальный метод с обработкой 401
             res = await self._make_google_api_request(
@@ -720,7 +732,7 @@ class CalendarService:
                             "client_id": settings.CLIENT_ID,
                             "client_secret": settings.CLIENT_SECRET,
                             "grant_type": "authorization_code",
-                            "redirect_uri": "http://localhost:8000/",
+                            "redirect_uri": "http://localhost:3000/calendar/callback",
                             "code": code,
                         }
                 ) as response:
@@ -729,16 +741,14 @@ class CalendarService:
                     if response.status != 200:
                         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=res)
 
-
                     user_sub = await self.calendar_repo.get_user_scope(user_id)
 
                     await self.calendar_repo.update_user_scope(
                         user_id,
-                        scope=f"{user_sub[0]} {res["scope"]}",
+                        scope=f"{user_sub[0]} {res['scope']}",
                         access_token=res["access_token"],
                         refresh_token=res["refresh_token"],
                     )
-
 
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
@@ -855,7 +865,7 @@ class CalendarService:
         try:
             subscription = await self.calendar_repo.get_webhook_subscription(channel_id)
             if subscription:
-                return subscription.get("user_id")
+                return subscription["user_id"]
             return None
         except Exception as e:
             print(f"Error getting user by channel ID: {str(e)}")
@@ -1003,7 +1013,7 @@ class CalendarService:
                 "expiration": webhook_payload["expiration"],
                 "created_at": datetime.now()
             }
-            
+
             await self.calendar_repo.save_webhook_subscription(
                 user_id=user_id,
                 channel_id=channel_id,
