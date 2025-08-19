@@ -70,6 +70,23 @@ export interface CalendarEventsResponse {
 }
 
 class CalendarService {
+  private static readonly WEBHOOK_KEY = 'calendar_webhook_configured';
+
+  // Проверить, настроен ли уже вебхук
+  private isWebhookConfigured(): boolean {
+    return localStorage.getItem(CalendarService.WEBHOOK_KEY) === 'true';
+  }
+
+  // Отметить вебхук как настроенный
+  private markWebhookAsConfigured(): void {
+    localStorage.setItem(CalendarService.WEBHOOK_KEY, 'true');
+  }
+
+  // Сбросить состояние вебхука (для отладки или переподключения)
+  resetWebhookStatus(): void {
+    localStorage.removeItem(CalendarService.WEBHOOK_KEY);
+  }
+
   // Получить список календарей пользователя
   async getCalendarList(): Promise<CalendarListResponse> {
     const response = await api.get('/calendar/list');
@@ -113,6 +130,24 @@ class CalendarService {
   // Настройка подписки на вебхуки
   async setupWebhook(): Promise<void> {
     await api.post('/calendar/webhook-setup');
+  }
+
+  // Настройка подписки на вебхуки с проверкой localStorage
+  async setupWebhookIfNeeded(): Promise<boolean> {
+    if (this.isWebhookConfigured()) {
+      console.log('Webhook already configured, skipping setup');
+      return false;
+    }
+
+    try {
+      await this.setupWebhook();
+      this.markWebhookAsConfigured();
+      console.log('Webhook setup successful and marked as configured');
+      return true;
+    } catch (error) {
+      console.error('Webhook setup failed:', error);
+      throw error;
+    }
   }
 }
 

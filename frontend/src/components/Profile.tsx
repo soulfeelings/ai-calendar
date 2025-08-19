@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { authService, User } from '../services/authService';
 import { calendarService, Calendar, CalendarEvent } from '../services/calendarService';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -25,19 +25,19 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
   const [sidebarVisible, setSidebarVisible] = useState(true);
 
   // Определяем активную секцию на основе URL или prop
-  const getActiveSectionFromUrl = (): ActiveSection => {
+  const getActiveSectionFromUrl = useCallback((): ActiveSection => {
     if (propActiveSection) return propActiveSection;
     if (location.pathname === '/events') return 'events';
     if (location.pathname === '/recommendations') return 'recommendations';
     return 'calendar';
-  };
+  }, [propActiveSection, location.pathname]);
 
   const [activeSection, setActiveSection] = useState<ActiveSection>(getActiveSectionFromUrl());
 
   // Обновляем активную секцию при изменении URL
   useEffect(() => {
     setActiveSection(getActiveSectionFromUrl());
-  }, [location.pathname, propActiveSection]);
+  }, [getActiveSectionFromUrl]);
 
   // Автоматически загружаем события с fullresponse=true при переходе на страницу событий
   useEffect(() => {
@@ -60,8 +60,17 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
 
         setUser(userInfo);
 
-        // Пытаемся загрузить список календарей
-        await loadCalendars();
+        // Загружаем список календарей только для раздела 'calendar'
+        // Добавляем дополнительную проверку URL для надежности
+        const currentSection = getActiveSectionFromUrl();
+        console.log('Current section:', currentSection, 'Path:', location.pathname);
+
+        if (currentSection === 'calendar') {
+          console.log('Loading calendars for calendar section');
+          await loadCalendars();
+        } else {
+          console.log('Skipping calendar load for section:', currentSection);
+        }
 
       } catch (error) {
         console.error('Error loading user info:', error);
@@ -73,7 +82,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     };
 
     loadUserAndCalendars();
-  }, [navigate]);
+  }, [navigate, getActiveSectionFromUrl, location.pathname]);
 
   const loadCalendars = async () => {
     try {
@@ -88,10 +97,14 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
         setCalendars(response.items);
         console.log('Calendars loaded successfully:', response.items);
 
-        // Подписываемся на вебхук после успешной загрузки календарей
+        // Подписываемся на вебхук только если он еще не настроен
         try {
-          await calendarService.setupWebhook();
-          console.log('Webhook setup successful');
+          const wasSetup = await calendarService.setupWebhookIfNeeded();
+          if (wasSetup) {
+            console.log('Webhook setup successful');
+          } else {
+            console.log('Webhook was already configured');
+          }
         } catch (webhookError) {
           console.warn('Webhook setup failed, but continuing:', webhookError);
           // Не показываем ошибку пользователю, так как это не критично
