@@ -15,6 +15,10 @@ export interface AuthResponse {
 
 class AuthService {
   private tokenRefreshPromise: Promise<boolean> | null = null;
+  private authCheckPromise: Promise<boolean> | null = null;
+  private lastAuthCheck: number = 0;
+  private authCheckCacheTime: number = 5000; // 5 секунд кэша
+  private lastAuthResult: boolean = false;
 
   // Получить URL для Google OAuth авторизации
   getGoogleAuthUrl(): string {
@@ -92,7 +96,7 @@ class AuthService {
     return response.data;
   }
 
-  // Получить токен доступа
+  // Получить токен до��тупа
   getAccessToken(): string | null {
     return localStorage.getItem('access_token');
   }
@@ -185,24 +189,50 @@ class AuthService {
     }
   }
 
-  // Улучшенная проверка авторизации
+  // Улучшенная проверка авторизации с кэшированием
   async isAuthenticatedAsync(): Promise<boolean> {
     console.log('AuthService.isAuthenticatedAsync() called');
 
+    // Проверяем кэш (если проверка была недавно)
+    const now = Date.now();
+    if (now - this.lastAuthCheck < this.authCheckCacheTime) {
+      console.log('AuthService.isAuthenticatedAsync() - returning cached result:', this.lastAuthResult);
+      return this.lastAuthResult;
+    }
+
+    // Если уже идет проверка авторизации, возвращаем существующий Promise
+    if (this.authCheckPromise) {
+      console.log('AuthService.isAuthenticatedAsync() - auth check in progress, waiting...');
+      return this.authCheckPromise;
+    }
+
+    // Создаем новый Promise для проверки авторизации
+    this.authCheckPromise = this.performAuthCheck();
+    const result = await this.authCheckPromise;
+
+    // Сохраняем результат в кэш
+    this.lastAuthCheck = now;
+    this.lastAuthResult = result;
+    this.authCheckPromise = null;
+
+    return result;
+  }
+
+  private async performAuthCheck(): Promise<boolean> {
     const token = this.getAccessToken();
     const userInfo = this.getSavedUserInfo();
 
-    console.log('AuthService.isAuthenticatedAsync() - token exists:', !!token);
-    console.log('AuthService.isAuthenticatedAsync() - userInfo exists:', !!userInfo);
+    console.log('AuthService.performAuthCheck() - token exists:', !!token);
+    console.log('AuthService.performAuthCheck() - userInfo exists:', !!userInfo);
 
     if (!token || !userInfo) {
-      console.log('AuthService.isAuthenticatedAsync() - missing token or userInfo, returning false');
+      console.log('AuthService.performAuthCheck() - missing token or userInfo, returning false');
       return false;
     }
 
     // Проверяем и обновляем токен при необходимости
     const isValid = await this.ensureValidToken();
-    console.log('AuthService.isAuthenticatedAsync() - token validity:', isValid);
+    console.log('AuthService.performAuthCheck() - token validity:', isValid);
     return isValid;
   }
 
@@ -220,10 +250,19 @@ class AuthService {
     return !!(token && userInfo);
   }
 
+  // Очистка кэша при изменении состояни�� авторизации
+  clearAuthCache(): void {
+    this.lastAuthCheck = 0;
+    this.lastAuthResult = false;
+    this.authCheckPromise = null;
+  }
+
   // Выход из системы
   async logout(): Promise<void> {
     console.log('🔴 AuthService.logout() called!');
     console.trace('Stack trace for logout call');
+
+    this.clearAuthCache(); // Очищаем кэш
 
     try {
       await api.post('/auth/logout');
