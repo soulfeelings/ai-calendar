@@ -23,6 +23,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
   const [error, setError] = useState<string | null>(null);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [selectedDate, setSelectedDate] = useState<string>(''); // Для выбора конкретной даты
 
   // Определяем активную секцию на основе URL или prop
   const getActiveSectionFromUrl = useCallback((): ActiveSection => {
@@ -179,7 +180,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     const startDate = event.start.dateTime || event.start.date;
     const endDate = event.end.dateTime || event.end.date;
 
-    if (!startDate) return 'Дата не указана';
+    if (!startDate) return { date: 'Дата не указана', time: '', duration: '', isAllDay: false };
 
     const start = new Date(startDate);
     const end = new Date(endDate || startDate);
@@ -187,38 +188,260 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     const isAllDay = !event.start.dateTime;
 
     if (isAllDay) {
-      return start.toLocaleDateString('ru-RU', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
+      return {
+        date: start.toLocaleDateString('ru-RU', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        }),
+        time: 'Весь день',
+        duration: '',
+        isAllDay: true
+      };
     }
 
     const isSameDay = start.toDateString() === end.toDateString();
+    const duration = Math.round((end.getTime() - start.getTime()) / (1000 * 60));
 
     if (isSameDay) {
-      return `${start.toLocaleDateString('ru-RU')} с ${start.toLocaleTimeString('ru-RU', {
-        hour: '2-digit',
-        minute: '2-digit'
-      })} до ${end.toLocaleTimeString('ru-RU', {
-        hour: '2-digit',
-        minute: '2-digit'
-      })}`;
+      return {
+        date: start.toLocaleDateString('ru-RU', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long'
+        }),
+        time: `${start.toLocaleTimeString('ru-RU', {
+          hour: '2-digit',
+          minute: '2-digit'
+        })} — ${end.toLocaleTimeString('ru-RU', {
+          hour: '2-digit',
+          minute: '2-digit'
+        })}`,
+        duration: duration >= 60 ? `${Math.floor(duration / 60)}ч ${duration % 60}м` : `${duration}м`,
+        isAllDay: false
+      };
     }
 
-    return `${start.toLocaleDateString('ru-RU')} ${start.toLocaleTimeString('ru-RU', {
-      hour: '2-digit',
-      minute: '2-digit'
-    })} - ${end.toLocaleDateString('ru-RU')} ${end.toLocaleTimeString('ru-RU', {
-      hour: '2-digit',
-      minute: '2-digit'
-    })}`;
+    return {
+      date: `${start.toLocaleDateString('ru-RU')} — ${end.toLocaleDateString('ru-RU')}`,
+      time: `${start.toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit'
+      })} — ${end.toLocaleTimeString('ru-RU', {
+        hour: '2-digit',
+        minute: '2-digit'
+      })}`,
+      duration: duration >= 60 ? `${Math.floor(duration / 60)}ч ${duration % 60}м` : `${duration}м`,
+      isAllDay: false
+    };
+  };
+
+  // Расширенный тип для поддержки многодневных событий
+  interface ExtendedCalendarEvent extends CalendarEvent {
+    originalId?: string;
+    isMultiDay?: boolean;
+    isFirstDay?: boolean;
+    isLastDay?: boolean;
+    multiDayIndex?: number;
+  }
+
+  const expandMultiDayEvents = (events: CalendarEvent[]): ExtendedCalendarEvent[] => {
+    const expandedEvents: ExtendedCalendarEvent[] = [];
+
+    events.forEach(event => {
+      const startDate = event.start.dateTime || event.start.date;
+      const endDate = event.end.dateTime || event.end.date;
+
+      if (!startDate || !endDate) {
+        expandedEvents.push(event);
+        return;
+      }
+
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      // Если событие в один день, просто добавляем
+      if (start.toDateString() === end.toDateString()) {
+        expandedEvents.push(event);
+        return;
+      }
+
+      // Для многодневных событий создаем копии на каждый день
+      const currentDate = new Date(start);
+      let dayIndex = 0;
+
+      while (currentDate <= end) {
+        const isFirstDay = dayIndex === 0;
+        const isLastDay = currentDate.toDateString() === end.toDateString();
+
+        const dayEvent: ExtendedCalendarEvent = {
+          ...event,
+          id: `${event.id}-day-${dayIndex}`,
+          originalId: event.id,
+          isMultiDay: true,
+          isFirstDay,
+          isLastDay,
+          multiDayIndex: dayIndex,
+          start: {
+            ...event.start,
+            dateTime: isFirstDay ? event.start.dateTime : undefined,
+            date: currentDate.toISOString().split('T')[0]
+          },
+          end: {
+            ...event.end,
+            dateTime: isLastDay ? event.end.dateTime : undefined,
+            date: currentDate.toISOString().split('T')[0]
+          }
+        };
+
+        expandedEvents.push(dayEvent);
+
+        currentDate.setDate(currentDate.getDate() + 1);
+        dayIndex++;
+      }
+    });
+
+    return expandedEvents;
+  };
+
+  const getActiveEvents = (events: CalendarEvent[]): CalendarEvent[] => {
+    const now = new Date();
+
+    return events.filter(event => {
+      const startDate = event.start.dateTime || event.start.date;
+      const endDate = event.end.dateTime || event.end.date;
+
+      if (!startDate || !endDate) return false;
+
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      // Событие активно, если текущее время между началом и концом
+      return now >= start && now <= end;
+    });
+  };
+
+  const getFilteredEvents = (): ExtendedCalendarEvent[] => {
+    let filteredEvents = events;
+
+    console.log('getFilteredEvents called:', { 
+      selectedDate, 
+      totalEvents: events.length 
+    });
+
+    // Если выбрана конкретная дата, фильтруем по ней
+    if (selectedDate) {
+      console.log('Filtering by selected date:', selectedDate);
+      
+      filteredEvents = events.filter(event => {
+        const startDate = event.start.dateTime || event.start.date;
+        const endDate = event.end.dateTime || event.end.date;
+
+        if (!startDate || !endDate) return false;
+
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        const selectedDateObj = new Date(selectedDate);
+
+        // Проверяем, попадает ли выбранная дата в диапазон события
+        // Учитываем только дату, игнорируя время
+        const startDateOnly = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+        const endDateOnly = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+        const selectedDateOnly = new Date(selectedDateObj.getFullYear(), selectedDateObj.getMonth(), selectedDateObj.getDate());
+
+        const isInRange = selectedDateOnly >= startDateOnly && selectedDateOnly <= endDateOnly;
+        
+        console.log('Event check:', {
+          eventTitle: event.summary,
+          startDate: startDateOnly.toISOString().split('T')[0],
+          endDate: endDateOnly.toISOString().split('T')[0],
+          selectedDate: selectedDateOnly.toISOString().split('T')[0],
+          isInRange
+        });
+
+        return isInRange;
+      });
+      
+      console.log('Filtered events by date:', filteredEvents.length);
+    } else {
+      // Если дата не выбрана, показываем только активные события
+      console.log('No date selected, filtering active events');
+      filteredEvents = getActiveEvents(events);
+      console.log('Active events found:', filteredEvents.length);
+    }
+
+    // Разворачиваем многодневные события
+    const expandedEvents = expandMultiDayEvents(filteredEvents);
+    console.log('Final expanded events:', expandedEvents.length);
+    
+    return expandedEvents;
+  };
+
+  const groupEventsByDate = (events: ExtendedCalendarEvent[]) => {
+    const groups: { [key: string]: CalendarEvent[] } = {};
+
+    events.forEach(event => {
+      const startDate = event.start.dateTime || event.start.date;
+      if (startDate) {
+        const date = new Date(startDate);
+        const dateKey = date.toISOString().split('T')[0];
+
+        if (!groups[dateKey]) {
+          groups[dateKey] = [];
+        }
+        groups[dateKey].push(event);
+      }
+    });
+
+    // Сортируем события внутри каждого дня по времени
+    Object.keys(groups).forEach(dateKey => {
+      groups[dateKey].sort((a, b) => {
+        const timeA = a.start.dateTime || a.start.date;
+        const timeB = b.start.dateTime || b.start.date;
+        if (!timeA || !timeB) return 0;
+        return new Date(timeA).getTime() - new Date(timeB).getTime();
+      });
+    });
+
+    return groups;
+  };
+
+  const isEventSoon = (event: CalendarEvent) => {
+    const startDate = event.start.dateTime || event.start.date;
+    if (!startDate) return false;
+
+    const start = new Date(startDate);
+    const now = new Date();
+    const diffHours = (start.getTime() - now.getTime()) / (1000 * 60 * 60);
+
+    return diffHours > 0 && diffHours <= 2;
+  };
+
+  const isEventNow = (event: CalendarEvent) => {
+    const startDate = event.start.dateTime || event.start.date;
+    const endDate = event.end.dateTime || event.end.date;
+
+    if (!startDate || !endDate) return false;
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const now = new Date();
+
+    return now >= start && now <= end;
   };
 
   const handleLogout = async () => {
     await authService.logout();
     navigate('/login');
+  };
+
+  const handleDateSelect = (date: string) => {
+    setSelectedDate(date);
+  };
+
+  const clearDateFilter = () => {
+    setSelectedDate('');
   };
 
   const renderSectionContent = () => {
@@ -275,96 +498,251 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
         );
 
       case 'events':
+        const filteredEvents = getFilteredEvents();
+        const groupedEvents = groupEventsByDate(filteredEvents);
+        const sortedDates = Object.keys(groupedEvents).sort();
+
+        // Определяем тип отображения
+        const isShowingActiveOnly = !selectedDate;
+
         return (
           <div className="events-section">
             <div className="section-header">
-              <h2>События календаря</h2>
-              <button
-                onClick={loadEvents}
-                className="refresh-button"
-                disabled={eventsLoading}
-              >
-                {eventsLoading ? 'Загрузка...' : 'Загрузить события'}
-              </button>
+              <div className="header-content">
+                <h2>
+                  <span className="section-icon">📅</span>
+                  События календаря
+                </h2>
+                <div className="events-stats">
+                  <span className="events-count">{filteredEvents.length} событий</span>
+                  <span className="events-timeframe">
+                    {selectedDate ?
+                      `на ${new Date(selectedDate).toLocaleDateString('ru-RU')}` :
+                      'активные сейчас'
+                    }
+                  </span>
+                </div>
+              </div>
+              <div className="section-controls">
+                <div className="date-picker-container">
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => handleDateSelect(e.target.value)}
+                    className="date-picker modern"
+                    title="Выберите дату для просмотра событий"
+                  />
+                  {selectedDate && (
+                    <button
+                      onClick={clearDateFilter}
+                      className="clear-date-button"
+                      title="Показать активные события"
+                    >
+                      <span className="clear-icon">✕</span>
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={loadEvents}
+                  className="refresh-button modern"
+                  disabled={eventsLoading}
+                >
+                  <span className="button-icon">🔄</span>
+                  {eventsLoading ? 'Загрузка...' : 'Обновить'}
+                </button>
+              </div>
             </div>
 
             {eventsError && (
-              <div className="error-banner">
-                <p>{eventsError}</p>
+              <div className="error-banner modern">
+                <div className="error-icon">⚠️</div>
+                <div className="error-content">
+                  <h4>Ошибка загрузки</h4>
+                  <p>{eventsError}</p>
+                </div>
               </div>
             )}
 
             {eventsLoading && (
-              <div className="calendar-loading">
-                <div className="spinner small"></div>
-                <p>Загружаем события...</p>
+              <div className="loading-container modern">
+                <div className="loading-spinner"></div>
+                <div className="loading-content">
+                  <h3>Загружаем события...</h3>
+                  <p>Получаем данные из Google Calendar</p>
+                </div>
               </div>
             )}
 
-            {events.length > 0 && (
-              <div className="events-list">
-                <h3>Ваши события:</h3>
-                {events.map((event) => (
-                  <div key={event.id} className="event-item">
-                    <div className="event-header">
-                      <h4 className="event-title">{event.summary || 'Без названия'}</h4>
-                      <span className={`event-status ${event.status}`}>
-                        {event.status === 'confirmed' ? 'Подтверждено' : event.status}
-                      </span>
-                    </div>
+            {filteredEvents.length > 0 && (
+              <div className="events-timeline">
+                {sortedDates.map((dateKey) => {
+                  const dayEvents = groupedEvents[dateKey];
+                  const date = new Date(dateKey + 'T00:00:00');
+                  const isToday = date.toDateString() === new Date().toDateString();
+                  const isTomorrow = date.toDateString() === new Date(Date.now() + 24 * 60 * 60 * 1000).toDateString();
 
-                    <div className="event-details">
-                      <div className="event-time">
-                        <span className="event-icon">🕒</span>
-                        <span>{formatEventDate(event)}</span>
+                  let dayLabel;
+                  if (isToday) {
+                    dayLabel = 'Сегодня';
+                  } else if (isTomorrow) {
+                    dayLabel = 'Завтра';
+                  } else {
+                    dayLabel = date.toLocaleDateString('ru-RU', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long'
+                    });
+                  }
+
+                  return (
+                    <div key={dateKey} className="day-group">
+                      <div className={`day-header ${isToday ? 'today' : ''}`}>
+                        <div className="day-indicator"></div>
+                        <div className="day-info">
+                          <h3 className="day-label">{dayLabel}</h3>
+                          <span className="day-date">{date.toLocaleDateString('ru-RU')}</span>
+                          <span className="events-count-day">{dayEvents.length} событий</span>
+                        </div>
                       </div>
 
-                      {event.location && (
-                        <div className="event-location">
-                          <span className="event-icon">📍</span>
-                          <span>{event.location}</span>
-                        </div>
-                      )}
+                      <div className="day-events">
+                        {dayEvents.map((event, index) => {
+                          const eventTime = formatEventDate(event);
+                          const isSoon = isEventSoon(event);
+                          const isNow = isEventNow(event);
+                          const isMultiDay = (event as any).isMultiDay;
+                          const isFirstDay = (event as any).isFirstDay;
+                          const isLastDay = (event as any).isLastDay;
 
-                      {event.description && (
-                        <div className="event-description">
-                          <span className="event-icon">📝</span>
-                          <span>{event.description}</span>
-                        </div>
-                      )}
+                          return (
+                            <div
+                              key={event.id}
+                              className={`event-card modern ${isNow ? 'happening-now' : ''} ${isSoon ? 'happening-soon' : ''} ${isMultiDay ? 'multi-day' : ''}`}
+                            >
+                              <div className="event-timeline-indicator">
+                                <div className={`timeline-dot ${isNow ? 'now' : isSoon ? 'soon' : ''}`}></div>
+                                {index < dayEvents.length - 1 && <div className="timeline-line"></div>}
+                              </div>
 
-                      <div className="event-organizer">
-                        <span className="event-icon">👤</span>
-                        <span>{event.organizer.displayName || event.organizer.email}</span>
+                              <div className="event-content">
+                                <div className="event-header">
+                                  <div className="event-title-section">
+                                    <h4 className="event-title">
+                                      {event.summary || 'Без названия'}
+                                      {isMultiDay && (
+                                        <span className="multi-day-indicator">
+                                          {isFirstDay ? ' (начало)' : isLastDay ? ' (окончание)' : ' (продолжение)'}
+                                        </span>
+                                      )}
+                                    </h4>
+                                    {isNow && <span className="status-badge now">Сейчас</span>}
+                                    {isSoon && !isNow && <span className="status-badge soon">Скоро</span>}
+                                  </div>
+                                  <div className={`event-status ${event.status}`}>
+                                    {event.status === 'confirmed' ? '✓' : event.status}
+                                  </div>
+                                </div>
+
+                                <div className="event-time-info">
+                                  <div className="time-primary">
+                                    <span className="time-icon">🕐</span>
+                                    <span className="time-text">
+                                      {isMultiDay ?
+                                        (isFirstDay ? `С ${eventTime.time}` :
+                                         isLastDay ? `До ${eventTime.time}` :
+                                         'Весь день') :
+                                        eventTime.time
+                                      }
+                                    </span>
+                                  </div>
+                                  {!eventTime.isAllDay && !isMultiDay && (
+                                    <div className="time-duration">
+                                      <span className="duration-icon">⏱</span>
+                                      <span className="duration-text">{eventTime.duration}</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {event.location && (
+                                  <div className="event-location">
+                                    <span className="location-icon">📍</span>
+                                    <span className="location-text">{event.location}</span>
+                                  </div>
+                                )}
+
+                                {event.description && (
+                                  <div className="event-description">
+                                    <span className="description-text">{event.description.length > 100 ?
+                                      event.description.substring(0, 100) + '...' :
+                                      event.description}
+                                    </span>
+                                  </div>
+                                )}
+
+                                <div className="event-meta">
+                                  <div className="event-organizer">
+                                    <span className="organizer-icon">👤</span>
+                                    <span className="organizer-text">
+                                      {event.organizer.displayName || event.organizer.email}
+                                    </span>
+                                  </div>
+
+                                  {event.attendees && event.attendees.length > 0 && (
+                                    <div className="event-attendees">
+                                      <span className="attendees-icon">👥</span>
+                                      <span className="attendees-text">{event.attendees.length}</span>
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div className="event-actions">
+                                  <a
+                                    href={event.htmlLink}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="event-link modern"
+                                  >
+                                    <span className="link-icon">🔗</span>
+                                    Открыть в Google Calendar
+                                  </a>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-
-                      {event.attendees && event.attendees.length > 0 && (
-                        <div className="event-attendees">
-                          <span className="event-icon">👥</span>
-                          <span>{event.attendees.length} участник(ов)</span>
-                        </div>
-                      )}
                     </div>
-
-                    <div className="event-actions">
-                      <a
-                        href={event.htmlLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="event-link"
-                      >
-                        Открыть в Google Calendar
-                      </a>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
 
-            {events.length === 0 && !eventsLoading && !eventsError && (
-              <div className="no-events">
-                <p>События не найдены</p>
-                <p>Нажмите "Загрузить события" чтобы получить ваши события из Google Calendar</p>
+            {filteredEvents.length === 0 && !eventsLoading && !eventsError && (
+              <div className="no-events modern">
+                <div className="no-events-icon">📅</div>
+                <h3>
+                  {selectedDate ?
+                    `События на ${new Date(selectedDate).toLocaleDateString('ru-RU')} не найдены` :
+                    'Нет активных событий'
+                  }
+                </h3>
+                <p>
+                  {selectedDate ?
+                    'Попробуйте выбрать другую дату или очистить фильтр' :
+                    'В данный момент нет событий, которые бы проходили сейчас'
+                  }
+                </p>
+                {selectedDate ? (
+                  <button onClick={clearDateFilter} className="load-events-button">
+                    <span className="button-icon">🗓️</span>
+                    Показать активные события
+                  </button>
+                ) : (
+                  <button onClick={loadEvents} className="load-events-button">
+                    <span className="button-icon">📥</span>
+                    Загрузить события
+                  </button>
+                )}
               </div>
             )}
           </div>

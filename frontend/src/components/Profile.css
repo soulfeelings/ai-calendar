@@ -165,209 +165,383 @@
 .section-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 2px solid #f0f2f5;
 }
 
-.section-header h2 {
-  color: #333;
+.header-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.header-content h2 {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.6rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
-.coming-soon {
-  text-align: center;
-  padding: 60px 20px;
-  color: #666;
+.section-icon {
+  font-size: 1.4rem;
 }
 
-.coming-soon p:first-child {
-  font-size: 1.2rem;
-  margin-bottom: 10px;
+.events-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.85rem;
+  color: #6c757d;
 }
 
-/* Остальные существующие стили */
-.refresh-button {
-  padding: 8px 16px;
-  background: #007bff;
+.events-count {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.events-timeframe {
+  opacity: 0.8;
+}
+
+/* Современная кнопка обновления */
+.refresh-button.modern {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 12px;
   cursor: pointer;
-  font-weight: 500;
-  transition: background 0.3s;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
 }
 
-.refresh-button:hover:not(:disabled) {
-  background: #0056b3;
+.refresh-button.modern:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
 }
 
-.refresh-button:disabled {
-  background: #6c757d;
+.refresh-button.modern:disabled {
+  opacity: 0.6;
   cursor: not-allowed;
+  transform: none;
 }
 
-.error-banner {
-  background: #f8d7da;
-  border: 1px solid #f5c6cb;
-  color: #721c24;
-  padding: 20px;
-  border-radius: 8px;
-  margin-bottom: 20px;
+.button-icon {
+  font-size: 1rem;
 }
 
-.calendar-loading {
+/* Современный баннер ошибки */
+.error-banner.modern {
   display: flex;
   align-items: center;
   gap: 15px;
-  color: #666;
-  padding: 20px 0;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+  color: white;
+  padding: 20px;
+  border-radius: 16px;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 20px rgba(255, 107, 107, 0.3);
 }
 
-.spinner {
-  width: 40px;
-  height: 40px;
+.error-icon {
+  font-size: 1.5rem;
+}
+
+.error-content h4 {
+  margin: 0 0 4px 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.error-content p {
+  margin: 0;
+  opacity: 0.9;
+}
+
+/* Современный индикатор загрузки */
+.loading-container.modern {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 40px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 20px;
+  margin-bottom: 30px;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
   border: 4px solid #f3f3f3;
-  border-top: 4px solid #007bff;
+  border-top: 4px solid #667eea;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: modernSpin 1s linear infinite;
 }
 
-.spinner.small {
-  width: 20px;
-  height: 20px;
-  border-width: 2px;
+.loading-content h3 {
+  margin: 0 0 4px 0;
+  font-size: 1.2rem;
+  color: #333;
 }
 
-@keyframes spin {
+.loading-content p {
+  margin: 0;
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+@keyframes modernSpin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
 
-.calendars-list {
-  margin-top: 20px;
+/* Timeline интерфейс для событий */
+.events-timeline {
+  position: relative;
 }
 
-.calendars-list h3 {
-  color: #333;
-  margin-bottom: 15px;
-  font-size: 1.2rem;
+.day-group {
+  position: relative;
+  margin-bottom: 30px;
 }
 
-.calendar-item {
+.day-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 15px;
-  border: 1px solid #e9ecef;
-  border-radius: 8px;
-  margin-bottom: 10px;
-  transition: box-shadow 0.3s;
-}
-
-.calendar-item:hover {
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-}
-
-.calendar-info h4 {
-  color: #333;
-  margin: 0 0 5px 0;
-  font-size: 1.1rem;
-}
-
-.calendar-role {
-  padding: 4px 8px;
-  background: #e9ecef;
-  color: #495057;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  font-weight: 500;
-}
-
-.calendar-role.primary {
-  background: #d4edda;
-  color: #155724;
-}
-
-.no-calendars {
-  text-align: center;
-  color: #666;
-  padding: 40px 20px;
-}
-
-.profile-loading, .profile-error {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  text-align: center;
-}
-
-.error-message {
-  background: rgba(255, 255, 255, 0.1);
-  padding: 30px;
-  border-radius: 12px;
-  backdrop-filter: blur(10px);
-}
-
-.error-message button {
-  margin-top: 15px;
-  padding: 10px 20px;
-  background: white;
-  color: #667eea;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.events-list {
-  margin-top: 20px;
-}
-
-.events-list h3 {
-  color: #333;
+  gap: 12px;
   margin-bottom: 15px;
-  font-size: 1.2rem;
-}
-
-.event-item {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 15px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 16px;
+  border-left: 4px solid #6c757d;
   transition: all 0.3s ease;
 }
 
-.event-item:hover {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  transform: translateY(-2px);
+.day-header.today {
+  background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+  border-left-color: #2196f3;
+  box-shadow: 0 4px 20px rgba(33, 150, 243, 0.2);
+}
+
+.day-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #6c757d;
+  flex-shrink: 0;
+}
+
+.day-header.today .day-indicator {
+  background: #2196f3;
+  box-shadow: 0 0 20px rgba(33, 150, 243, 0.5);
+}
+
+.day-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+}
+
+.day-label {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #333;
+}
+
+.day-header.today .day-label {
+  color: #1976d2;
+}
+
+.day-date {
+  font-size: 0.85rem;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.events-count-day {
+  font-size: 0.75rem;
+  color: #6c757d;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 2px 8px;
+  border-radius: 12px;
+  align-self: flex-start;
+}
+
+/* События дня */
+.day-events {
+  position: relative;
+  padding-left: 25px;
+}
+
+.event-card.modern {
+  display: flex;
+  gap: 15px;
+  background: white;
+  border-radius: 20px;
+  padding: 18px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  border: 1px solid #f0f2f5;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.event-card.modern:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+.event-card.happening-now {
+  background: linear-gradient(135deg, #e8f5e8 0%, #c8e6c9 100%);
+  border-color: #4caf50;
+  box-shadow: 0 4px 20px rgba(76, 175, 80, 0.3);
+}
+
+.event-card.happening-soon {
+  background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+  border-color: #ff9800;
+  box-shadow: 0 4px 20px rgba(255, 152, 0, 0.3);
+}
+
+/* Стили для многодневных событий */
+.event-card.multi-day {
+  border-left: 4px solid #9c27b0;
+  background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+}
+
+.multi-day-indicator {
+  font-size: 0.75rem;
+  color: #9c27b0;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+/* Timeline индикаторы */
+.event-timeline-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.timeline-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #e9ecef;
+  border: 3px solid white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 2;
+}
+
+.timeline-dot.now {
+  background: #4caf50;
+  box-shadow: 0 0 20px rgba(76, 175, 80, 0.6);
+  animation: pulse 2s infinite;
+}
+
+.timeline-dot.soon {
+  background: #ff9800;
+  box-shadow: 0 0 15px rgba(255, 152, 0, 0.5);
+}
+
+.timeline-line {
+  width: 2px;
+  height: 30px;
+  background: linear-gradient(to bottom, #e9ecef 0%, #dee2e6 100%);
+  margin-top: 6px;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+/* Содержимое события */
+.event-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .event-header {
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.event-title-section {
+  display: flex;
   align-items: center;
-  margin-bottom: 15px;
+  gap: 12px;
+  flex: 1;
 }
 
 .event-title {
-  color: #333;
   margin: 0;
-  font-size: 1.2rem;
-  font-weight: 600;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #333;
+  line-height: 1.3;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.now {
+  background: #4caf50;
+  color: white;
+  animation: glow 2s infinite;
+}
+
+.status-badge.soon {
+  background: #ff9800;
+  color: white;
+}
+
+@keyframes glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(76, 175, 80, 0.5); }
+  50% { box-shadow: 0 0 20px rgba(76, 175, 80, 0.8); }
 }
 
 .event-status {
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  font-weight: 500;
-  text-transform: uppercase;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: bold;
+  background: #e9ecef;
+  color: #6c757d;
 }
 
 .event-status.confirmed {
@@ -375,112 +549,334 @@
   color: #155724;
 }
 
-.event-status.tentative {
-  background: #fff3cd;
-  color: #856404;
-}
-
-.event-status.cancelled {
-  background: #f8d7da;
-  color: #721c24;
-}
-
-.event-details {
-  margin-bottom: 15px;
-}
-
-.event-details > div {
+/* Информация о времени */
+.event-time-info {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
-  color: #666;
-  font-size: 0.95rem;
+  gap: 16px;
+  padding: 12px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 16px;
+  border-left: 4px solid #667eea;
 }
 
-.event-icon {
-  margin-right: 8px;
-  width: 16px;
-  text-align: center;
+.time-primary, .time-duration {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.event-description {
-  align-items: flex-start;
+.time-icon, .duration-icon {
+  font-size: 1.2rem;
 }
 
-.event-description span:last-child {
-  margin-top: 2px;
-  line-height: 1.4;
+.time-text {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #333;
 }
 
-.event-actions {
-  border-top: 1px solid #e9ecef;
-  padding-top: 12px;
+.duration-text {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #667eea;
+  background: rgba(102, 126, 234, 0.1);
+  padding: 4px 8px;
+  border-radius: 8px;
 }
 
-.event-link {
-  color: #007bff;
-  text-decoration: none;
-  font-weight: 500;
-  font-size: 0.9rem;
-  transition: color 0.3s ease;
-}
-.event-link:hover {
-  color: #0056b3;
-  text-decoration: underline;
-}
-
-.no-events {
-  text-align: center;
-  color: #666;
-  padding: 40px 20px;
+/* Локация события */
+.event-location {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 193, 7, 0.1);
+  border-radius: 12px;
+  border-left: 3px solid #ffc107;
 }
 
-.no-events p:first-child {
+.location-icon {
   font-size: 1.1rem;
-  margin-bottom: 8px;
 }
 
-.no-events p:last-child {
+.location-text {
+  font-weight: 600;
+  color: #333;
+}
+
+/* Описание события */
+.event-description {
+  padding: 10px 12px;
+  background: rgba(108, 117, 125, 0.05);
+  border-radius: 12px;
+  border-left: 3px solid #6c757d;
+}
+
+.description-text {
+  color: #6c757d;
+  line-height: 1.5;
   font-size: 0.9rem;
-  opacity: 0.8;
+}
+
+/* Метаинформация события */
+.event-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 0;
+  border-top: 1px solid #f0f2f5;
+}
+
+.event-organizer, .event-attendees {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
+.organizer-icon, .attendees-icon {
+  font-size: 1rem;
+}
+
+.organizer-text, .attendees-text {
+  font-weight: 500;
+}
+
+/* Действия с событием */
+.event-actions {
+  padding-top: 10px;
+  border-top: 1px solid #f0f2f5;
+}
+
+.event-link.modern {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  text-decoration: none;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 10px rgba(102, 126, 234, 0.3);
+}
+
+.event-link.modern:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.5);
+  text-decoration: none;
+  color: white;
+}
+
+.link-icon {
+  font-size: 0.9rem;
+}
+
+/* Состояние отсутствия событий */
+.no-events.modern {
+  text-align: center;
+  padding: 60px 20px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 24px;
+  border: 2px dashed #dee2e6;
+}
+
+.no-events-icon {
+  font-size: 4rem;
+  margin-bottom: 20px;
+  opacity: 0.5;
+}
+
+.no-events.modern h3 {
+  margin: 0 0 12px 0;
+  font-size: 1.5rem;
+  color: #333;
+  font-weight: 700;
+}
+
+.no-events.modern p {
+  margin: 0 0 24px 0;
+  color: #6c757d;
+  font-size: 1rem;
+}
+
+.load-events-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.load-events-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+}
+
+/* Контролы секции с выбором даты */
+.section-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.date-picker-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.date-picker.modern {
+  padding: 10px 12px;
+  border: 2px solid #e9ecef;
+  border-radius: 12px;
+  background: white;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #333;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  min-width: 140px;
+}
+
+.date-picker.modern:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.date-picker.modern:hover {
+  border-color: #667eea;
+  background: #f8f9fa;
+}
+
+/* Стили для кнопки очистки даты */
+.clear-date-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  background: #ff6b6b;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.clear-date-button:hover {
+  background: #ff5252;
+  transform: scale(1.1);
+}
+
+.clear-icon {
+  line-height: 1;
+}
+
+/* Обновляем существующие стили для адаптивности */
+@media (max-width: 768px) {
+  .section-controls {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .date-picker-container {
+    justify-content: center;
+  }
+
+  .date-picker.modern {
+    min-width: auto;
+    width: 100%;
+    max-width: 200px;
+  }
 }
 
 @media (max-width: 768px) {
-  .profile-layout {
+  .section-header {
     flex-direction: column;
+    gap: 16px;
+    align-items: stretch;
   }
 
-  .profile-sidebar {
-    width: 100%;
-    order: 2;
+  .header-content h2 {
+    font-size: 1.5rem;
   }
 
-  .sidebar-nav {
+  .events-stats {
+    justify-content: center;
+  }
+
+  .refresh-button.modern {
+    align-self: center;
+  }
+
+  .day-events {
+    padding-left: 20px;
+  }
+
+  .event-card.modern {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .event-timeline-indicator {
     flex-direction: row;
-    overflow-x: auto;
-    padding: 10px;
+    align-items: center;
+    order: -1;
   }
 
-  .nav-item {
-    flex-shrink: 0;
-    padding: 10px 15px;
-    border-radius: 6px;
-    margin-right: 10px;
+  .timeline-line {
+    width: 40px;
+    height: 2px;
+    margin-top: 0;
+    margin-left: 8px;
   }
 
-  .nav-item.active {
-    border-right: none;
-    border-bottom: 3px solid #1976d2;
-  }
-
-  .profile-main {
-    order: 1;
-    padding: 20px;
-  }
-
-  .profile-header {
-    padding: 15px 20px;
+  .event-time-info {
     flex-direction: column;
-    gap: 15px;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .event-meta {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .day-header {
+    padding: 12px 16px;
+  }
+
+  .event-card.modern {
+    padding: 16px;
+    margin-bottom: 12px;
+  }
+
+  .event-title {
+    font-size: 1.1rem;
+  }
+
+  .no-events-icon {
+    font-size: 3rem;
   }
 }
