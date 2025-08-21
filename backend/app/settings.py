@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # Cache settings
     CACHE_TTL_SECONDS: int = 360  # 6 минут
 
+    GOOGLE_AUTH_REDIRECT_URI: str = 'https://your-domain.com/calendar/callback'
+    GOOGLE_CALENDAR_REDIRECT_URI: str = 'https://your-domain.com/calendar/callback'
+
     class Config:
         env_file = ".env"
         extra = 'allow'

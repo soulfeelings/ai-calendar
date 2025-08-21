@@ -183,7 +183,7 @@ class CalendarService:
             if "https://www.googleapis.com/auth/calendar" not in user_scope[0].split():
                 query_params = {
                     "client_id": settings.CLIENT_ID,
-                    "redirect_uri": "http://localhost:3000/calendar/callback",
+                    "redirect_uri": settings.GOOGLE_CALENDAR_REDIRECT_URI,
                     "response_type": "code",
                     "scope": " ".join([
                         "https://www.googleapis.com/auth/calendar",
@@ -229,7 +229,7 @@ class CalendarService:
                             "client_id": settings.CLIENT_ID,
                             "client_secret": settings.CLIENT_SECRET,
                             "grant_type": "authorization_code",
-                            "redirect_uri": "http://localhost:3000/calendar/callback",
+                            "redirect_uri": settings.GOOGLE_CALENDAR_REDIRECT_URI,
                             "code": code,
                         }
                 ) as response:
@@ -686,7 +686,7 @@ class CalendarService:
             if "https://www.googleapis.com/auth/calendar" not in user_scope[0].split():
                 query_params = {
                     "client_id": settings.CLIENT_ID,
-                    "redirect_uri": "http://localhost:3000/calendar/callback",
+                    "redirect_uri": settings.GOOGLE_CALENDAR_REDIRECT_URI,
                     "response_type": "code",
                     "scope": " ".join([
                         "https://www.googleapis.com/auth/calendar",
@@ -732,7 +732,7 @@ class CalendarService:
                             "client_id": settings.CLIENT_ID,
                             "client_secret": settings.CLIENT_SECRET,
                             "grant_type": "authorization_code",
-                            "redirect_uri": "http://localhost:3000/calendar/callback",
+                            "redirect_uri": settings.GOOGLE_CALENDAR_REDIRECT_URI,
                             "code": code,
                         }
                 ) as response:
