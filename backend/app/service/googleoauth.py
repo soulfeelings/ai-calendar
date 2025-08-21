@@ -19,7 +19,7 @@ class GoogleOauthService:
     def generate_google_oauth_redirect_uri():
         query_params = {
             "client_id": settings.CLIENT_ID,
-            "redirect_uri": "http://localhost:3000/auth/callback",
+            "redirect_uri": settings.GOOGLE_AUTH_REDIRECT_URI,
             "response_type": "code",
             "scope": " ".join([
                 "https://www.googleapis.com/auth/calendar",
@@ -43,7 +43,7 @@ class GoogleOauthService:
                     "client_id": settings.CLIENT_ID,
                     "client_secret": settings.CLIENT_SECRET,
                     "grant_type": "authorization_code",
-                    "redirect_uri": "http://localhost:3000/auth/callback",
+                    "redirect_uri": settings.GOOGLE_AUTH_REDIRECT_URI,
                     "code": code,
                 }
             ) as response:
@@ -55,13 +55,10 @@ class GoogleOauthService:
 
                 user_data = self.decode_id_token(res["id_token"])
 
-                await self.google_oauth_repo.add_user(
-                    {
+                data_for_update = {
                         "user_sub": user_data["sub"],
                         "access_token": res["access_token"],
-                        "refresh_token": res["refresh_token"],
                         "expires_in": res["expires_in"],
-                        "refresh_token_expires_in": res["refresh_token_expires_in"],
                         "scope": res["scope"],
                         "user_data": {
                             "email": user_data["email"],
@@ -70,6 +67,13 @@ class GoogleOauthService:
                         },
                         "updated_at": datetime.now()
                     }
+
+                if res.get("refresh_token", None) is not None:
+                    data_for_update["refresh_token"] = res["refresh_token"]
+                    data_for_update["refresh_token_expires_in"] = res["refresh_token_expires_in"]
+
+                await self.google_oauth_repo.add_user(
+                    data_for_update
                 )
 
                 return await self.generate_jwt_token(

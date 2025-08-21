@@ -147,7 +147,7 @@ services:
     container_name: ai-calendar-mongodb
     restart: unless-stopped
     ports:
-      - "127.0.0.1:27017:27017"
+      - "27017:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
@@ -167,7 +167,7 @@ services:
     container_name: ai-calendar-redis
     restart: unless-stopped
     ports:
-      - "127.0.0.1:6379:6379"
+      - "6379:6379"
     volumes:
       - redis_data:/data
     networks:
@@ -185,7 +185,7 @@ services:
     container_name: ai-calendar-backend
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8000:8000"
+      - "8000:8000"
     env_file:
       - .env
     environment:
@@ -204,7 +204,7 @@ services:
         max-size: "100m"
         max-file: "3"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthcheck"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -221,8 +221,6 @@ services:
     depends_on:
       - mongodb
       - redis
-    networks:
-      - ai-calendar-network
     volumes:
       - ./logs:/app/logs
     logging:
@@ -239,13 +237,12 @@ services:
     restart: unless-stopped
     command: poetry run celery -A celery_app flower --port=5555
     ports:
-      - "127.0.0.1:5555:5555"
+      - "5555:5555"
     env_file:
       - .env
     depends_on:
       - redis
-    networks:
-      - ai-calendar-network
+
 
   frontend:
     build:
@@ -254,7 +251,7 @@ services:
     container_name: ai-calendar-frontend
     restart: unless-stopped
     ports:
-      - "127.0.0.1:3000:3000"
+      - "3000:3000"
     env_file:
       - .env
     depends_on:
@@ -275,9 +272,6 @@ volumes:
   redis_data:
     driver: local
 
-networks:
-  ai-calendar-network:
-    driver: bridge
 ```
 
 ### 2. Запуск приложения
@@ -317,43 +311,46 @@ sudo systemctl enable nginx
 ```nginx
 server {
     listen 80;
-    server_name yourdomain.com www.yourdomain.com;
-    
-    # Редирект на HTTPS
+    server_name ai-calendar.ai-ia.tech;
     return 301 https://$server_name$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name yourdomain.com www.yourdomain.com;
+    server_name ai-calendar.ai-ia.tech;
 
-    # SSL сертификаты
-    ssl_certificate /etc/ssl/certs/yourdomain.com.crt;
-    ssl_certificate_key /etc/ssl/private/yourdomain.com.key;
-    
     # SSL настройки
+    ssl_certificate /etc/letsencrypt/live/ai-calendar.ai-ia.tech/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/ai-calendar.ai-ia.tech/privkey.pem;
+    
+    # Критические настройки для решения проблемы с key share
     ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384;
+    ssl_ecdh_curve X25519:prime256v1:secp384r1;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256:DHE-RSA-AES256-GCM-SHA384;
     ssl_prefer_server_ciphers off;
-    ssl_session_cache shared:SSL:10m;
 
-    # Фронтенд приложение (React)
+    # Дополнительные SSL настройки для улучшения безопасности
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+    ssl_stapling on;
+    ssl_stapling_verify on;
+    
+    # Корневая директория со статическими файлами
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Основное location
     location / {
-        proxy_pass http://127.0.0.1:3000;
+        proxy_pass http://127.0.0.1:3000;  # Прокси на фронтенд-контейнер
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
         
-        # WebSocket поддержка для React dev server
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        
-        # Таймауты
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
+        # Для SPA приложений может потребоваться обработка HTML5 History API
+        proxy_intercept_errors on;
+        error_page 404 = /index.html;
     }
 
     # API бэкенда
@@ -363,26 +360,35 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
+
         # CORS заголовки
-        add_header Access-Control-Allow-Origin "*" always;
-        add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" always;
-        add_header Access-Control-Allow-Headers "Authorization, Content-Type, Accept" always;
-        
+        add_header Access-Control-Allow-Origin "$http_origin" always;
+        add_header Access-Control-Allow-Credentials "true" always;
+        add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS, PATCH" always;
+        add_header Access-Control-Allow-Headers "Authorization, Content-Type, Accept, X-Requested-With, Origin" always;
+        add_header Access-Control-Max-Age "3600" always;
+
         # Обработка preflight запросов
         if ($request_method = 'OPTIONS') {
-            add_header Access-Control-Allow-Origin "*";
-            add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS";
-            add_header Access-Control-Allow-Headers "Authorization, Content-Type, Accept";
+            add_header Access-Control-Allow-Origin "$http_origin";
+            add_header Access-Control-Allow-Credentials "true";
+            add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS, PATCH";
+            add_header Access-Control-Allow-Headers "Authorization, Content-Type, Accept, X-Requested-With, Origin";
+            add_header Access-Control-Max-Age "3600";
             add_header Content-Length 0;
             add_header Content-Type text/plain;
             return 204;
         }
-        
-        # Таймауты
-        proxy_connect_timeout 60s;
+
+        # Таймауты для API
+        proxy_connect_timeout 30s;
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
+        
+        # Буферизация
+        proxy_buffering on;
+        proxy_buffer_size 4k;
+        proxy_buffers 8 4k;
     }
 
     # Flower (мониторинг Celery)
@@ -392,28 +398,88 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # Аутентификация (опционально)
+
+        # Базовая аутентификация
         auth_basic "Flower Monitoring";
         auth_basic_user_file /etc/nginx/.htpasswd;
     }
 
-    # Статические файлы (если есть)
-    location /static/ {
-        alias /opt/ai-calendar/static/;
-        expires 30d;
-        add_header Cache-Control "public, immutable";
+    # Документация API (если используется Swagger/OpenAPI)
+    location /docs {
+        proxy_pass http://127.0.0.1:8000/docs;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+    
+        # Webhook endpoint для CI/CD
+    location /webhook {
+        proxy_pass http://127.0.0.1:9000/webhook;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Ограничиваем размер тела запроса для webhook'ов
+        client_max_body_size 1M;
+
+        # Таймауты для webhook'ов
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+
+        # Логирование webhook'ов в отдельный файл
+        access_log /var/log/nginx/webhook-access.log;
+        error_log /var/log/nginx/webhook-error.log;
+
+        # Безопасность - разрешаем только POST запросы
+        limit_except POST {
+            deny all;
+        }
+    }
+
+
+    # Health check endpoints
+    location /health {
+        proxy_pass http://127.0.0.1:8000/health;
+        access_log off;
+    }
+
+    # Блокирование доступа к системным файлам
+    location ~ /\. {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    location ~ ~$ {
+        deny all;
+        access_log off;
+        log_not_found off;
     }
 
     # Логи
     access_log /var/log/nginx/ai-calendar-access.log;
     error_log /var/log/nginx/ai-calendar-error.log;
-    
+
     # Безопасность
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-XSS-Protection "1; mode=block" always;
-    add_header Referrer-Policy "no-referrer-when-downgrade" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https: wss:; font-src 'self' data:; object-src 'none'; base-uri 'self'; form-action 'self';" always;
+
+    # Ограничения по размеру
+    client_max_body_size 10M;
+    client_body_buffer_size 128k;
+
+    # Общие настройки производительности
+    sendfile on;
+    tcp_nopush on;
+    tcp_nodelay on;
+    keepalive_timeout 65;
+    types_hash_max_size 2048;
 }
 ```
 

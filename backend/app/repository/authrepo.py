@@ -41,8 +41,7 @@ class AuthRepo:
 
         res1 = await mongodb.users.update_one(
             {"user_sub": user_id},
-            {"$set": {"access_token": "",
-                      "refresh_token": ""}},)
+            {"$set": {"access_token": ""}},)
 
         if res.modified_count + res1.modified_count != 2:
             raise HTTPException(status_code=404, detail="Not Found. Check token")
