@@ -412,6 +412,33 @@ server {
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
+    
+        # Webhook endpoint для CI/CD
+    location /webhook {
+        proxy_pass http://127.0.0.1:9000/webhook;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Ограничиваем размер тела запроса для webhook'ов
+        client_max_body_size 1M;
+
+        # Таймауты для webhook'ов
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 30s;
+        proxy_read_timeout 30s;
+
+        # Логирование webhook'ов в отдельный файл
+        access_log /var/log/nginx/webhook-access.log;
+        error_log /var/log/nginx/webhook-error.log;
+
+        # Безопасность - разрешаем только POST запросы
+        limit_except POST {
+            deny all;
+        }
+    }
+
 
     # Health check endpoints
     location /health {
