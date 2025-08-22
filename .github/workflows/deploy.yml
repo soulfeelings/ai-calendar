@@ -4,94 +4,33 @@ on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main ]
+      branches: [ main ]
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
-    - name: Deploy to production server
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.HOST }}
-        username: ${{ secrets.USERNAME }}
-        key: ${{ secrets.SSH_KEY }}
-        port: ${{ secrets.PORT }}
-        timeout: 300s
-        script: |
-          cd "/media/arman/Local Disk/Projects/AIcalendar/ai-calendar"
-          
-          # Проверяем статус git репозитория
-          echo "Текущая ветка: $(git branch --show-current)"
-          echo "Последний коммит: $(git log -1 --oneline)"
-          
-          # Получаем изменения
-          git fetch origin main
-          
-          # Проверяем есть ли изменения
-          BEHIND=$(git rev-list HEAD..origin/main --count)
-          if [ "$BEHIND" -eq 0 ]; then
-            echo "Нет новых изменений для развертывания"
-            exit 0
-          fi
-          
-          echo "Найдено $BEHIND новых коммитов. Начинаем развертывание..."
-          
-          # Переключаемся на main и получаем изменения
-          git checkout main
-          git pull origin main
-          
-          # Показываем изменения
-          echo "Последние изменения:"
-          git log -3 --oneline
-          
-          # Останавливаем контейнеры
-          echo "Останавливаем контейнеры..."
-          docker-compose down
-          
-          # Очищаем старые образы
-          echo "Очищаем неиспользуемые образы..."
-          docker system prune -f
-          
-          # Собираем новые образы
-          echo "Собираем новые образы..."
-          docker-compose build --no-cache --parallel
-          
-          # Запускаем контейнеры
-          echo "Запускаем контейнеры..."
-          docker-compose up -d
-          
-          # Ждем запуска
-          echo "Ждем запуска сервисов..."
-          sleep 15
-          
-          # Проверяем статус
-          echo "Статус контейнеров:"
-          docker-compose ps
-          
-          # Проверяем логи
-          echo "Последние логи backend:"
-          docker-compose logs --tail=10 backend
-          
-          # Проверяем nginx
-          if systemctl is-active --quiet nginx; then
-            echo "Перезагружаем nginx..."
-            sudo nginx -t && sudo systemctl reload nginx || echo "Ошибка nginx, пропускаем"
-          fi
-          
-          echo "✅ Развертывание завершено успешно!"
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-    - name: Notify on success
-      if: success()
+    - name: Stop existing containers
       run: |
-        echo "🎉 Deployment completed successfully!"
-        echo "Deployed commit: ${{ github.sha }}"
-        echo "Time: $(date)"
+        cd "/opt/ai-calendar"
+        docker-compose down || true
 
-    - name: Notify on failure
-      if: failure()
+    - name: Pull latest changes
       run: |
-        echo "❌ Deployment failed!"
-        echo "Failed commit: ${{ github.sha }}"
-        echo "Please check the logs above"
+        cd "/opt/ai-calendar"
+        git pull origin main
+
+    - name: Build and start containers
+      run: |
+        cd "/opt/ai-calendar"
+        docker-compose -f docker-compose.yml --env-file .env up -d --build
+
+    - name: Check deployment
+      run: |
+        sleep 30
+        docker-compose ps
+        curl -f http://localhost:3000 || exit 1
