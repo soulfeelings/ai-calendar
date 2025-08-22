@@ -27,7 +27,7 @@ jobs:
     - name: Build and start containers
       run: |
         cd "/opt/ai-calendar"
-        docker-compose up -d --build
+        docker-compose -f docker-compose.yml --env-file .env up -d --build
 
     - name: Check deployment
       run: |
