@@ -32,6 +32,7 @@ jobs:
 
     - name: Check deployment
       run: |
+        cd "/opt/ai-calendar"
         sleep 30
         docker-compose ps
         curl -f http://localhost:3000 || exit 1
