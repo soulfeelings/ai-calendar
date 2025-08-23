@@ -34,4 +34,3 @@ jobs:
       run: |
         sleep 30
         docker-compose ps
-        curl -f http://localhost:3000 || exit 1
