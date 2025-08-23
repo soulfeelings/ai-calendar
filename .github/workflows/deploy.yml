@@ -20,9 +20,8 @@ jobs:
     - name: Safe update with git stash
       run: |
         cd "/opt/ai-calendar"
-        git stash push --include-untracked --message "Save local changes including .env"
-        git pull origin main
-        git stash pop
+        git fetch origin main
+        git merge origin/main --no-edit --no-commit
 
 
     - name: Build and start containers
