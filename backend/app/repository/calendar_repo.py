@@ -259,10 +259,11 @@ class CalendarRepo:
     async def get_user_webhook_info_if_exists(self, user_id):
         res = await mongodb.webhook_subscriptions.find_one({"user_id": user_id})
 
+        print(res)
         if res:
             return {
                 "channel_id": res['channel_id'],
-                "resource_id": res["resourceId"],
+                "resource_id": res["resource_id"],
                 "expiration": res["expiration"]
             }
 

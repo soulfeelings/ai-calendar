@@ -46,3 +46,8 @@ class GoogleOauthRepo:
             raise ValueError("Not user is found")
 
         return True
+
+    async def get_user_refresh_info(self, user_id):
+        res = await mongodb.users.find_one({"user_sub": user_id})
+
+        return res["refresh_token"], res["refresh_token_expires_in"]

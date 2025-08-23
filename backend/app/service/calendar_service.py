@@ -484,7 +484,7 @@ class CalendarService:
 
             email_and_access = await self.calendar_repo.get_access_and_email(user_id)
             
-            # Генерируем уникальный channel_id
+            # Генерируем уникальный channel_idsdfs
             channel_id = str(uuid.uuid4())
             
             # Настраиваем webhook
@@ -980,60 +980,6 @@ class CalendarService:
             print(f"Error processing changed events: {str(e)}")
             raise
 
-    async def setup_calendar_webhook(self, user_id: str) -> Dict[str, Any]:
-        """
-        Настраивает вебхук для получения уведомлений об изменениях в календаре.
-        """
-        try:
-            email_and_access = await self.calendar_repo.get_access_and_email(user_id)
-            
-            # Генерируем уникальный channel_id
-            channel_id = str(uuid.uuid4())
-            
-            # Настраиваем webhook
-            webhook_payload = {
-                "id": channel_id,
-                "type": "web_hook",
-                "address": f"{settings.WEBHOOK_BASE_URL}/webhook/google-calendar",
-                "token": f"user_{user_id}",  # Токен для верификации
-                "expiration": int((datetime.now() + timedelta(days=7)).timestamp() * 1000)  # 7 дней
-            }
-            
-            url = self.watch_url.format(calendarId=email_and_access[0])
-            
-            res = await self._make_google_api_request(
-                user_id=user_id,
-                url=url,
-                method=HttpMethod.POST,
-                json_data=webhook_payload
-            )
-            
-            # Сохраняем информацию о подписке в БД
-            subscription_data = {
-                "user_id": user_id,
-                "channel_id": channel_id,
-                "resource_id": res.get("resourceId"),
-                "resource_uri": res.get("resourceUri"),
-                "expiration": webhook_payload["expiration"],
-                "created_at": datetime.now()
-            }
-
-            await self.calendar_repo.save_webhook_subscription(
-                user_id=user_id,
-                channel_id=channel_id,
-                resource_id=res.get("resourceId"),
-                expiration=webhook_payload["expiration"]
-            )
-            
-            return {
-                "channel_id": channel_id,
-                "resource_id": res.get("resourceId"),
-                "expiration": webhook_payload["expiration"]
-            }
-            
-        except Exception as e:
-            print(f"Error setting up webhook: {str(e)}")
-            raise
 
     async def get_webhook_status(self, user_id: str) -> Dict[str, Any]:
         """

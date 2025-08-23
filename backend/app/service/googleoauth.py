@@ -71,6 +71,10 @@ class GoogleOauthService:
                 if res.get("refresh_token", None) is not None:
                     data_for_update["refresh_token"] = res["refresh_token"]
                     data_for_update["refresh_token_expires_in"] = res["refresh_token_expires_in"]
+                else:
+                    refresh_data = await self.google_oauth_repo.get_user_refresh_info(user_data["sub"])
+                    data_for_update["refresh_token"] = refresh_data[0]
+                    data_for_update["refresh_token_expires_in"] = refresh_data[1]
 
                 await self.google_oauth_repo.add_user(
                     data_for_update
