@@ -47,12 +47,6 @@ function AppContent() {
     }
     console.log('All localStorage keys:', keys);
 
-    // Тестируем работу localStorage
-    console.log('Testing localStorage functionality...');
-    localStorage.setItem('test_token', 'test_value_123');
-    const testResult = localStorage.getItem('test_token');
-    console.log('Test save/load result:', testResult);
-
     // Проверяем настройки браузера
     console.log('Browser info:');
     console.log('- Cookie enabled:', navigator.cookieEnabled);

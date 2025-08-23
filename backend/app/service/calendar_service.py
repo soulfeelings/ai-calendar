@@ -478,6 +478,10 @@ class CalendarService:
         Настраивает вебхук для получения уведомлений об изменениях в календаре.
         """
         try:
+            webhook_info = await self.calendar_repo.get_user_webhook_info_if_exists(user_id)
+            if webhook_info:
+                return webhook_info
+
             email_and_access = await self.calendar_repo.get_access_and_email(user_id)
             
             # Генерируем уникальный channel_id

@@ -255,3 +255,15 @@ class CalendarRepo:
             raise ValueError("Failed to update access token")
 
         return True
+
+    async def get_user_webhook_info_if_exists(self, user_id):
+        res = await mongodb.webhook_subscriptions.find_one({"user_id": user_id})
+
+        if res:
+            return {
+                "channel_id": res['channel_id'],
+                "resource_id": res["resourceId"],
+                "expiration": res["expiration"]
+            }
+
+        return None
