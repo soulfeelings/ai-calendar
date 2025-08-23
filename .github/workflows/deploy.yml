@@ -3,8 +3,6 @@ name: Deploy AI Calendar
 on:
   push:
     branches: [ main ]
-  pull_request:
-      branches: [ main ]
 
 jobs:
   deploy:
@@ -19,11 +17,13 @@ jobs:
         cd "/opt/ai-calendar"
         docker-compose down || true
 
-    - name: Pull latest changes
+    - name: Safe update with git stash
       run: |
         cd "/opt/ai-calendar"
-        git fetch origin main
-        git merge origin/main --no-edit
+        git stash push --include-untracked --message "Save local changes including .env"
+        git pull origin main
+        git stash pop
+
 
     - name: Build and start containers
       run: |
@@ -34,3 +34,4 @@ jobs:
       run: |
         sleep 30
         docker-compose ps
+        curl -f http://localhost:3000 || exit 1
