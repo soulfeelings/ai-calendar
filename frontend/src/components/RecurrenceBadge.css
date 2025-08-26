@@ -1,0 +1,199 @@
+/* Стили для компонента RecurrenceBadge */
+.recurrence-badge {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+}
+
+.recurrence-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: help;
+  transition: all 0.2s ease;
+}
+
+.recurrence-icon {
+  font-size: 0.9em;
+  line-height: 1;
+}
+
+.recurrence-text {
+  white-space: nowrap;
+}
+
+/* Цветовая схема - один цвет для всех повторяющихся событий */
+.recurrence-daily .recurrence-content,
+.recurrence-weekly .recurrence-content,
+.recurrence-monthly .recurrence-content,
+.recurrence-yearly .recurrence-content,
+.recurrence-custom .recurrence-content {
+  background: linear-gradient(135deg, #ff6b35, #f7931e);
+  color: white;
+  border: 1px solid #e55a2b;
+  box-shadow: 0 2px 8px rgba(255, 107, 53, 0.3);
+}
+
+.recurrence-instance .recurrence-content {
+  background: linear-gradient(135deg, #607d8b, #78909c);
+  color: white;
+  border: 1px solid #455a64;
+  box-shadow: 0 2px 8px rgba(96, 125, 139, 0.3);
+}
+
+/* Hover эффекты - яркие цвета */
+.recurrence-content:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.recurrence-daily .recurrence-content:hover {
+  background: linear-gradient(135deg, #e55a2b, #f57c00);
+  box-shadow: 0 4px 16px rgba(255, 107, 53, 0.5);
+}
+
+.recurrence-weekly .recurrence-content:hover {
+  background: linear-gradient(135deg, #e55a2b, #f57c00);
+  box-shadow: 0 4px 16px rgba(255, 107, 53, 0.5);
+}
+
+.recurrence-monthly .recurrence-content:hover {
+  background: linear-gradient(135deg, #e55a2b, #f57c00);
+  box-shadow: 0 4px 16px rgba(255, 107, 53, 0.5);
+}
+
+.recurrence-yearly .recurrence-content:hover {
+  background: linear-gradient(135deg, #e55a2b, #f57c00);
+  box-shadow: 0 4px 16px rgba(255, 107, 53, 0.5);
+}
+
+.recurrence-instance .recurrence-content:hover {
+  background: linear-gradient(135deg, #455a64, #607d8b);
+  box-shadow: 0 4px 16px rgba(96, 125, 139, 0.5);
+}
+
+.recurrence-custom .recurrence-content:hover {
+  background: linear-gradient(135deg, #e55a2b, #f57c00);
+  box-shadow: 0 4px 16px rgba(255, 107, 53, 0.5);
+}
+
+/* Детальная информация о повторении */
+.recurrence-details {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 1000;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 250px;
+  max-width: 300px;
+}
+
+.recurrence-description {
+  margin: 0 0 8px 0;
+  font-size: 0.875rem;
+  color: #333;
+  line-height: 1.4;
+}
+
+.recurrence-days,
+.recurrence-interval,
+.recurrence-count,
+.recurrence-until {
+  display: flex;
+  align-items: center;
+  margin-bottom: 6px;
+  font-size: 0.8rem;
+}
+
+.recurrence-label {
+  font-weight: 600;
+  color: #666;
+  margin-right: 8px;
+  min-width: 70px;
+}
+
+.days-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.day-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  background-color: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  color: #555;
+}
+
+.interval-value,
+.count-value,
+.until-date {
+  color: #333;
+  font-weight: 500;
+}
+
+/* Адаптивность */
+@media (max-width: 768px) {
+  .recurrence-content {
+    padding: 3px 6px;
+    font-size: 0.7rem;
+  }
+
+  .recurrence-details {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90vw;
+    max-width: 280px;
+  }
+}
+
+/* Анимация появления детальной информации */
+.recurrence-details {
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-8px);
+  transition: all 0.2s ease;
+}
+
+.recurrence-badge:hover .recurrence-details {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+/* Темная тема (если потребуется) */
+@media (prefers-color-scheme: dark) {
+  .recurrence-details {
+    background: #2d2d2d;
+    border-color: #444;
+    color: #e0e0e0;
+  }
+
+  .recurrence-description {
+    color: #e0e0e0;
+  }
+
+  .recurrence-label {
+    color: #bbb;
+  }
+
+  .day-badge {
+    background-color: #3d3d3d;
+    border-color: #555;
+    color: #ddd;
+  }
+}

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { authService, User } from '../services/authService';
 import { calendarService, Calendar, CalendarEvent } from '../services/calendarService';
 import { useNavigate, useLocation } from 'react-router-dom';
+import RecurrenceBadge from './RecurrenceBadge';
 import './Profile.css';
 
 type ActiveSection = 'calendar' | 'events' | 'recommendations';
@@ -16,13 +17,26 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
   const [user, setUser] = useState<User | null>(null);
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [eventsLoaded, setEventsLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [eventsLoading, setEventsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [eventsError, setEventsError] = useState<string | null>(null);
   const [sidebarVisible, setSidebarVisible] = useState(true);
+  const [cacheInfo, setCacheInfo] = useState<string>('');
+  const [isUpdating, setIsUpdating] = useState(false); // Флаг для предотвращения дублирования
+  const [lastFocusTime, setLastFocusTime] = useState<number>(Date.now()); // Время последнего фокуса
+  const [initialLoadDone, setInitialLoadDone] = useState(false); // Флаг первоначальной загрузки
+  const [requestInProgress, setRequestInProgress] = useState(false); // Глобальный флаг запроса
+  const [showOnlyActiveEvents, setShowOnlyActiveEvents] = useState(false); // Фильтр актуальных событий
+
+  // Очистка таймера при размонтировании
+  useEffect(() => {
+    return () => {
+      // Cleanup function for component unmount
+    };
+  }, []);
+
 
   // Определяем активную секцию на основе URL или prop
   const getActiveSectionFromUrl = useCallback((): ActiveSection => {
@@ -36,20 +50,126 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
 
   // Обновляем активную секцию при изменении URL
   useEffect(() => {
-    setActiveSection(getActiveSectionFromUrl());
-  }, [getActiveSectionFromUrl]);
-
-  // Автоматически загружаем события с fullresponse=true при переходе на страницу событий
-  useEffect(() => {
-    if (activeSection === 'events' && !eventsLoaded) {
-      loadEventsWithFullResponse();
+    const newSection = getActiveSectionFromUrl();
+    if (newSection !== activeSection) {
+      setActiveSection(newSection);
+      // Сбрасываем флаг первоначальной загрузки при смене секции
+      if (newSection === 'events' && activeSection !== 'events') {
+        setInitialLoadDone(false);
+      }
     }
-  }, [activeSection, eventsLoaded]);
+  }, [getActiveSectionFromUrl, activeSection]);
+
+  // Реализация вашей логики кеширования для страницы /events
+  const loadEventsWithCacheLogic = useCallback(async () => {
+    if (eventsLoading || isUpdating || requestInProgress) {
+      console.log('Events loading already in progress, skipping...');
+      return;
+    }
+
+    try {
+      setEventsLoading(true);
+      setRequestInProgress(true);
+      setEventsError(null);
+
+      console.log('=== STARTING EVENTS CACHE LOGIC ===');
+
+      // Шаг 1: Проверяем кеш и загружаем события
+      const cacheResult = await calendarService.getEventsWithCache();
+
+      if (cacheResult.fromCache) {
+        console.log('Events loaded from cache');
+        setEvents(cacheResult.events);
+        setCacheInfo(`Загружено из кеша: ${cacheResult.events.length} событий`);
+      } else {
+        console.log('Events loaded with full sync');
+        setEvents(cacheResult.events);
+        setCacheInfo(`Полная синхронизация: ${cacheResult.events.length} событий`);
+      }
+
+      // Помечаем, что первоначальная загрузка выполнена
+      setInitialLoadDone(true);
+
+      // Шаг 2: Проверяем обновления с защитой от дублирования
+      // Делаем это асинхронно, чтобы не блокировать UI
+      setTimeout(async () => {
+        if (isUpdating || eventsLoading) {
+          console.log('Another update already in progress, skipping scheduled update');
+          return;
+        }
+
+        try {
+          setIsUpdating(true);
+          console.log('Checking for updates after initial load...');
+
+          const updateResult = await calendarService.checkEventsUpdates();
+
+          if (updateResult.hasChanges) {
+            console.log('Updates found, using updated events list');
+            // ИСПРАВЛЕНИЕ: Используем полный список событий из updateResult
+            setEvents(updateResult.events);
+            setCacheInfo(`Обновлено: ${updateResult.events.length} событий`);
+          } else {
+            console.log('No updates found');
+            setCacheInfo(prev => prev + ' (актуальные)');
+          }
+        } catch (updateError) {
+          console.warn('Failed to check updates:', updateError);
+          // Не показываем ошибку пользователю, так как основные данные уже загружены
+        } finally {
+          setIsUpdating(false);
+        }
+      }, cacheResult.fromCache ? 100 : 1000);
+
+    } catch (error: any) {
+      console.error('Error in events cache logic:', error);
+      setEventsError('Ошибка при загрузке событий');
+      setCacheInfo('Ошибка загрузки');
+      setIsUpdating(false); // Сбрасываем флаг при ошибке
+    } finally {
+      setEventsLoading(false);
+      setRequestInProgress(false);
+    }
+  }, [eventsLoading, isUpdating, requestInProgress]);
+
+  useEffect(() => {
+    if (activeSection === 'events' && !initialLoadDone) {
+      console.log('Starting initial events load for /events section');
+      loadEventsWithCacheLogic();
+    }
+  }, [activeSection, initialLoadDone, loadEventsWithCacheLogic]);
+
+  // Принудительное обновление событий
+  const forceRefreshEvents = async () => {
+    try {
+      setEventsLoading(true);
+      setEventsError(null);
+
+      console.log('Force refreshing events...');
+      const refreshedEvents = await calendarService.forceRefreshEvents();
+
+      setEvents(refreshedEvents);
+      setCacheInfo(`Принудительное обновление: ${refreshedEvents.length} событий`);
+
+    } catch (error: any) {
+      console.error('Error force refreshing events:', error);
+      setEventsError('Ошибка при принудительном обновлении');
+    } finally {
+      setEventsLoading(false);
+    }
+  };
+
+  // Очистка кеша ��ля отладки
+  const clearCache = () => {
+    calendarService.clearEventsCache();
+    setCacheInfo('Кеш очищен');
+    console.log('Cache cleared manually');
+  };
 
   useEffect(() => {
     const loadUserAndCalendars = async () => {
       try {
-        // Загружаем информацию о пользователе
+        // Загружаем инфор��ацию о пользователе
         let userInfo = authService.getSavedUserInfo();
 
         if (!userInfo) {
@@ -146,74 +266,97 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     }
   };
 
-  // Загружаем события с полным ответом (включая детали) при первом загрузке страницы событий
-  const loadEventsWithFullResponse = async () => {
-    try {
-      setEventsLoading(true);
-      setEventsError(null);
-      console.log('Attempting to load events with full response...');
-
-      const response = await calendarService.getCalendarEvents(false, true);
-
-      // Проверяем оба возможных поля для событий
-      const eventsList = response.items || response.events || [];
-
-      if (eventsList.length > 0) {
-        setEvents(eventsList);
-        console.log('Events with full response loaded successfully:', eventsList);
-      } else {
-        setEvents([]);
-        console.log('No events found in response:', response);
-      }
-
-    } catch (error: any) {
-      console.error('Error loading events with full response:', error);
-      setEventsError('Ошибка при загрузке событий');
-    } finally {
-      setEventsLoading(false);
-      setEventsLoaded(true); // Помечаем, что события загружены
-    }
-  };
-
-  const formatEventDate = (event: CalendarEvent) => {
+  const formatEventDateModern = (event: CalendarEvent) => {
     const startDate = event.start.dateTime || event.start.date;
     const endDate = event.end.dateTime || event.end.date;
 
-    if (!startDate) return 'Дата не указана';
+    if (!startDate) return { date: 'Дата не указана', time: '', duration: '', endInfo: '' };
 
     const start = new Date(startDate);
     const end = new Date(endDate || startDate);
 
     const isAllDay = !event.start.dateTime;
+    const isMultiDay = start.toDateString() !== end.toDateString();
 
     if (isAllDay) {
-      return start.toLocaleDateString('ru-RU', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
+      if (isMultiDay) {
+        // Событие на несколько дней
+        const startDateStr = start.toLocaleDateString('ru-RU', {
+          day: 'numeric',
+          month: 'short'
+        });
+        const endDateStr = end.toLocaleDateString('ru-RU', {
+          day: 'numeric',
+          month: 'short'
+        });
+        return {
+          date: `${startDateStr} - ${endDateStr}`,
+          time: 'Весь день',
+          duration: '',
+          endInfo: `До ${endDateStr}`
+        };
+      } else {
+        // Событие на один день
+        const date = start.toLocaleDateString('ru-RU', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric'
+        });
+        return { date, time: 'Весь день', duration: '', endInfo: '' };
+      }
+    }
+
+    // События с конкретным временем
+    const startDateStr = start.toLocaleDateString('ru-RU', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric'
+    });
+
+    const startTime = start.toLocaleTimeString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    const endTime = end.toLocaleTimeString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+
+    const durationMs = end.getTime() - start.getTime();
+    const durationMinutes = Math.ceil(durationMs / (1000 * 60));
+
+    let duration = '';
+    if (durationMinutes < 60) {
+      duration = `${durationMinutes}мин`;
+    } else {
+      const hours = Math.floor(durationMinutes / 60);
+      const minutes = durationMinutes % 60;
+      duration = minutes > 0 ? `${hours}ч ${minutes}мин` : `${hours}ч`;
+    }
+
+    if (isMultiDay) {
+      // Событие с временем на несколько дней
+      const endDateStr = end.toLocaleDateString('ru-RU', {
+        weekday: 'short',
+        month: 'short',
         day: 'numeric'
       });
+      return {
+        date: startDateStr,
+        time: startTime,
+        duration: `До ${endDateStr} ${endTime}`,
+        endInfo: `${endDateStr} ${endTime}`
+      };
+    } else {
+      // Событие в один день
+      return {
+        date: startDateStr,
+        time: `${startTime}-${endTime}`,
+        duration,
+        endInfo: `До ${endTime}`
+      };
     }
-
-    const isSameDay = start.toDateString() === end.toDateString();
-
-    if (isSameDay) {
-      return `${start.toLocaleDateString('ru-RU')} с ${start.toLocaleTimeString('ru-RU', {
-        hour: '2-digit',
-        minute: '2-digit'
-      })} до ${end.toLocaleTimeString('ru-RU', {
-        hour: '2-digit',
-        minute: '2-digit'
-      })}`;
-    }
-
-    return `${start.toLocaleDateString('ru-RU')} ${start.toLocaleTimeString('ru-RU', {
-      hour: '2-digit',
-      minute: '2-digit'
-    })} - ${end.toLocaleDateString('ru-RU')} ${end.toLocaleTimeString('ru-RU', {
-      hour: '2-digit',
-      minute: '2-digit'
-    })}`;
   };
 
   const handleLogout = async () => {
@@ -246,7 +389,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
             {calendarLoading && (
               <div className="calendar-loading">
                 <div className="spinner small"></div>
-                <p>Загружаем календари...</p>
+                <p>��агружаем календари...</p>
               </div>
             )}
 
@@ -303,61 +446,105 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
 
             {events.length > 0 && (
               <div className="events-list">
-                <h3>Ваши события:</h3>
-                {events.map((event) => (
-                  <div key={event.id} className="event-item">
-                    <div className="event-header">
-                      <h4 className="event-title">{event.summary || 'Без названия'}</h4>
-                      <span className={`event-status ${event.status}`}>
-                        {event.status === 'confirmed' ? 'Подтверждено' : event.status}
-                      </span>
-                    </div>
-
-                    <div className="event-details">
-                      <div className="event-time">
-                        <span className="event-icon">🕒</span>
-                        <span>{formatEventDate(event)}</span>
-                      </div>
-
-                      {event.location && (
-                        <div className="event-location">
-                          <span className="event-icon">📍</span>
-                          <span>{event.location}</span>
-                        </div>
-                      )}
-
-                      {event.description && (
-                        <div className="event-description">
-                          <span className="event-icon">📝</span>
-                          <span>{event.description}</span>
-                        </div>
-                      )}
-
-                      <div className="event-organizer">
-                        <span className="event-icon">👤</span>
-                        <span>{event.organizer.displayName || event.organizer.email}</span>
-                      </div>
-
-                      {event.attendees && event.attendees.length > 0 && (
-                        <div className="event-attendees">
-                          <span className="event-icon">👥</span>
-                          <span>{event.attendees.length} участник(ов)</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="event-actions">
-                      <a
-                        href={event.htmlLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="event-link"
-                      >
-                        Открыть в Google Calendar
-                      </a>
-                    </div>
+                <div className="events-list-header">
+                  <h3>
+                    {showOnlyActiveEvents
+                      ? `Актуальные события (${getFilteredEvents().length})`
+                      : `Ваши события (${events.length})`
+                    }
+                  </h3>
+                  <div className="events-filter">
+                    <label className="filter-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={showOnlyActiveEvents}
+                        onChange={toggleActiveEventsFilter}
+                      />
+                      <span className="checkmark"></span>
+                      Только актуальные
+                    </label>
                   </div>
-                ))}
+                </div>
+                <div className="events-grid">
+                  {getFilteredEvents().map((event) => (
+                    <div key={event.id} className={`event-card ${!isEventActive(event) ? 'event-past' : ''} ${isEventRecurring(event) ? 'event-recurring' : ''}`}>
+                      <div className="event-card-header">
+                        <div className="event-time-block">
+                          <div className="event-date">
+                            {formatEventDateModern(event).date}
+                          </div>
+                          <div className="event-time">
+                            {formatEventDateModern(event).time}
+                          </div>
+                          <div className="event-duration">
+                            {formatEventDateModern(event).duration}
+                          </div>
+                        </div>
+                        <div className="event-main-info">
+                          <div className="event-title-row">
+                            <h4 className="event-title">{event.summary || 'Без названия'}</h4>
+                            <div className="event-badges">
+                              <RecurrenceBadge event={event} />
+                              <span className={`event-status status-${event.status}`}>
+                                {event.status === 'confirmed' ? '✓' : event.status === 'tentative' ? '?' : '✕'}
+                              </span>
+                            </div>
+                          </div>
+                          {event.location && (
+                            <div className="event-location">
+                              <span className="location-icon">📍</span>
+                              <span>{event.location}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {(event.description || event.attendees?.length) && (
+                        <div className="event-card-body">
+                          {event.description && (
+                            <div className="event-description">
+                              <p>{event.description.length > 100 ?
+                                event.description.substring(0, 100) + '...' :
+                                event.description}
+                              </p>
+                            </div>
+                          )}
+                          {event.attendees && event.attendees.length > 0 && (
+                            <div className="event-attendees">
+                              <span className="attendees-count">
+                                👥 {event.attendees.length} участник{event.attendees.length > 1 ? 'ов' : ''}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="event-card-footer">
+                        <div className="event-organizer">
+                          <span className="organizer-info">
+                            👤 {event.organizer.displayName || event.organizer.email.split('@')[0]}
+                          </span>
+                        </div>
+                        <a
+                          href={event.htmlLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="event-link-btn"
+                          title="Открыть в Google Calendar"
+                        >
+                          <span>📅</span>
+                        </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {showOnlyActiveEvents && getFilteredEvents().length === 0 && (
+                  <div className="no-active-events">
+                    <p>📅 Актуальных событий нет</p>
+                    <p>Все ваши события уже завершились</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -367,6 +554,19 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
                 <p>Нажмите "Загрузить события" чтобы получить ваши события из Google Calendar</p>
               </div>
             )}
+
+            <div className="cache-info">
+              <p>{cacheInfo}</p>
+            </div>
+
+            <div className="events-actions">
+              <button onClick={forceRefreshEvents} className="action-button">
+                Принудительно обновить события
+              </button>
+              <button onClick={clearCache} className="action-button">
+                Очистить кеш
+              </button>
+            </div>
           </div>
         );
 
@@ -390,6 +590,168 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     setSidebarVisible(!sidebarVisible);
   };
 
+  // Проверка обновлений при возвращении фокуса на вкладку
+  const checkEventsUpdatesOnFocus = useCallback(async () => {
+    if (isUpdating || eventsLoading || requestInProgress) {
+      console.log('Update already in progress, skipping focus update');
+      return;
+    }
+
+    try {
+      setIsUpdating(true);
+      setRequestInProgress(true);
+      console.log('Checking for updates on focus with full response...');
+
+      // ИСПРАВЛЕНИЕ: Используем новый метод с fullresponse=true
+      const updateResult = await calendarService.checkEventsUpdatesWithFullResponse();
+
+      if (updateResult.hasChanges) {
+        console.log('Updates found on focus, replacing all events');
+        setEvents(updateResult.events); // Полная замена всех событий
+        setCacheInfo(`Обновлено при возвращении: ${updateResult.events.length} событий`);
+      } else {
+        console.log('No updates found on focus');
+        // Если изменений нет, всё равно обновляем события из полного ответа
+        setEvents(updateResult.events);
+        setCacheInfo(`Проверено при возвращении: ${updateResult.events.length} событий (актуальные)`);
+      }
+
+      // Обновляем время последнего фокуса
+      setLastFocusTime(Date.now());
+
+    } catch (error) {
+      console.warn('Failed to check updates on focus:', error);
+      // Не показываем ошибку пользователю
+    } finally {
+      setIsUpdating(false);
+      setRequestInProgress(false);
+    }
+  }, [isUpdating, eventsLoading, requestInProgress]);
+
+  // Обработка переключения между вкладками ���раузера
+  useEffect(() => {
+    if (activeSection !== 'events' || !initialLoadDone) return;
+
+    let debounceTimer: NodeJS.Timeout | null = null;
+    const FOCUS_DEBOUNCE_DELAY = 300; // Увеличиваем задержку для надежности
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden && initialLoadDone) {
+        // Вкладка стала активной
+        console.log('Tab became visible, checking if update needed...');
+
+        // Проверяем, прошло ли достаточно времени с последнего обновления
+        const timeSinceLastFocus = Date.now() - lastFocusTime;
+        const MIN_UPDATE_INTERVAL = 5000; // Минимум 5 секунд между обновлениями
+
+        if (timeSinceLastFocus < MIN_UPDATE_INTERVAL) {
+          console.log(`Too soon since last update (${timeSinceLastFocus}ms), skipping`);
+          return;
+        }
+
+        // Очищаем предыдущий таймер если есть
+        if (debounceTimer) {
+          clearTimeout(debounceTimer);
+        }
+        
+        // Добавляем задержку для дебаунсинга
+        debounceTimer = setTimeout(() => {
+          if (!isUpdating && !eventsLoading && !requestInProgress) {
+            console.log('Executing focus update check');
+            checkEventsUpdatesOnFocus();
+          } else {
+            console.log('Skipping focus update - another operation in progress');
+          }
+        }, FOCUS_DEBOUNCE_DELAY);
+      }
+    };
+
+    const handleWindowFocus = () => {
+      if (!initialLoadDone) return;
+
+      console.log('Window gained focus, checking if update needed...');
+
+      // Проверяем, прошло ли достаточно времени с последнего обновления
+      const timeSinceLastFocus = Date.now() - lastFocusTime;
+      const MIN_UPDATE_INTERVAL = 5000; // Минимум 5 секунд между обновлениями
+
+      if (timeSinceLastFocus < MIN_UPDATE_INTERVAL) {
+        console.log(`Too soon since last update (${timeSinceLastFocus}ms), skipping`);
+        return;
+      }
+
+      // Очищаем предыдущий таймер если есть
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      
+      // Добавляем задержку для дебаунсинга
+      debounceTimer = setTimeout(() => {
+        if (!isUpdating && !eventsLoading && !requestInProgress) {
+          console.log('Executing window focus update check');
+          checkEventsUpdatesOnFocus();
+        } else {
+          console.log('Skipping window focus update - another operation in progress');
+        }
+      }, FOCUS_DEBOUNCE_DELAY);
+    };
+
+    // Добавляем слушатели событий
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleWindowFocus);
+
+    return () => {
+      // Очищаем таймер при размонтировании
+      if (debounceTimer) {
+        clearTimeout(debounceTimer);
+      }
+      
+      // Убираем слушатели при размонтировании или смене секции
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleWindowFocus);
+    };
+  }, [activeSection, initialLoadDone, isUpdating, eventsLoading, requestInProgress, lastFocusTime, checkEventsUpdatesOnFocus]);
+
+  // Функция для проверки актуальности события
+  const isEventActive = (event: CalendarEvent): boolean => {
+    // Повторяющиеся события всегда считаем актуальными,
+    // так как они продолжаются в будущем
+    if (isEventRecurring(event)) {
+      return true;
+    }
+
+    const endDate = event.end.dateTime || event.end.date;
+    if (!endDate) return true; // Если нет даты окончания, считаем актуальным
+
+    const now = new Date();
+    const eventEnd = new Date(endDate);
+
+    // Для событий на весь день добавляем время до конца дня
+    if (!event.end.dateTime) {
+      eventEnd.setHours(23, 59, 59, 999);
+    }
+
+    return eventEnd > now;
+  };
+
+  // Фильтрация событий
+  const getFilteredEvents = (): CalendarEvent[] => {
+    if (!showOnlyActiveEvents) {
+      return events;
+    }
+    return events.filter(isEventActive);
+  };
+
+  // Функция для проверки, является ли событие повторяющимся
+  const isEventRecurring = (event: CalendarEvent): boolean => {
+    return !!(event.recurrence && event.recurrence.length > 0) || !!event.recurringEventId;
+  };
+
+  // Функция переключения фильтра
+  const toggleActiveEventsFilter = () => {
+    setShowOnlyActiveEvents(!showOnlyActiveEvents);
+  };
+
   if (loading) {
     return (
       <div className="profile-loading">
@@ -403,7 +765,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     return (
       <div className="profile-error">
         <div className="error-message">
-          <p>Не удалось загрузить информацию о пользователе</p>
+          <p>Не удалось за��рузить информацию о пользователе</p>
           <button onClick={() => navigate('/login')}>
             Вернуться к входу
           </button>
