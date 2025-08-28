@@ -3,6 +3,7 @@ import { authService, User } from '../services/authService';
 import { calendarService, Calendar, CalendarEvent } from '../services/calendarService';
 import { useNavigate, useLocation } from 'react-router-dom';
 import RecurrenceBadge from './RecurrenceBadge';
+import Recommendations from './Recommendations';
 import './Profile.css';
 
 type ActiveSection = 'calendar' | 'events' | 'recommendations';
@@ -571,15 +572,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
         );
 
       case 'recommendations':
-        return (
-          <div className="recommendations-section">
-            <h2>Рекомендации от ИИ</h2>
-            <div className="coming-soon">
-              <p>🤖 ИИ рекомендации для оптимизации времени</p>
-              <p>Здесь будут предложения по улучшению вашего расписания</p>
-            </div>
-          </div>
-        );
+        return <Recommendations />;
 
       default:
         return null;
