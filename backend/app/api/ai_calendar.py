@@ -41,9 +41,12 @@ async def analyze_calendar_and_goals(
         # Преобразуем события календаря в словари
         calendar_events_dict = [event.model_dump() for event in request.calendar_events]
 
+        # Преобразуем события в упрощенный формат для AI
+        simplified_events = openai_service._convert_calendar_events_for_ai(calendar_events_dict)
+
         # Вызываем сервис OpenAI для анализа
         ai_response = await openai_service.analyze_calendar_and_goals(
-            calendar_events=calendar_events_dict,
+            calendar_events=simplified_events,
             user_goals=goals_dict,
             analysis_period_days=request.analysis_period_days
         )

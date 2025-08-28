@@ -1,6 +1,7 @@
 import aiohttp
 import json
 from typing import Dict, List, Optional, Any
+from datetime import datetime
 from settings import settings
 import logging
 
@@ -23,6 +24,46 @@ class OpenAIService:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
+
+    def _convert_calendar_events_for_ai(self, calendar_events: List[Dict]) -> List[Dict]:
+        """
+        Преобразование событий календаря в упрощенный формат для AI анализа
+        """
+        simplified_events = []
+
+        for event in calendar_events:
+            try:
+                # Извлекаем время начала и окончания
+                start_time = None
+                end_time = None
+
+                if event.get('start'):
+                    start_time = event['start'].get('dateTime') or event['start'].get('date')
+
+                if event.get('end'):
+                    end_time = event['end'].get('dateTime') or event['end'].get('date')
+
+                # Упрощенная структура для AI
+                simplified_event = {
+                    'id': event.get('id', ''),
+                    'title': event.get('summary', ''),
+                    'description': event.get('description', ''),
+                    'start_time': start_time,
+                    'end_time': end_time,
+                    'location': event.get('location', ''),
+                    'status': event.get('status', ''),
+                    'attendees_count': len(event.get('attendees', [])) if event.get('attendees') else 0,
+                    'is_recurring': bool(event.get('recurringEventId') or event.get('recurrence'))
+                }
+
+                simplified_events.append(simplified_event)
+
+            except Exception as e:
+                logger.warning(f"Error converting event {event.get('id', 'unknown')}: {str(e)}")
+                continue
+
+        logger.info(f"Converted {len(simplified_events)} events for AI analysis")
+        return simplified_events
 
     async def create_chat_completion(
         self,

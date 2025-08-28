@@ -132,17 +132,38 @@ const Recommendations: React.FC = () => {
       setIsLoading(true);
       setError(null);
 
-      // Загружаем события календаря и цели параллельно
-      const [eventsResponse, goalsData] = await Promise.all([
-        calendarService.getEvents(),
-        aiService.getGoals()
-      ]);
+      // Загружаем события календаря с логикой кеширования
+      const eventsResult = await calendarService.getEventsWithCache();
+      setEvents(eventsResult.events);
 
-      setEvents(eventsResponse.events || []);
-      setGoals(goalsData);
+      console.log(`Events loaded: ${eventsResult.events.length} events, from cache: ${eventsResult.fromCache}`);
+
+      // Загружаем цели отдельно с более детальной обработкой ошибок
+      try {
+        const goalsData = await aiService.getGoals();
+
+        // Проверяем, что goalsData это массив
+        if (Array.isArray(goalsData)) {
+          setGoals(goalsData);
+          console.log(`Goals loaded: ${goalsData.length} goals`);
+        } else {
+          console.warn('Goals data is not an array:', goalsData);
+          setGoals([]);
+        }
+      } catch (goalsError: any) {
+        console.error('Error loading goals:', goalsError);
+        setGoals([]); // Устанавливаем пустой массив при ошибке
+
+        // Не показываем ошибку пользователю, так как события загрузились
+        console.warn('Goals loading failed, continuing with empty goals array');
+      }
+
     } catch (err) {
       console.error('Error loading initial data:', err);
       setError('Ошибка при загрузке данных. Попробуйте обновить страницу.');
+      // Устанавливаем безопасные значения по умолчанию
+      setEvents([]);
+      setGoals([]);
     } finally {
       setIsLoading(false);
     }
@@ -192,7 +213,11 @@ const Recommendations: React.FC = () => {
         });
       }
 
-      setAppliedChanges(prev => new Set([...prev, index]));
+      setAppliedChanges(prev => {
+        const newSet = new Set(Array.from(prev));
+        newSet.add(index);
+        return newSet;
+      });
     } catch (err: any) {
       console.error('Error applying schedule change:', err);
       setError(err.response?.data?.detail || 'Ошибка при применении изменения');
@@ -200,7 +225,11 @@ const Recommendations: React.FC = () => {
   };
 
   const rejectScheduleChange = (index: number) => {
-    setRejectedChanges(prev => new Set([...prev, index]));
+    setRejectedChanges(prev => {
+      const newSet = new Set(Array.from(prev));
+      newSet.add(index);
+      return newSet;
+    });
   };
 
   const getProductivityScoreColor = (score: number) => {
