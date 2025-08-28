@@ -404,39 +404,30 @@ server {
         auth_basic_user_file /etc/nginx/.htpasswd;
     }
 
-    # Документация API (если используется Swagger/OpenAPI)
-    location /docs {
+    location /api/openapi.json {
+        proxy_pass http://127.0.0.1:8000/openapi.json;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Добавляем префикс /api в спецификацию
+        proxy_set_header Accept "application/json";
+        proxy_redirect ~^/(.*) /api/$1;
+    }
+    
+    location /api/docs {
         proxy_pass http://127.0.0.1:8000/docs;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-    }
-    
-        # Webhook endpoint для CI/CD
-    location /webhook {
-        proxy_pass http://127.0.0.1:9000/webhook;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-
-        # Ограничиваем размер тела запроса для webhook'ов
-        client_max_body_size 1M;
-
-        # Таймауты для webhook'ов
-        proxy_connect_timeout 10s;
-        proxy_send_timeout 30s;
-        proxy_read_timeout 30s;
-
-        # Логирование webhook'ов в отдельный файл
-        access_log /var/log/nginx/webhook-access.log;
-        error_log /var/log/nginx/webhook-error.log;
-
-        # Безопасность - разрешаем только POST запросы
-        limit_except POST {
-            deny all;
-        }
+        
+        # Модифицируем HTML чтобы Swagger знал про префикс
+        sub_filter_once off;
+        sub_filter_types *;
+        sub_filter 'url: "' 'url: "/api';
+        sub_filter '"/openapi.json"' '"/api/openapi.json"';
     }
 
 
