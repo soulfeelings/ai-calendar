@@ -3,8 +3,6 @@ import json
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 
-from aiohttp_socks import ProxyConnector
-
 from settings import settings
 import logging
 
@@ -110,13 +108,21 @@ class OpenAIService:
                 "max_tokens": max_tokens or self.max_tokens,
                 "temperature": temperature or self.temperature
             }
-            connector = ProxyConnector.from_url(settings.PROXY_URL)
-            async with aiohttp.ClientSession() as session:
+
+            # Создаем connector для прокси если он настроен
+            connector = None
+            if settings.PROXY_URL:
+                try:
+                    from aiohttp_socks import ProxyConnector
+                    connector = ProxyConnector.from_url(settings.PROXY_URL)
+                except ImportError:
+                    logger.warning("aiohttp_socks not installed, proxy will be ignored")
+
+            async with aiohttp.ClientSession(connector=connector) as session:
                 async with session.post(
                     f"{self.base_url}/chat/completions",
                     headers=self._get_headers(),
-                    json=payload,
-                    connector=connector if settings.PROXY_URL else None
+                    json=payload
                 ) as response:
                     response_data = await response.json()
 
@@ -157,14 +163,14 @@ class OpenAIService:
             1. Важность работы с приоритетами (матрица Эйзенхауэра)
             2. Принцип временных блоков для фокусной работы
             3. Необходимость отдыха и восстановления
-            4. Соответствие активностей энергетическим циклам
+            4. ��оответствие активностей энергетическим циклам
             5. Прогресс к достижению целей
             
             Отвечай в формате JSON с полями:
             - analysis: общий анализ текущего расписания
             - recommendations: список конкретных рекомендаций
             - schedule_changes: предлагаемые изменения в календаре
-            - goal_alignment: оценка соответствия расписания целям
+            - goal_alignment: оценка соотв��тствия расписания целям
             """
 
             # Формируем пользовательский запрос
@@ -188,7 +194,7 @@ class OpenAIService:
                 temperature=0.7
             )
 
-            # Извлекаем содержание ответа
+            # Извлекаем содержан��е ответа
             ai_response = response["choices"][0]["message"]["content"]
 
             try:
@@ -246,7 +252,7 @@ class OpenAIService:
             user_message = f"""
             Помоги запланировать работу над целью в свободное время.
             
-            ЦЕЛЬ:
+            ��ЕЛЬ:
             {json.dumps(goal, ensure_ascii=False, indent=2)}
             
             СВОБОДНЫЕ СЛОТЫ:
