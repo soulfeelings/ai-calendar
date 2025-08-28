@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     GOOGLE_AUTH_REDIRECT_URI: str = 'https://your-domain.com/calendar/callback'
     GOOGLE_CALENDAR_REDIRECT_URI: str = 'https://your-domain.com/calendar/callback'
 
+    PROXY_URL: str = None  # e.g., 'http://proxyserver:port'
+
     class Config:
         env_file = ".env"
         extra = 'allow'

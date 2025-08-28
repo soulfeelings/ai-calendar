@@ -2,6 +2,9 @@ import aiohttp
 import json
 from typing import Dict, List, Optional, Any
 from datetime import datetime
+
+from aiohttp_socks import ProxyConnector
+
 from settings import settings
 import logging
 
@@ -107,13 +110,13 @@ class OpenAIService:
                 "max_tokens": max_tokens or self.max_tokens,
                 "temperature": temperature or self.temperature
             }
-
+            connector = ProxyConnector.from_url(settings.PROXY_URL)
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{self.base_url}/chat/completions",
                     headers=self._get_headers(),
                     json=payload,
-                    proxy="socks5://127.0.0.1:1080"
+                    connector=connector if settings.PROXY_URL else None
                 ) as response:
                     response_data = await response.json()
 
