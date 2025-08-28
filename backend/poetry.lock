@@ -121,6 +121,22 @@ yarl = ">=1.17.0,<2.0"
 speedups = ["Brotli ; platform_python_implementation == \"CPython\"", "aiodns (>=3.3.0)", "brotlicffi ; platform_python_implementation != \"CPython\""]
 
 [[package]]
+name = "aiohttp-socks"
+version = "0.10.1"
+description = "Proxy connector for aiohttp"
+optional = false
+python-versions = ">=3.8.0"
+groups = ["main"]
+files = [
+    {file = "aiohttp_socks-0.10.1-py3-none-any.whl", hash = "sha256:6fd4d46c09f952f971a011ff446170daab8d539cf5310c0627f8423df2fb15ea"},
+    {file = "aiohttp_socks-0.10.1.tar.gz", hash = "sha256:49f2e1f8051f2885719beb1b77e312b5a27c3e4b60f0b045a388f194d995e068"},
+]
+
+[package.dependencies]
+aiohttp = ">=3.10.0"
+python-socks = {version = ">=2.4.3,<3.0.0", extras = ["asyncio"]}
+
+[[package]]
 name = "aiosignal"
 version = "1.4.0"
 description = "aiosignal: a list of registered asynchronous callbacks"
@@ -1188,6 +1204,24 @@ files = [
 cli = ["click (>=5.0)"]
 
 [[package]]
+name = "python-socks"
+version = "2.7.2"
+description = "Proxy (SOCKS4, SOCKS5, HTTP CONNECT) client for Python"
+optional = false
+python-versions = ">=3.8.0"
+groups = ["main"]
+files = [
+    {file = "python_socks-2.7.2-py3-none-any.whl", hash = "sha256:d311aefbacc0ddfaa1fa1c32096c436d4fe75b899c24d78e677e1b0623c52c48"},
+    {file = "python_socks-2.7.2.tar.gz", hash = "sha256:4c845d4700352bc7e7382f302dfc6baf0af0de34d2a6d70ba356b2539d4dbb62"},
+]
+
+[package.extras]
+anyio = ["anyio (>=3.3.4,<5.0.0)"]
+asyncio = ["async-timeout (>=4.0) ; python_version < \"3.11\""]
+curio = ["curio (>=1.4)"]
+trio = ["trio (>=0.24)"]
+
+[[package]]
 name = "pytz"
 version = "2025.2"
 description = "World timezone definitions, modern and historical"
@@ -1485,4 +1519,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12"
-content-hash = "43f86a1c42c6ed0a1062f164b95bd0fc60cd764430c63e5b83a14cb3a5ad5d2e"
+content-hash = "9e1871f9629889615ad085124c7b230f300c1c0cdfd15da32fb30c9c0f26a559"
