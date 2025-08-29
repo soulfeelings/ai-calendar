@@ -39,10 +39,25 @@ class OpenAIService:
                 end_time = None
 
                 if event.get('start'):
-                    start_time = event['start'].get('dateTime') or event['start'].get('date')
+                    if isinstance(event['start'], dict):
+                        start_time = event['start'].get('dateTime') or event['start'].get('date')
+                    else:
+                        start_time = str(event['start'])
 
                 if event.get('end'):
-                    end_time = event['end'].get('dateTime') or event['end'].get('date')
+                    if isinstance(event['end'], dict):
+                        end_time = event['end'].get('dateTime') or event['end'].get('date')
+                    else:
+                        end_time = str(event['end'])
+
+                # Обрабатываем участников
+                attendees = []
+                if event.get('attendees'):
+                    for attendee in event['attendees']:
+                        if isinstance(attendee, dict):
+                            attendees.append(attendee.get('email', str(attendee)))
+                        elif isinstance(attendee, str):
+                            attendees.append(attendee)
 
                 # Упрощенная структура для AI
                 simplified_event = {
@@ -52,18 +67,16 @@ class OpenAIService:
                     'start_time': start_time,
                     'end_time': end_time,
                     'location': event.get('location', ''),
-                    'status': event.get('status', ''),
-                    'attendees_count': len(event.get('attendees', [])) if event.get('attendees') else 0,
-                    'is_recurring': bool(event.get('recurringEventId') or event.get('recurrence'))
+                    'attendees': attendees,
+                    'is_recurring': bool(event.get('recurrence'))
                 }
 
                 simplified_events.append(simplified_event)
 
             except Exception as e:
-                logger.warning(f"Error converting event {event.get('id', 'unknown')}: {str(e)}")
+                logger.warning(f"Error converting event {event.get('id', 'unknown')}: {e}")
                 continue
 
-        logger.info(f"Converted {len(simplified_events)} events for AI analysis")
         return simplified_events
 
     async def create_chat_completion(
@@ -163,14 +176,14 @@ class OpenAIService:
             1. Важность работы с приоритетами (матрица Эйзенхауэра)
             2. Принцип временных блоков для фокусной работы
             3. Необходимость отдыха и восстановления
-            4. ��оответствие активностей энергетическим циклам
+            4. Соответствие активностей энергетическим циклам
             5. Прогресс к достижению целей
             
             Отвечай в формате JSON с полями:
             - analysis: общий анализ текущего расписания
             - recommendations: список конкретных рекомендаций
             - schedule_changes: предлагаемые изменения в календаре
-            - goal_alignment: оценка соотв��тствия расписания целям
+            - goal_alignment: оценка соответствия расписания целям
             """
 
             # Формируем пользовательский запрос
@@ -194,7 +207,7 @@ class OpenAIService:
                 temperature=0.7
             )
 
-            # Извлекаем содержан��е ответа
+            # Извлекаем содержимое ответа
             ai_response = response["choices"][0]["message"]["content"]
 
             try:
@@ -252,7 +265,7 @@ class OpenAIService:
             user_message = f"""
             Помоги запланировать работу над целью в свободное время.
             
-            ��ЕЛЬ:
+            ЦЕЛЬ:
             {json.dumps(goal, ensure_ascii=False, indent=2)}
             
             СВОБОДНЫЕ СЛОТЫ:
@@ -287,6 +300,100 @@ class OpenAIService:
         except Exception as e:
             logger.error(f"Error in generate_schedule_suggestion: {str(e)}")
             raise
+
+    async def analyze_calendar_events(
+        self,
+        calendar_events: List[Dict],
+        goals: List[str] = None,
+        context: str = None
+    ) -> Dict[str, Any]:
+        """
+        Анализ событий календаря с помощью OpenAI
+        """
+        try:
+            # Формируем системный промпт
+            system_prompt = """
+            Ты - экспертный ИИ-ассистент по тайм-менеджменту и планированию.
+            Проанализируй календарь пользователя и предоставь:
+            1. Краткое резюме (summary)
+            2. Конкретные изменения в расписании (schedule_changes) - массив объектов с полями:
+               - id: идентификатор события
+               - action: тип действия (move, reschedule, cancel, optimize)
+               - title: название изменения
+               - reason: причина изменения
+               - new_start: новое время начала (если применимо)
+               - new_end: новое время окончания (если применимо)
+               - priority: приоритет (high, medium, low)
+            3. Общие рекомендации (recommendations) - массив строк
+            4. Оценку продуктивности (productivity_score) от 1 до 10
+            5. Соответствие целям (goal_alignment)
+
+            Отвечай строго в JSON формате.
+            """
+
+            # Формируем пользовательский запрос
+            user_message = f"""
+            Проанализируй мой календарь:
+
+            События календаря:
+            {json.dumps(calendar_events, ensure_ascii=False, indent=2)}
+            """
+
+            if goals:
+                user_message += f"\n\nМои цели: {', '.join(goals)}"
+
+            if context:
+                user_message += f"\n\nДополнительный контекст: {context}"
+
+            # Запрос к OpenAI
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message}
+                ],
+                "max_tokens": self.max_tokens,
+                "temperature": self.temperature,
+                "response_format": {"type": "json_object"}
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=self._get_headers(),
+                    json=payload
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise Exception(f"OpenAI API error: {error_text}")
+
+                    result = await response.json()
+                    content = result["choices"][0]["message"]["content"]
+
+                    # Парсим JSON ответ
+                    analysis_result = json.loads(content)
+
+                    # Обеспечиваем правильную структуру ответа
+                    return {
+                        "summary": analysis_result.get("summary", "Анализ календаря завершен"),
+                        "schedule_changes": analysis_result.get("schedule_changes", []),
+                        "recommendations": analysis_result.get("recommendations", []),
+                        "productivity_score": analysis_result.get("productivity_score"),
+                        "goal_alignment": analysis_result.get("goal_alignment", "Не определено")
+                    }
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse OpenAI JSON response: {e}")
+            return {
+                "summary": "Ошибка при разборе ответа ИИ",
+                "schedule_changes": [],
+                "recommendations": ["Попробуйте повторить анализ"],
+                "productivity_score": None,
+                "goal_alignment": "Не удалось определить"
+            }
+        except Exception as e:
+            logger.error(f"Error in OpenAI calendar analysis: {e}")
+            raise Exception(f"Ошибка при анализе календаря: {str(e)}")
 
 
 # Создаем экземпляр сервиса

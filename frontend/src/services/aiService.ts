@@ -1,144 +1,165 @@
 import api from './api';
-import { CalendarEvent } from './calendarService';
 
-export interface SmartGoal {
-  id?: string;
-  user_id?: string;
-  title: string;
-  description?: string;
-  specific: string;
-  measurable: string;
-  achievable: string;
-  relevant: string;
-  time_bound: string;
-  priority: number;
-  created_at?: string;
-  updated_at?: string;
-  is_completed?: boolean;
-}
-
+// Интерфейсы для работы с ИИ сервисом
 export interface ScheduleChange {
-  action: 'create' | 'update' | 'delete';
-  event_id?: string;
-  title?: string;
-  start_time?: string;
-  end_time?: string;
-  description?: string;
-  location?: string;
-  reason: string;
-}
-
-export interface CalendarAnalysis {
-  analysis: string;
-  recommendations: string[];
-  schedule_changes: ScheduleChange[];
-  goal_alignment: string;
-  productivity_score: number;
-}
-
-export interface AnalyzeCalendarRequest {
-  calendar_events: CalendarEvent[];
-  user_goals: SmartGoal[];
-  analysis_period_days?: number;
-}
-
-export interface CreateGoalRequest {
+  id: string;
+  action: string;
   title: string;
-  description?: string;
-  specific: string;
-  measurable: string;
-  achievable: string;
-  relevant: string;
-  time_bound: string;
-  priority: number;
+  reason: string;
+  new_start?: string;
+  new_end?: string;
+  priority?: string;
 }
 
-export interface PlanGoalRequest {
-  goal: SmartGoal;
-  free_time_slots: Array<{
-    start: string;
-    end: string;
-    duration_minutes: number;
-  }>;
+export interface CalendarAnalysisResponse {
+  summary: string;
+  schedule_changes: ScheduleChange[];
+  recommendations: string[];
+  productivity_score?: number;
+  goal_alignment?: string;
+}
+
+export interface CalendarAnalysisRequest {
+  calendar_events: any[];
+  goals?: string[];
   context?: string;
 }
 
-export interface GoalPlan {
-  suggested_time: string;
-  duration: string;
-  frequency: string;
-  reasoning: string;
-  suggested_events: Array<{
+class AIService {
+  /**
+   * Анализ календаря с помощью ИИ
+   */
+  async analyzeCalendar(events: any[], goals?: string[], context?: string): Promise<CalendarAnalysisResponse> {
+    try {
+      const requestData: CalendarAnalysisRequest = {
+        calendar_events: events.map(event => ({
+          ...event,
+          // Добавляем calendarId если его нет
+          calendarId: event.calendarId || 'primary'
+        })),
+        goals: goals || [],
+        context: context
+      };
+
+      console.log('Sending analysis request:', requestData);
+
+      const response = await api.post('/ai/analyze-calendar', requestData);
+
+      console.log('Analysis response:', response.data);
+
+      return response.data;
+    } catch (error: any) {
+      console.error('Error analyzing calendar:', error);
+
+      // Обрабатываем ошибки валидации Pydantic
+      if (error.response?.data?.detail) {
+        if (Array.isArray(error.response.data.detail)) {
+          // Массив ошибок валидации
+          const validationErrors = error.response.data.detail
+            .map((err: any) => `${err.loc?.join('.')} - ${err.msg}`)
+            .join('; ');
+          throw new Error(`Ошибки валидации: ${validationErrors}`);
+        } else if (typeof error.response.data.detail === 'string') {
+          // Строковая ошибка
+          throw new Error(error.response.data.detail);
+        }
+      }
+
+      throw new Error('Ошибка при анализе календаря');
+    }
+  }
+
+  /**
+   * Применение изменения в расписании
+   */
+  async applyScheduleChange(change: ScheduleChange): Promise<boolean> {
+    try {
+      const response = await api.post('/ai/apply-schedule-change', change);
+      return response.data.success;
+    } catch (error) {
+      console.error('Error applying schedule change:', error);
+      throw new Error('Ошибка при применении изменения');
+    }
+  }
+
+  /**
+   * Получение рекомендаций по планированию
+   */
+  async getPlanningRecommendations(
+    freeSlots: any[],
+    goal: any,
+    context?: string
+  ): Promise<any> {
+    try {
+      const response = await api.post('/ai/plan-goal', {
+        free_time_slots: freeSlots,
+        goal: goal,
+        context: context
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error('Error getting planning recommendations:', error);
+      throw new Error('Ошибка при получении рекомендаций по планированию');
+    }
+  }
+
+  /**
+   * Общение с ИИ в чат-формате
+   */
+  async chatWithAI(
+    messages: Array<{role: string; content: string}>,
+    systemPrompt?: string
+  ): Promise<string> {
+    try {
+      const response = await api.post('/ai/chat', {
+        messages: messages,
+        system_prompt: systemPrompt,
+        model: 'gpt-4',
+        temperature: 0.7,
+        max_tokens: 1000
+      });
+
+      return response.data.content;
+    } catch (error) {
+      console.error('Error in AI chat:', error);
+      throw new Error('Ошибка при общении с ИИ');
+    }
+  }
+
+  /**
+   * Создание SMART цели
+   */
+  async createSMARTGoal(goal: {
     title: string;
     description: string;
-    start_time: string;
-    end_time: string;
-    priority: number;
-  }>;
-}
-
-export interface ChatMessage {
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-}
-
-export interface ChatRequest {
-  messages: ChatMessage[];
-  model?: string;
-  max_tokens?: number;
-  temperature?: number;
-}
-
-export interface ChatResponse {
-  content: string;
-  tokens_used: number;
-  model: string;
-  created: number;
-}
-
-class AIService {
-  // Анализ календаря и получение рекомендаций
-  async analyzeCalendar(request: AnalyzeCalendarRequest): Promise<CalendarAnalysis> {
-    const response = await api.post('/ai/analyze-calendar', request);
-    return response.data;
+    specific: string;
+    measurable: string;
+    achievable: string;
+    relevant: string;
+    time_bound: string;
+    deadline?: string;
+  }): Promise<any> {
+    try {
+      const response = await api.post('/ai/goals', goal);
+      return response.data;
+    } catch (error) {
+      console.error('Error creating SMART goal:', error);
+      throw new Error('Ошибка при создании цели');
+    }
   }
 
-  // Получение всех SMART целей
-  async getGoals(includeCompleted: boolean = false): Promise<SmartGoal[]> {
-    const response = await api.get('/ai/goals', {
-      params: { include_completed: includeCompleted }
-    });
-    return response.data;
-  }
-
-  // Создание новой SMART цели
-  async createGoal(goal: CreateGoalRequest): Promise<SmartGoal> {
-    const response = await api.post('/ai/goals', goal);
-    return response.data;
-  }
-
-  // Планирование расписания для цели
-  async planGoal(request: PlanGoalRequest): Promise<GoalPlan> {
-    const response = await api.post('/ai/plan-goal', request);
-    return response.data;
-  }
-
-  // Чат с AI
-  async chat(request: ChatRequest): Promise<ChatResponse> {
-    const response = await api.post('/ai/chat', request);
-    return response.data;
-  }
-
-  // Обновление события календаря
-  async updateCalendarEvent(eventId: string, updateData: Partial<CalendarEvent>): Promise<any> {
-    const response = await api.patch(`/calendar/event/${eventId}`, updateData);
-    return response.data;
-  }
-
-  // Массовое обновление событий
-  async bulkUpdateEvents(updates: Array<{ event_id: string; update_data: Partial<CalendarEvent> }>): Promise<any[]> {
-    const response = await api.patch('/calendar/events/bulk', updates);
-    return response.data;
+  /**
+   * Получение пользовательских целей
+   */
+  async getUserGoals(includeCompleted: boolean = false): Promise<any[]> {
+    try {
+      const response = await api.get(`/ai/goals?include_completed=${includeCompleted}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting user goals:', error);
+      throw new Error('Ошибка при получении целей');
+    }
   }
 }
 
