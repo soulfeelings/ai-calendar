@@ -1,5 +1,4 @@
 import api from './api';
-import { eventCacheService } from './eventCacheService';
 
 export interface Calendar {
   id: string;
@@ -49,224 +48,316 @@ export interface CalendarEvent {
   attendees?: Array<{
     email: string;
     displayName?: string;
-    responseStatus: string;
+    responseStatus?: string;
+    organizer?: boolean;
+    self?: boolean;
   }>;
-  calendarId: string;
-  // Поля для повторяющихся событий
-  recurrence?: string[]; // RRULE правила повторения
-  recurringEventId?: string; // ID родительского повторяющегося события
-  originalStartTime?: {
-    dateTime?: string;
-    date?: string;
-    timeZone?: string;
-  };
+  hangoutLink?: string;
+  conferenceData?: any;
+  reminders?: any;
+  recurrence?: string[];
+  recurringEventId?: string;  // Добавляем недостающее свойство
+  eventType?: string;
+  calendarId?: string;
 }
 
 export interface CalendarEventsResponse {
   kind?: string;
   etag?: string;
-  summary?: string;
-  description?: string;
-  updated?: string;
-  timeZone?: string;
-  accessRole?: string;
-  defaultReminders?: any[];
   nextSyncToken?: string;
   items?: CalendarEvent[];
-  // Для совместимости со старым форматом
   events?: CalendarEvent[];
-  totalCount?: number;
+  requires_authorization?: boolean;
+  authorization_url?: string;
+  message?: string;
 }
 
 class CalendarService {
-  private static readonly WEBHOOK_KEY = 'calendar_webhook_configured';
-
-  // Проверить, настроен ли уже вебхук
-  private isWebhookConfigured(): boolean {
-    return localStorage.getItem(CalendarService.WEBHOOK_KEY) === 'true';
-  }
-
-  // Отметить вебхук как настроенный
-  private markWebhookAsConfigured(): void {
-    localStorage.setItem(CalendarService.WEBHOOK_KEY, 'true');
-  }
-
-  // Сбросить состояние вебхука (для отладки или переподключения)
-  resetWebhookStatus(): void {
-    localStorage.removeItem(CalendarService.WEBHOOK_KEY);
-  }
-
-  // Получить список календарей пользователя
-  async getCalendarList(): Promise<CalendarListResponse> {
-    const response = await api.get('/calendar/list');
-
-    // Проверяем, требуется ли авторизация
-    if (response.data.requires_authorization) {
-      console.log('Calendar authorization required, redirecting...');
-      console.log('Authorization URL:', response.data.authorization_url);
-
-      // Редиректим на URL авторизации Google
-      window.location.href = response.data.authorization_url;
-
-      // Возвращаем данные, но компонент не будет их обрабатывать из-за редиректа
-      return response.data;
-    }
-
-    return response.data;
-  }
-
-  // Отправить код для получения разрешений на календарь
-  async sendCalendarCode(code: string): Promise<void> {
-    await api.post('/calendar/code', { code });
-  }
-
-  // Получить URL для авторизации календаря
-  getCalendarAuthUrl(): string {
-    const baseUrl = process.env.REACT_APP_API_URL || 'http://localhost:8000';
-    return `${baseUrl}/google/calendar`;
-  }
-
-  // Получить события календаря
-  async getCalendarEvents(forcefullsync: boolean = false, fullresponse: boolean = false): Promise<CalendarEventsResponse> {
-    const params = new URLSearchParams();
-    if (forcefullsync) params.append('forcefullsync', 'true');
-    if (fullresponse) params.append('fullresponse', 'true');
-
-    const response = await api.get(`/calendar/events?${params.toString()}`);
-    return response.data;
-  }
-
-  // Настройка подписки на вебхуки
-  async setupWebhook(): Promise<void> {
-    await api.post('/calendar/webhook-setup');
-  }
-
-  // Настройка подписки на вебхуки с проверкой localStorage
-  async setupWebhookIfNeeded(): Promise<boolean> {
-    if (this.isWebhookConfigured()) {
-      console.log('Webhook already configured, skipping setup');
-      return false;
-    }
-
+  /**
+   * Получение событий календаря с поддержкой forcefullsync
+   */
+  async getEvents(forcefullsync: boolean = false): Promise<CalendarEvent[]> {
     try {
-      await this.setupWebhook();
-      this.markWebhookAsConfigured();
-      console.log('Webhook setup successful and marked as configured');
+      const params = forcefullsync ? { forcefullsync: 'true' } : {};
+
+      const response = await api.get('/calendar/events', { params });
+
+      return response.data;
+    } catch (error: any) {
+      console.error('Error getting calendar events:', error);
+
+      if (error.response?.data?.detail) {
+        throw new Error(error.response.data.detail);
+      }
+
+      throw new Error('Ошибка при получении событий календаря');
+    }
+  }
+
+  /**
+   * Получение списка календарей
+   */
+  async getCalendars(): Promise<Calendar[]> {
+    try {
+      const response = await api.get('/calendar/calendars');
+      return response.data.items || [];
+    } catch (error: any) {
+      console.error('Error getting calendars:', error);
+
+      if (error.response?.data?.detail) {
+        throw new Error(error.response.data.detail);
+      }
+
+      throw new Error('Ошибка при получении календарей');
+    }
+  }
+
+  /**
+   * Обновление события календаря
+   */
+  async updateEvent(eventId: string, updateData: Partial<CalendarEvent>): Promise<CalendarEvent> {
+    try {
+      const response = await api.put(`/calendar/events/${eventId}`, updateData);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error updating calendar event:', error);
+
+      if (error.response?.data?.detail) {
+        throw new Error(error.response.data.detail);
+      }
+
+      throw new Error('Ошибка при обновлении события');
+    }
+  }
+
+  /**
+   * Создание нового события
+   */
+  async createEvent(eventData: Partial<CalendarEvent>): Promise<CalendarEvent> {
+    try {
+      const response = await api.post('/calendar/events', eventData);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error creating calendar event:', error);
+
+      if (error.response?.data?.detail) {
+        throw new Error(error.response.data.detail);
+      }
+
+      throw new Error('Ошибка при создании события');
+    }
+  }
+
+  /**
+   * Удаление события
+   */
+  async deleteEvent(eventId: string): Promise<boolean> {
+    try {
+      await api.delete(`/calendar/events/${eventId}`);
       return true;
+    } catch (error: any) {
+      console.error('Error deleting calendar event:', error);
+
+      if (error.response?.data?.detail) {
+        throw new Error(error.response.data.detail);
+      }
+
+      throw new Error('Ошибка при удалении события');
+    }
+  }
+
+  /**
+   * Очистка кеша событий
+   */
+  clearEventsCache(): void {
+    localStorage.removeItem('calendar_events');
+    console.log('Calendar events cache cleared');
+  }
+
+  /**
+   * Получение событий с кешированием
+   */
+  async getEventsWithCache(): Promise<{ events: CalendarEvent[]; fromCache: boolean }> {
+    try {
+      // Проверяем кеш
+      const cachedEvents = localStorage.getItem('calendar_events');
+      const cacheTimestamp = localStorage.getItem('calendar_events_timestamp');
+
+      // Если кеш свежий (младше 5 минут), используем его
+      if (cachedEvents && cacheTimestamp) {
+        const cacheAge = Date.now() - parseInt(cacheTimestamp);
+        if (cacheAge < 5 * 60 * 1000) { // 5 минут
+          return {
+            events: JSON.parse(cachedEvents),
+            fromCache: true
+          };
+        }
+      }
+
+      // Иначе загружаем с сервера
+      const events = await this.getEvents(true);
+
+      // Сохраняем в кеш
+      localStorage.setItem('calendar_events', JSON.stringify(events));
+      localStorage.setItem('calendar_events_timestamp', Date.now().toString());
+
+      return {
+        events,
+        fromCache: false
+      };
     } catch (error) {
-      console.error('Webhook setup failed:', error);
+      console.error('Error in getEventsWithCache:', error);
+
+      // В случае ошибки пытаемся вернуть кешированные данные
+      const cachedEvents = localStorage.getItem('calendar_events');
+      if (cachedEvents) {
+        return {
+          events: JSON.parse(cachedEvents),
+          fromCache: true
+        };
+      }
+
       throw error;
     }
   }
 
-  // Получить события календаря с учетом кеширования
-  async getEventsWithCache(): Promise<{
-    events: CalendarEvent[];
-    fromCache: boolean;
-    hasChanges?: boolean;
-  }> {
-    console.log('Getting events with cache logic...');
-
-    // Проверяем, есть ли валидный кеш
-    if (eventCacheService.hasValidCache()) {
-      console.log('Valid cache found, returning cached events');
-      const cachedEvents = eventCacheService.getEventsFromCache();
-      return {
-        events: cachedEvents,
-        fromCache: true
-      };
-    }
-
-    console.log('No valid cache, fetching events with full sync');
-
-    // Если кеша нет или он устарел, делаем полную синхронизацию
-    const response = await this.getCalendarEvents(true, true);
-    const events = response.items || response.events || [];
-
-    // Кешируем полученные события
-    eventCacheService.setCachedEvents(events, response.etag);
-
-    return {
-      events,
-      fromCache: false
-    };
-  }
-
-  // Проверить обновления событий (без forcefullsync)
-  async checkEventsUpdates(): Promise<{
-    events: CalendarEvent[];
-    hasChanges: boolean;
-  }> {
-    console.log('Checking for events updates...');
-
-    // Запрашиваем только изменения (без forcefullsync)
-    const response = await this.getCalendarEvents(false, false);
-
-    // Сравниваем с кешем и обновляем при необходимости
-    const result = eventCacheService.updateEventsCache(response);
-
-    console.log('Update check result:', {
-      hasChanges: result.hasChanges,
-      eventsCount: result.updatedEvents.length
-    });
-
-    return {
-      events: result.updatedEvents,
-      hasChanges: result.hasChanges
-    };
-  }
-
-  // Проверить обновления с полным ответом (для переходов между вкладками)
-  async checkEventsUpdatesWithFullResponse(): Promise<{
-    events: CalendarEvent[];
-    hasChanges: boolean;
-  }> {
-    console.log('Checking for events updates with full response...');
-
-    // Запрашиваем с fullresponse=true для получения всех событий
-    const response = await this.getCalendarEvents(false, true);
-    const events = response.items || response.events || [];
-
-    // Получаем текущий кеш для сравнения
-    const cachedEvents = eventCacheService.getEventsFromCache();
-    const hasChanges = events.length !== cachedEvents.length ||
-                      eventCacheService.compareEvents(cachedEvents, events);
-
-    // Обновляем кеш полученными событиями
-    eventCacheService.setCachedEvents(events, response.etag);
-
-    console.log('Full response update result:', {
-      hasChanges,
-      eventsCount: events.length,
-      previousCount: cachedEvents.length
-    });
-
-    return {
-      events,
-      hasChanges
-    };
-  }
-
-  // Принудительно обновить кеш событий
+  /**
+   * Принудительное обновление событий
+   */
   async forceRefreshEvents(): Promise<CalendarEvent[]> {
-    console.log('Force refreshing events...');
+    try {
+      // Очищаем кеш
+      this.clearEventsCache();
 
-    const response = await this.getCalendarEvents(true, true);
-    const events = response.items || response.events || [];
+      // Загружаем события с сервера
+      const events = await this.getEvents(true);
 
-    eventCacheService.setCachedEvents(events, response.etag);
+      // Сохраняем в кеш
+      localStorage.setItem('calendar_events', JSON.stringify(events));
+      localStorage.setItem('calendar_events_timestamp', Date.now().toString());
 
-    return events;
+      return events;
+    } catch (error) {
+      console.error('Error in forceRefreshEvents:', error);
+      throw error;
+    }
   }
 
-  // Получить информацию о состоянии кеша
-  getCacheInfo() {
-    return eventCacheService.getCacheInfo();
+  /**
+   * Проверка обновлений событий
+   */
+  async checkEventsUpdates(): Promise<{ hasChanges: boolean; events: CalendarEvent[] }> {
+    try {
+      const response = await api.get('/calendar/events', {
+        params: {
+          forcefullsync: 'false',
+          fullresponse: 'true'
+        }
+      });
+
+      const serverEvents = response.data;
+      const cachedEvents = localStorage.getItem('calendar_events');
+
+      if (!cachedEvents) {
+        // Если кеша нет, считаем что есть изменения
+        localStorage.setItem('calendar_events', JSON.stringify(serverEvents));
+        localStorage.setItem('calendar_events_timestamp', Date.now().toString());
+        return { hasChanges: true, events: serverEvents };
+      }
+
+      const cached = JSON.parse(cachedEvents);
+
+      // Простое сравнение по количеству и updated полям
+      const hasChanges = serverEvents.length !== cached.length ||
+        serverEvents.some((event: CalendarEvent, index: number) =>
+          !cached[index] || event.updated !== cached[index].updated
+        );
+
+      if (hasChanges) {
+        localStorage.setItem('calendar_events', JSON.stringify(serverEvents));
+        localStorage.setItem('calendar_events_timestamp', Date.now().toString());
+      }
+
+      return { hasChanges, events: serverEvents };
+    } catch (error) {
+      console.error('Error checking events updates:', error);
+      throw error;
+    }
   }
 
-  // Очистить кеш событий
-  clearEventsCache(): void {
-    eventCacheService.clearCache();
+  /**
+   * Проверка обновлений с полным ответом
+   */
+  async checkEventsUpdatesWithFullResponse(): Promise<{ hasChanges: boolean; events: CalendarEvent[] }> {
+    return this.checkEventsUpdates();
+  }
+
+  /**
+   * Получение списка календарей (алиас для getCalendars)
+   */
+  async getCalendarList(): Promise<CalendarListResponse> {
+    try {
+      const response = await api.get('/calendar/calendars');
+      return response.data;
+    } catch (error: any) {
+      console.error('Error getting calendar list:', error);
+
+      if (error.response?.data?.detail) {
+        throw new Error(error.response.data.detail);
+      }
+
+      throw new Error('Ошибка при получении списка календарей');
+    }
+  }
+
+  /**
+   * Получение событий календаря (алиас для getEvents)
+   */
+  async getCalendarEvents(): Promise<CalendarEventsResponse> {
+    try {
+      const events = await this.getEvents(false);
+      return {
+        items: events,
+        events: events
+      };
+    } catch (error: any) {
+      console.error('Error getting calendar events:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Отправка кода авторизации календаря
+   */
+  async sendCalendarCode(code: string): Promise<any> {
+    try {
+      const response = await api.post('/auth/google/calendar/callback', { code });
+      return response.data;
+    } catch (error: any) {
+      console.error('Error sending calendar code:', error);
+
+      if (error.response?.data?.detail) {
+        throw new Error(error.response.data.detail);
+      }
+
+      throw new Error('Ошибка при отправке кода авторизации');
+    }
+  }
+
+  /**
+   * Настройка вебхука если необходимо
+   */
+  async setupWebhookIfNeeded(): Promise<boolean> {
+    try {
+      const response = await api.post('/calendar/webhook/setup');
+      return response.data.success || true;
+    } catch (error: any) {
+      console.error('Error setting up webhook:', error);
+
+      // Вебхук не критичен, поэтому не выбрасываем ошибку
+      console.warn('Webhook setup failed, but continuing...');
+      return false;
+    }
   }
 }
 

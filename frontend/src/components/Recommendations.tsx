@@ -5,108 +5,112 @@ import './Recommendations.css';
 
 interface RecommendationCardProps {
   recommendation: string;
-  index: number;
 }
 
-const RecommendationCard: React.FC<RecommendationCardProps> = ({ recommendation, index }) => (
-  <div className="recommendation-card">
-    <div className="recommendation-number">{index + 1}</div>
-    <div className="recommendation-text">{recommendation}</div>
-  </div>
-);
+const RecommendationCard: React.FC<RecommendationCardProps> = ({ recommendation }) => {
+  return (
+    <div className="recommendation-card">
+      <div className="recommendation-content">
+        <span className="recommendation-text">{recommendation}</span>
+      </div>
+    </div>
+  );
+};
 
 interface ScheduleChangeCardProps {
   change: ScheduleChange;
-  onAccept: () => void;
+  onApply: () => void;
   onReject: () => void;
-  isLoading: boolean;
+  isApplying: boolean;
 }
 
 const ScheduleChangeCard: React.FC<ScheduleChangeCardProps> = ({ 
   change, 
-  onAccept, 
-  onReject, 
-  isLoading 
+  onApply,
+  onReject,
+  isApplying
 }) => {
+  const formatDateTime = (dateTimeStr: string) => {
+    try {
+      return new Date(dateTimeStr).toLocaleString('ru-RU');
+    } catch {
+      return dateTimeStr;
+    }
+  };
+
   const getActionIcon = (action: string) => {
-    switch (action) {
+    switch (action.toLowerCase()) {
+      case 'move': return '📅';
+      case 'reschedule': return '⏰';
+      case 'cancel': return '❌';
+      case 'optimize': return '⚡';
       case 'create': return '➕';
-      case 'update': return '✏️';
-      case 'delete': return '🗑️';
-      default: return '📅';
+      default: return '🔄';
     }
   };
 
-  const getActionText = (action: string) => {
-    switch (action) {
-      case 'create': return 'Создать событие';
-      case 'update': return 'Обновить событие';
-      case 'delete': return 'Удалить событие';
-      default: return 'Изменить событие';
+  const getActionLabel = (action: string) => {
+    switch (action.toLowerCase()) {
+      case 'move': return 'Перенести';
+      case 'reschedule': return 'Перепланировать';
+      case 'cancel': return 'Отменить';
+      case 'optimize': return 'Оптимизировать';
+      case 'create': return 'Создать';
+      default: return action;
     }
-  };
-
-  const formatDateTime = (dateTime?: string) => {
-    if (!dateTime) return '';
-    const date = new Date(dateTime);
-    return date.toLocaleString('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   };
 
   return (
     <div className="schedule-change-card">
       <div className="change-header">
-        <span className="change-icon">{getActionIcon(change.action)}</span>
-        <span className="change-action">{getActionText(change.action)}</span>
+        <div className="change-title">
+          <span className="action-icon">{getActionIcon(change.action)}</span>
+          <h4>{change.title}</h4>
+        </div>
+        <span className={`action-badge ${change.action.toLowerCase()}`}>
+          {getActionLabel(change.action)}
+        </span>
       </div>
-      
-      {change.title && (
-        <div className="change-detail">
-          <strong>Название:</strong> {change.title}
-        </div>
-      )}
-      
-      {change.start_time && (
-        <div className="change-detail">
-          <strong>Начало:</strong> {formatDateTime(change.start_time)}
-        </div>
-      )}
-      
-      {change.end_time && (
-        <div className="change-detail">
-          <strong>Конец:</strong> {formatDateTime(change.end_time)}
-        </div>
-      )}
-      
-      {change.location && (
-        <div className="change-detail">
-          <strong>Место:</strong> {change.location}
-        </div>
-      )}
-      
-      <div className="change-reason">
-        <strong>Причина:</strong> {change.reason}
+
+      <div className="change-body">
+        <p className="change-reason">{change.reason}</p>
+
+        {change.new_start && (
+          <div className="change-detail">
+            <strong>Новое начало:</strong> {formatDateTime(change.new_start)}
+          </div>
+        )}
+
+        {change.new_end && (
+          <div className="change-detail">
+            <strong>Новый конец:</strong> {formatDateTime(change.new_end)}
+          </div>
+        )}
+
+        {change.priority && (
+          <div className="change-priority">
+            <span className={`priority-badge ${change.priority}`}>
+              {change.priority === 'high' ? '🔴 Высокий' :
+               change.priority === 'medium' ? '🟡 Средний' : '🟢 Низкий'}
+            </span>
+          </div>
+        )}
       </div>
       
       <div className="change-actions">
         <button 
-          className="btn-accept" 
-          onClick={onAccept}
-          disabled={isLoading}
+          onClick={onApply}
+          className="apply-button"
+          disabled={isApplying}
         >
-          {isLoading ? 'Применяется...' : 'Согласиться'}
+          {isApplying ? '⏳ Применяется...' : '✅ Применить'}
         </button>
         <button 
-          className="btn-reject" 
           onClick={onReject}
-          disabled={isLoading}
+          className="reject-button"
+          disabled={isApplying}
         >
-          Отклонить
+          ❌ Отклонить
         </button>
       </div>
     </div>
@@ -115,29 +119,45 @@ const ScheduleChangeCard: React.FC<ScheduleChangeCardProps> = ({
 
 const Recommendations: React.FC = () => {
   const [analysis, setAnalysis] = useState<CalendarAnalysis | null>(null);
-  const [goals, setGoals] = useState<SmartGoal[]>([]);
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [goals, setGoals] = useState<SmartGoal[]>([]);
   const [appliedChanges, setAppliedChanges] = useState<Set<number>>(new Set());
   const [rejectedChanges, setRejectedChanges] = useState<Set<number>>(new Set());
+  const [applyingChange, setApplyingChange] = useState<number | null>(null);
 
-  // Загрузка данных при монтировании компонента
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  const loadInitialData = async () => {
+  // Загрузка событий из localStorage или с бэкенда
+  const loadEvents = async (): Promise<CalendarEvent[]> => {
     try {
-      setIsLoading(true);
-      setError(null);
+      // Сначала проверяем localStorage
+      const cachedEvents = localStorage.getItem('calendar_events');
 
-      // Загружаем события календаря с логикой кеширования
-      const eventsResult = await calendarService.getEventsWithCache();
-      setEvents(eventsResult.events);
+      if (cachedEvents) {
+        console.log('Loading events from localStorage');
+        const parsedEvents = JSON.parse(cachedEvents);
+        setEvents(parsedEvents);
+        return parsedEvents;
+      }
 
-      console.log(`Events loaded: ${eventsResult.events.length} events, from cache: ${eventsResult.fromCache}`);
+      // Если в localStorage нет событий, запрашиваем с бэкенда
+      console.log('No events in localStorage, fetching from backend');
+      const eventsFromBackend = await calendarService.getEvents(true); // forcefullsync=true
 
+      // Сохраняем в localStorage
+      localStorage.setItem('calendar_events', JSON.stringify(eventsFromBackend));
+      setEvents(eventsFromBackend);
+      return eventsFromBackend;
+
+    } catch (error) {
+      console.error('Error loading events:', error);
+      throw error;
+    }
+  };
+
+  // Загрузка целей пользователя
+  const loadGoals = async (): Promise<SmartGoal[]> => {
+    try {
       // Загружаем цели отдельно с более детальной обработкой ошибок
       try {
         const goalsData = await aiService.getGoals();
@@ -145,106 +165,140 @@ const Recommendations: React.FC = () => {
         // Проверяем, что goalsData это массив
         if (Array.isArray(goalsData)) {
           setGoals(goalsData);
-          console.log(`Goals loaded: ${goalsData.length} goals`);
+          return goalsData;
         } else {
           console.warn('Goals data is not an array:', goalsData);
           setGoals([]);
+          return [];
         }
-      } catch (goalsError: any) {
-        console.error('Error loading goals:', goalsError);
-        setGoals([]); // Устанавливаем пустой массив при ошибке
-
-        // Не показываем ошибку пользователю, так как события загрузились
-        console.warn('Goals loading failed, continuing with empty goals array');
+      } catch (goalsError) {
+        console.warn('Failed to load goals, continuing without them:', goalsError);
+        setGoals([]);
+        return [];
       }
-
-    } catch (err) {
-      console.error('Error loading initial data:', err);
-      setError('Ошибка при загрузке данных. Попробуйте обновить страницу.');
-      // Устанавливаем безопасные значения по умолчанию
-      setEvents([]);
-      setGoals([]);
-    } finally {
-      setIsLoading(false);
+    } catch (error) {
+      console.error('Error loading goals:', error);
+      return [];
     }
   };
 
-  const analyzeCalendar = async () => {
-    if (events.length === 0) {
-      setError('Нет событий календаря для анализа');
-      return;
-    }
+  // Получение анализа календаря
+  const getCalendarAnalysis = async () => {
+    setLoading(true);
+    setError(null);
 
     try {
-      setIsLoading(true);
-      setError(null);
+      // Загружаем события и цели
+      const [eventsList, goalsList] = await Promise.all([
+        loadEvents(),
+        loadGoals()
+      ]);
 
+      if (!eventsList || eventsList.length === 0) {
+        setError('Нет событий для анализа');
+        return;
+      }
+
+      // Отправляем события на анализ ИИ
       const analysisResult = await aiService.analyzeCalendar({
-        calendar_events: events,
-        user_goals: goals,
+        calendar_events: eventsList,
+        user_goals: goalsList,
         analysis_period_days: 7
       });
 
       setAnalysis(analysisResult);
-      setAppliedChanges(new Set());
-      setRejectedChanges(new Set());
+
     } catch (err: any) {
-      console.error('Error analyzing calendar:', err);
-      setError(err.response?.data?.detail || 'Ошибка при анализе календаря');
+      console.error('Error getting calendar analysis:', err);
+      setError(err.message || 'Произошла ошибка при анализе календаря');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
+  // Применение изменения в расписании
   const applyScheduleChange = async (change: ScheduleChange, index: number) => {
+    setApplyingChange(index);
+
     try {
-      // Здесь будет логика применения изменений
       if (change.action === 'create') {
         // Создание нового события - пока что просто помечаем как применено
         console.log('Creating event:', change);
-      } else if (change.action === 'update' && change.event_id) {
+      } else if (change.action === 'update' && change.id) {
         // Обновление существующего события
-        await aiService.updateCalendarEvent(change.event_id, {
+        await aiService.updateCalendarEvent(change.id, {
           summary: change.title,
-          description: change.description,
-          location: change.location,
-          start: change.start_time ? { dateTime: change.start_time } : undefined,
-          end: change.end_time ? { dateTime: change.end_time } : undefined
+          description: change.reason,
+          start: change.new_start ? { dateTime: change.new_start } : undefined,
+          end: change.new_end ? { dateTime: change.new_end } : undefined
         });
       }
 
+      // Помечаем изменение как примененное
       setAppliedChanges(prev => {
-        const newSet = new Set(Array.from(prev));
+        const newSet = new Set(prev);
         newSet.add(index);
         return newSet;
       });
-    } catch (err: any) {
-      console.error('Error applying schedule change:', err);
-      setError(err.response?.data?.detail || 'Ошибка при применении изменения');
+
+      // Обновляем события после применения изменения
+      await loadEvents();
+
+    } catch (error: any) {
+      console.error('Error applying schedule change:', error);
+      alert(`Ошибка при применении изменения: ${error.message}`);
+    } finally {
+      setApplyingChange(null);
     }
   };
 
+  // Отклонение изменения
   const rejectScheduleChange = (index: number) => {
     setRejectedChanges(prev => {
-      const newSet = new Set(Array.from(prev));
+      const newSet = new Set(prev);
       newSet.add(index);
       return newSet;
     });
   };
 
-  const getProductivityScoreColor = (score: number) => {
-    if (score >= 8) return '#4caf50';
-    if (score >= 6) return '#ff9800';
-    return '#f44336';
-  };
+  // Загружаем анализ при монтировании компонента
+  useEffect(() => {
+    getCalendarAnalysis();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  if (isLoading && !analysis) {
+  if (loading) {
     return (
       <div className="recommendations-container">
-        <div className="loading-state">
+        <div className="loading-spinner">
           <div className="spinner"></div>
-          <p>Загрузка данных...</p>
+          <p>Анализируем ваш календарь...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="recommendations-container">
+        <div className="error-message">
+          <h3>⚠️ Ошибка</h3>
+          <p>{error}</p>
+          <button onClick={getCalendarAnalysis} className="retry-button">
+            Попробовать снова
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!analysis) {
+    return (
+      <div className="recommendations-container">
+        <p>Нет данных для отображения</p>
+        <button onClick={getCalendarAnalysis} className="retry-button">
+          Загрузить анализ
+        </button>
       </div>
     );
   }
@@ -252,128 +306,99 @@ const Recommendations: React.FC = () => {
   return (
     <div className="recommendations-container">
       <header className="recommendations-header">
-        <h1>🤖 AI Рекомендации</h1>
-        <p>Анализ вашего календаря и целей для оптимизации времени</p>
+        <h2>📊 Анализ календаря</h2>
+        <button onClick={getCalendarAnalysis} className="refresh-button">
+          🔄 Обновить анализ
+        </button>
       </header>
 
-      {error && (
-        <div className="error-message">
-          <span className="error-icon">⚠️</span>
-          {error}
-        </div>
-      )}
+      {/* Краткое резюме */}
+      <div className="summary-section">
+        <h3>📝 Общий анализ</h3>
+        <p>{analysis.summary}</p>
 
-      <div className="stats-section">
-        <div className="stat-card">
-          <div className="stat-number">{events.length}</div>
-          <div className="stat-label">События в календаре</div>
-        </div>
-        <div className="stat-card">
-          <div className="stat-number">{goals.length}</div>
-          <div className="stat-label">Активные цели</div>
-        </div>
-        {analysis && (
-          <div className="stat-card">
-            <div 
-              className="stat-number"
-              style={{ color: getProductivityScoreColor(analysis.productivity_score) }}
-            >
-              {analysis.productivity_score}/10
-            </div>
-            <div className="stat-label">Продуктивность</div>
+        {analysis.productivity_score && (
+          <div className="productivity-score">
+            <strong>Оценка продуктивности:</strong> {analysis.productivity_score}/10
+          </div>
+        )}
+
+        {analysis.goal_alignment && (
+          <div className="goal-alignment">
+            <strong>Соответствие целям:</strong> {analysis.goal_alignment}
           </div>
         )}
       </div>
 
-      {!analysis ? (
-        <div className="analyze-section">
-          <button 
-            className="btn-analyze"
-            onClick={analyzeCalendar}
-            disabled={isLoading || events.length === 0}
-          >
-            {isLoading ? 'Анализируем...' : '🔍 Анализировать календарь'}
-          </button>
-          {events.length === 0 && (
-            <p className="help-text">
-              Сначала добавьте события в календарь или убедитесь, что календарь синхронизирован
-            </p>
-          )}
-        </div>
-      ) : (
-        <div className="analysis-results">
-          <div className="analysis-overview">
-            <h2>📊 Анализ календаря</h2>
-            <div className="analysis-text">{analysis.analysis}</div>
-            <div className="goal-alignment">
-              <strong>Соответствие целям:</strong> 
-              <span className={`alignment-${analysis.goal_alignment.toLowerCase()}`}>
-                {analysis.goal_alignment}
-              </span>
-            </div>
-          </div>
-
-          {analysis.recommendations.length > 0 && (
-            <div className="recommendations-section">
-              <h3>💡 Рекомендации</h3>
-              <div className="recommendations-list">
-                {analysis.recommendations.map((recommendation, index) => (
-                  <RecommendationCard 
-                    key={index}
-                    recommendation={recommendation}
-                    index={index}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {analysis.schedule_changes.length > 0 && (
-            <div className="schedule-changes-section">
-              <h3>📅 Предлагаемые изменения</h3>
-              <div className="schedule-changes-list">
-                {analysis.schedule_changes.map((change, index) => {
-                  if (appliedChanges.has(index) || rejectedChanges.has(index)) {
-                    return null;
-                  }
-                  
-                  return (
-                    <ScheduleChangeCard
-                      key={index}
-                      change={change}
-                      onAccept={() => applyScheduleChange(change, index)}
-                      onReject={() => rejectScheduleChange(index)}
-                      isLoading={isLoading}
-                    />
-                  );
-                })}
-              </div>
-              
-              {appliedChanges.size > 0 && (
-                <div className="applied-changes">
-                  <h4>✅ Примененные изменения: {appliedChanges.size}</h4>
-                </div>
-              )}
-              
-              {rejectedChanges.size > 0 && (
-                <div className="rejected-changes">
-                  <h4>❌ Отклоненные изменения: {rejectedChanges.size}</h4>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="reanalyze-section">
-            <button 
-              className="btn-reanalyze"
-              onClick={analyzeCalendar}
-              disabled={isLoading}
-            >
-              {isLoading ? 'Анализируем...' : '🔄 Повторить анализ'}
-            </button>
+      {/* Общие рекомендации */}
+      {analysis.recommendations && analysis.recommendations.length > 0 && (
+        <div className="recommendations-section">
+          <h3>💡 Рекомендации</h3>
+          <div className="recommendations-list">
+            {analysis.recommendations.map((recommendation: string, index: number) => (
+              <RecommendationCard
+                key={index}
+                recommendation={recommendation}
+              />
+            ))}
           </div>
         </div>
       )}
+
+      {/* Предлагаемые изменения расписания */}
+      {analysis.schedule_changes && analysis.schedule_changes.length > 0 && (
+        <div className="schedule-changes-section">
+          <h3>📅 Предлагаемые изменения</h3>
+          <div className="schedule-changes-list">
+            {analysis.schedule_changes.map((change: ScheduleChange, index: number) => {
+              if (appliedChanges.has(index) || rejectedChanges.has(index)) {
+                return null;
+              }
+
+              return (
+                <ScheduleChangeCard
+                  key={index}
+                  change={change}
+                  onApply={() => applyScheduleChange(change, index)}
+                  onReject={() => rejectScheduleChange(index)}
+                  isApplying={applyingChange === index}
+                />
+              );
+            })}
+          </div>
+
+          {appliedChanges.size > 0 && (
+            <div className="applied-changes">
+              <h4>✅ Примененные изменения: {appliedChanges.size}</h4>
+            </div>
+          )}
+
+          {rejectedChanges.size > 0 && (
+            <div className="rejected-changes">
+              <h4>❌ Отклоненные изменения: {rejectedChanges.size}</h4>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Статистика */}
+      <div className="events-stats">
+        <h3>📈 Статистика</h3>
+        <div className="stats-grid">
+          <div className="stat-item">
+            <span className="stat-value">{events.length}</span>
+            <span className="stat-label">Событий</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-value">{goals.length}</span>
+            <span className="stat-label">Целей</span>
+          </div>
+          <div className="stat-item">
+            <span className="stat-value">{analysis.schedule_changes?.length || 0}</span>
+            <span className="stat-label">Предложений</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

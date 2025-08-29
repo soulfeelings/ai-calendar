@@ -11,7 +11,7 @@ export interface ScheduleChange {
   priority?: string;
 }
 
-export interface CalendarAnalysisResponse {
+export interface CalendarAnalysis {
   summary: string;
   schedule_changes: ScheduleChange[];
   recommendations: string[];
@@ -19,8 +19,24 @@ export interface CalendarAnalysisResponse {
   goal_alignment?: string;
 }
 
+export interface SmartGoal {
+  id?: string;
+  title: string;
+  description: string;
+  specific: string;
+  measurable: string;
+  achievable: string;
+  relevant: string;
+  time_bound: string;
+  deadline?: string;
+  priority?: string;
+  status?: string;
+}
+
 export interface CalendarAnalysisRequest {
   calendar_events: any[];
+  user_goals?: SmartGoal[];
+  analysis_period_days?: number;
   goals?: string[];
   context?: string;
 }
@@ -29,18 +45,8 @@ class AIService {
   /**
    * Анализ календаря с помощью ИИ
    */
-  async analyzeCalendar(events: any[], goals?: string[], context?: string): Promise<CalendarAnalysisResponse> {
+  async analyzeCalendar(requestData: CalendarAnalysisRequest): Promise<CalendarAnalysis> {
     try {
-      const requestData: CalendarAnalysisRequest = {
-        calendar_events: events.map(event => ({
-          ...event,
-          // Добавляем calendarId если его нет
-          calendarId: event.calendarId || 'primary'
-        })),
-        goals: goals || [],
-        context: context
-      };
-
       console.log('Sending analysis request:', requestData);
 
       const response = await api.post('/ai/analyze-calendar', requestData);
@@ -66,6 +72,32 @@ class AIService {
       }
 
       throw new Error('Ошибка при анализе календаря');
+    }
+  }
+
+  /**
+   * Получение целей пользователя
+   */
+  async getGoals(includeCompleted: boolean = false): Promise<SmartGoal[]> {
+    try {
+      const response = await api.get(`/ai/goals?include_completed=${includeCompleted}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting user goals:', error);
+      throw new Error('Ошибка при получении целей');
+    }
+  }
+
+  /**
+   * Обновление события календаря
+   */
+  async updateCalendarEvent(eventId: string, updateData: any): Promise<any> {
+    try {
+      const response = await api.put(`/calendar/events/${eventId}`, updateData);
+      return response.data;
+    } catch (error) {
+      console.error('Error updating calendar event:', error);
+      throw new Error('Ошибка при обновлении события');
     }
   }
 
@@ -130,35 +162,13 @@ class AIService {
   /**
    * Создание SMART цели
    */
-  async createSMARTGoal(goal: {
-    title: string;
-    description: string;
-    specific: string;
-    measurable: string;
-    achievable: string;
-    relevant: string;
-    time_bound: string;
-    deadline?: string;
-  }): Promise<any> {
+  async createSMARTGoal(goal: SmartGoal): Promise<SmartGoal> {
     try {
       const response = await api.post('/ai/goals', goal);
       return response.data;
     } catch (error) {
       console.error('Error creating SMART goal:', error);
       throw new Error('Ошибка при создании цели');
-    }
-  }
-
-  /**
-   * Получение пользовательских целей
-   */
-  async getUserGoals(includeCompleted: boolean = false): Promise<any[]> {
-    try {
-      const response = await api.get(`/ai/goals?include_completed=${includeCompleted}`);
-      return response.data;
-    } catch (error) {
-      console.error('Error getting user goals:', error);
-      throw new Error('Ошибка при получении целей');
     }
   }
 }

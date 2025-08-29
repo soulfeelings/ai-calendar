@@ -4,8 +4,33 @@ from datetime import datetime
 from .event_schemas import CalendarEvent, ScheduleChange, CalendarAnalysisResponse, CalendarAnalysisRequest
 
 
+class OpenAIMessage(BaseModel):
+    """Модель сообщения для OpenAI API"""
+    role: str  # system, user, assistant
+    content: str
+
+
+class OpenAIRequest(BaseModel):
+    """Запрос к OpenAI API"""
+    messages: List[OpenAIMessage]
+    model: Optional[str] = "gpt-4"
+    max_tokens: Optional[int] = 1000
+    temperature: Optional[float] = 0.7
+    system_prompt: Optional[str] = None
+
+
+class OpenAIResponse(BaseModel):
+    """Ответ от OpenAI API"""
+    content: str
+    tokens_used: Optional[int] = None
+    model: str
+    created: Optional[int] = None
+
+
 class SMARTGoal(BaseModel):
     """SMART цель"""
+    id: Optional[str] = None
+    user_id: Optional[str] = None
     title: str
     description: str
     specific: str  # Конкретная
@@ -14,6 +39,10 @@ class SMARTGoal(BaseModel):
     relevant: str  # Актуальная
     time_bound: str  # Ограниченная по времени
     deadline: Optional[datetime] = None
+    priority: Optional[str] = "medium"
+    status: Optional[str] = "active"
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 class FreeTimeSlot(BaseModel):
