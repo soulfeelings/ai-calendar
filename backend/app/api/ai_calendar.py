@@ -34,9 +34,7 @@ async def analyze_calendar_and_goals(
     """
     try:
         logger.info(f"Starting calendar analysis for user {user_id}")
-
-        # Преобразуем цели в словари для отправки в ИИ
-        goals_dict = [goal.model_dump() for goal in request.user_goals]
+        logger.info(f"Received {len(request.calendar_events)} events for analysis")
 
         # Преобразуем события календаря в словари
         calendar_events_dict = [event.model_dump() for event in request.calendar_events]
@@ -47,7 +45,7 @@ async def analyze_calendar_and_goals(
         # Вызываем сервис OpenAI для анализа
         ai_response = await openai_service.analyze_calendar_and_goals(
             calendar_events=simplified_events,
-            user_goals=goals_dict,
+            user_goals=request.user_goals,
             analysis_period_days=request.analysis_period_days
         )
 
@@ -60,11 +58,11 @@ async def analyze_calendar_and_goals(
             productivity_score=ai_response.get("productivity_score")
         )
 
-        logger.info(f"Calendar analysis completed for user {user_id}")
+        logger.info(f"Calendar analysis completed successfully")
         return response
 
     except Exception as e:
-        logger.error(f"Error in analyze_calendar_and_goals: {str(e)}")
+        logger.error(f"Error in calendar analysis: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ошибка при анализе календаря: {str(e)}"

@@ -1,122 +1,150 @@
-from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from pydantic import BaseModel, Field, validator
+from typing import Optional, List, Dict, Any, Union
 from datetime import datetime
-from enum import Enum
 
 
-class EventDateTime(BaseModel):
-    """Схема для времени события"""
+class GoogleCalendarDateTime(BaseModel):
+    """Модель для времени события Google Calendar"""
     dateTime: Optional[str] = None
     date: Optional[str] = None
     timeZone: Optional[str] = None
 
 
-class EventAttendee(BaseModel):
-    """Схема для участника события"""
+class GoogleCalendarAttendee(BaseModel):
+    """Модель для участника события Google Calendar"""
     email: str
     displayName: Optional[str] = None
-    responseStatus: Optional[str] = None  # needsAction, declined, tentative, accepted
-    optional: Optional[bool] = None
+    organizer: Optional[bool] = False
+    self: Optional[bool] = False
+    responseStatus: Optional[str] = None
 
 
-class EventReminder(BaseModel):
-    """Схема для напоминания"""
-    method: str  # email, popup
-    minutes: int
+class GoogleCalendarPerson(BaseModel):
+    """Модель для создателя/организатора события"""
+    email: str
+    displayName: Optional[str] = None
+    self: Optional[bool] = False
 
 
-class EventReminders(BaseModel):
-    """Схема для настроек напоминаний"""
-    useDefault: Optional[bool] = None
-    overrides: Optional[List[EventReminder]] = None
-
-
-class EventConferenceData(BaseModel):
-    """Схема для конференц-данных (Meet, Zoom и т.д.)"""
-    createRequest: Optional[Dict[str, Any]] = None
+class GoogleCalendarConferenceData(BaseModel):
+    """Модель для данных конференции"""
+    conferenceId: Optional[str] = None
     entryPoints: Optional[List[Dict[str, Any]]] = None
+    conferenceSolution: Optional[Dict[str, Any]] = None
 
 
-class UpdateEventRequest(BaseModel):
-    """Схема для обновления события - все поля опциональные"""
-    summary: Optional[str] = None
+class GoogleCalendarReminders(BaseModel):
+    """Модель для напоминаний"""
+    useDefault: Optional[bool] = True
+    overrides: Optional[List[Dict[str, Any]]] = None
+
+
+class CalendarEvent(BaseModel):
+    """Модель события календаря Google с гибкой валидацией"""
+
+    # Обязательные поля
+    id: str
+    status: str
+    htmlLink: str
+    created: str
+    updated: str
+    summary: str
+
+    # Поля времени
+    start: GoogleCalendarDateTime
+    end: GoogleCalendarDateTime
+
+    # Поля людей
+    creator: GoogleCalendarPerson
+    organizer: GoogleCalendarPerson
+
+    # Опциональные поля
+    kind: Optional[str] = None
+    etag: Optional[str] = None
     description: Optional[str] = None
     location: Optional[str] = None
-    start: Optional[EventDateTime] = None
-    end: Optional[EventDateTime] = None
-    attendees: Optional[List[EventAttendee]] = None
-    reminders: Optional[EventReminders] = None
-    transparency: Optional[str] = None  # opaque, transparent
-    visibility: Optional[str] = None  # default, public, private, confidential
-    status: Optional[str] = None  # confirmed, tentative, cancelled
-    colorId: Optional[str] = None
-    conferenceData: Optional[EventConferenceData] = None
-    recurrence: Optional[List[str]] = None  # RRULE строки для повторяющихся событий
-    
+    transparency: Optional[str] = None
+    visibility: Optional[str] = None
+    iCalUID: Optional[str] = None
+    sequence: Optional[int] = 0
+    attendees: Optional[List[GoogleCalendarAttendee]] = None
+    hangoutLink: Optional[str] = None
+    conferenceData: Optional[GoogleCalendarConferenceData] = None
+    reminders: Optional[GoogleCalendarReminders] = None
+    recurrence: Optional[List[str]] = None
+    eventType: Optional[str] = "default"
+
+    # Поле календаря (добавляем как опциональное)
+    calendarId: Optional[str] = None
+
     class Config:
-        # Исключаем None значения при сериализации
-        exclude_none = True
+        # Разрешаем дополнительные поля
+        extra = "allow"
+        # Используем enum значения
+        use_enum_values = True
 
 
-class EventUpdateResponse(BaseModel):
-    """Схема ответа после обновления события"""
-    status: str
-    event_id: str
-    updated_fields: List[str]
-    message: str
+class CalendarAnalysisRequest(BaseModel):
+    """Запрос на анализ календаря"""
+    calendar_events: List[CalendarEvent]
+    goals: Optional[List[str]] = None
+    context: Optional[str] = None
+
+    @validator('calendar_events', pre=True)
+    def validate_calendar_events(cls, v):
+        """Валидатор для преобразования событий календаря"""
+        if isinstance(v, list):
+            validated_events = []
+            for event in v:
+                if isinstance(event, dict):
+                    # Добавляем calendarId если его нет
+                    if 'calendarId' not in event:
+                        event['calendarId'] = 'primary'
+
+                    # Преобразуем поля attendees если они есть
+                    if 'attendees' in event and isinstance(event['attendees'], list):
+                        validated_attendees = []
+                        for attendee in event['attendees']:
+                            if isinstance(attendee, dict):
+                                validated_attendees.append(attendee)
+                            elif isinstance(attendee, str):
+                                validated_attendees.append({'email': attendee})
+                        event['attendees'] = validated_attendees
+
+                    validated_events.append(event)
+                else:
+                    validated_events.append(event)
+            return validated_events
+        return v
 
 
-class SmartGoalCreate(BaseModel):
-    title: str = Field(..., description="Название цели")
-    description: Optional[str] = Field(None, description="Описание цели")
-    specific: str = Field(..., description="Конкретность цели")
-    measurable: str = Field(..., description="Измеримость цели")
-    achievable: str = Field(..., description="Достижимость цели")
-    relevant: str = Field(..., description="Релевантность цели")
-    time_bound: datetime = Field(..., description="Временные рамки цели")
-    priority: int = Field(default=1, ge=1, le=5, description="Приоритет от 1 до 5")
-
-
-class SmartGoal(BaseModel):
+class SimplifiedCalendarEvent(BaseModel):
+    """Упрощенная модель события для ИИ"""
     id: str
-    user_id: str
-    title: str
-    description: Optional[str]
-    specific: str
-    measurable: str
-    achievable: str
-    relevant: str
-    time_bound: datetime
-    priority: int
-    created_at: datetime
-    updated_at: datetime
-    is_completed: bool = False
-
-
-class RecommendationAction(str, Enum):
-    CREATE_EVENT = "create_event"
-    UPDATE_EVENT = "update_event"
-    DELETE_EVENT = "delete_event"
-    RESCHEDULE_EVENT = "reschedule_event"
-
-
-class EventRecommendation(BaseModel):
-    action: RecommendationAction
-    event_id: Optional[str] = None
     title: str
     description: Optional[str] = None
-    start_time: datetime
-    end_time: datetime
-    reason: str = Field(..., description="Обоснование рекомендации")
+    start_time: str
+    end_time: str
+    location: Optional[str] = None
+    attendees: Optional[List[str]] = None
+    is_recurring: bool = False
 
 
-class AIRecommendationResponse(BaseModel):
-    recommendations: List[EventRecommendation]
-    analysis: str = Field(..., description="Анализ календаря и целей")
-    productivity_score: int = Field(ge=1, le=10, description="Оценка продуктивности от 1 до 10")
+class ScheduleChange(BaseModel):
+    """Модель изменения в расписании"""
+    id: str
+    action: str  # move, reschedule, cancel, create
+    title: str
+    reason: str
+    new_start: Optional[str] = None
+    new_end: Optional[str] = None
+    priority: Optional[str] = "medium"
 
 
-class RecommendationDecision(BaseModel):
-    recommendation_id: str
-    action: str  # "accept" or "reject"
-    user_comment: Optional[str] = None
+class CalendarAnalysisResponse(BaseModel):
+    """Ответ анализа календаря"""
+    summary: str
+    schedule_changes: List[ScheduleChange]
+    recommendations: List[str]
+    productivity_score: Optional[int] = Field(None, ge=1, le=10)
+    goal_alignment: Optional[str] = None
