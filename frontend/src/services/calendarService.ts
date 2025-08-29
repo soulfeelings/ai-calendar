@@ -82,7 +82,26 @@ class CalendarService {
 
       const response = await api.get('/calendar/events', { params });
 
-      return response.data;
+      // Google Calendar API возвращает объект с полем items, извлекаем массив событий
+      const data = response.data;
+
+      // Если это объект Google Calendar с полем items
+      if (data && typeof data === 'object' && data.items) {
+        return data.items;
+      }
+
+      // Если это массив событий напрямую
+      if (Array.isArray(data)) {
+        return data;
+      }
+
+      // Если это объект с полем events (fallback)
+      if (data && typeof data === 'object' && data.events) {
+        return data.events;
+      }
+
+      console.warn('Unexpected response format:', data);
+      return [];
     } catch (error: any) {
       console.error('Error getting calendar events:', error);
 
