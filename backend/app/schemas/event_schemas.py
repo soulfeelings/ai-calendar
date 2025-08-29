@@ -137,7 +137,7 @@ class SimplifiedCalendarEvent(BaseModel):
 
 class ScheduleChange(BaseModel):
     """Модель изменения в расписании (терпима к неполным ответам ИИ)"""
-    id: str
+    id: Optional[str] = None
     # Делаем поля необязательными с безопасными значениями по умолчанию,
     # чтобы не падать на валидации, если ИИ что-то опустил
     action: str = Field(default="optimize", description="Тип действия: move, reschedule, cancel, create, optimize")

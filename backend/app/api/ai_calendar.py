@@ -49,11 +49,26 @@ async def analyze_calendar_and_goals(
             analysis_period_days=request.analysis_period_days or 7
         )
 
+        # Нормализуем schedule_changes: допускаем, что ИИ мог вернуть строки
+        raw_changes = ai_response.get("schedule_changes", []) or []
+        normalized_changes = []
+        for ch in raw_changes:
+            if isinstance(ch, dict):
+                normalized_changes.append(ch)
+            elif isinstance(ch, str):
+                normalized_changes.append({
+                    "action": "optimize",
+                    "title": ch,
+                    "reason": ch
+                })
+            else:
+                logger.debug(f"Skipping unsupported schedule_change item type: {type(ch)}")
+
         # Формируем ответ (поддерживаем оба варианта ключей: summary или analysis)
         response = CalendarAnalysisResponse(
             summary=ai_response.get("summary") or ai_response.get("analysis", "Анализ не получен"),
             recommendations=ai_response.get("recommendations", []),
-            schedule_changes=ai_response.get("schedule_changes", []),
+            schedule_changes=normalized_changes,
             goal_alignment=ai_response.get("goal_alignment", "Не определено"),
             productivity_score=ai_response.get("productivity_score")
         )
