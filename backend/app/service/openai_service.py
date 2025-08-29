@@ -85,7 +85,8 @@ class OpenAIService:
         model: Optional[str] = None,
         max_tokens: Optional[int] = None,
         temperature: Optional[float] = None,
-        system_prompt: Optional[str] = None
+        system_prompt: Optional[str] = None,
+        response_format: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Создание чат-завершения через OpenAI API
@@ -96,6 +97,7 @@ class OpenAIService:
             max_tokens: Максимальное количество токенов
             temperature: Температура генерации
             system_prompt: Системный промпт
+            response_format: Принудительный формат ответа (например, {"type": "json_object"})
 
         Returns:
             Ответ от OpenAI API
@@ -115,12 +117,14 @@ class OpenAIService:
             chat_messages.extend(messages)
 
             # Подготовка данных запроса
-            payload = {
+            payload: Dict[str, Any] = {
                 "model": model or self.model,
                 "messages": chat_messages,
                 "max_tokens": max_tokens or self.max_tokens,
                 "temperature": temperature or self.temperature
             }
+            if response_format:
+                payload["response_format"] = response_format
 
             # Создаем connector для прокси если он настроен
             connector = None
@@ -169,34 +173,48 @@ class OpenAIService:
         try:
             # Формируем системный промпт для анализа календаря
             system_prompt = """
-            Ты - эксперт по тайм-менеджменту и планированию. Твоя задача - анализировать календарь пользователя 
-            и его SMART цели, чтобы предложить оптимизацию расписания.
-            
-            Учитывай следующие принципы:
-            1. Важность работы с приоритетами (матрица Эйзенхауэра)
-            2. Принцип временных блоков для фокусной работы
-            3. Необходимость отдыха и восстановления
-            4. Соответствие активностей энергетическим циклам
-            5. Прогресс к достижению целей
-            
-            Отвечай в формате JSON с полями:
-            - analysis: общий анализ текущего расписания
-            - recommendations: список конкретных рекомендаций
-            - schedule_changes: предлагаемые изменения в календаре
-            - goal_alignment: оценка соответствия расписания целям
+            Ты — эксперт по тайм-менеджменту. Проанализируй календарь пользователя и его SMART-цели
+            и предложи конкретные, применимые изменения без абстракций.
+
+            Правила формата ответа (строго JSON):
+            {
+              "summary": string,
+              "recommendations": string[],
+              "schedule_changes": Array<{
+                "id"?: string,               // id события, если изменение для существующего
+                "action": "move" | "reschedule" | "cancel" | "create" | "optimize",
+                "title": string,             // коротко и конкретно, что сделать
+                "reason": string,            // почему это полезно
+                "new_start"?: string,        // ISO 8601, если перенос/перепланирование/создание
+                "new_end"?: string,          // ISO 8601
+                "priority"?: "high" | "medium" | "low"
+              }>,
+              "goal_alignment": string,
+              "productivity_score"?: number  // 1..10
+            }
+
+            Требования к содержанию:
+            - Предлагай конкретные действия: перенести на конкретное время, сократить длительность, отменить, разбить на блоки с явными слотами, создать новый слот — с датами/временем в ISO 8601.
+            - Не используй общие фразы вида «подумать», «улучшить», «оптимизировать расписание» без конкретики.
+            - Если action = "move" или "reschedule" — обязательно укажи new_start и new_end.
+            - Если action = "create" — обязательно укажи title, new_start и new_end.
+            - Если action = "cancel" — укажи reason, объясняющую отмену.
+            - Учитывай приоритеты целей и интервалы отдыха, избегай пересечений с существующими событиями.
+            - Используй локальную временную зону пользователя, если она видна в данных, иначе оставь как есть (ISO 8601).
+            - Минимизируй количество абстрактных рекомендаций; давай 3–7 точечных изменений в schedule_changes.
             """
 
             # Формируем пользовательский запрос
             user_message = f"""
             Проанализируй мой календарь на ближайшие {analysis_period_days} дней и мои цели.
-            
+
             МОИ ЦЕЛИ:
             {json.dumps(user_goals, ensure_ascii=False, indent=2)}
-            
-            МОЙ КАЛЕНДАРЬ:
+
+            МОЙ КАЛЕНДАРЬ (упрощённо):
             {json.dumps(calendar_events, ensure_ascii=False, indent=2)}
-            
-            Предложи конкретные изменения для оптимизации времени и достижения целей.
+
+            Верни строго JSON по описанной схеме, без дополнительного текста и пояснений.
             """
 
             messages = [{"role": "user", "content": user_message}]
@@ -204,7 +222,8 @@ class OpenAIService:
             response = await self.create_chat_completion(
                 messages=messages,
                 system_prompt=system_prompt,
-                temperature=0.7
+                temperature=0.6,
+                response_format={"type": "json_object"}
             )
 
             # Извлекаем содержимое ответа
@@ -246,35 +265,39 @@ class OpenAIService:
         """
         try:
             system_prompt = """
-            Ты - персональный планировщик. Помоги разместить активность для достижения цели 
-            в оптимальные временные слоты.
-            
-            Учитывай:
-            - Тип задачи и требуемую энергию
-            - Оптимальное время дня для разных видов деятельности
-            - Продолжительность и частоту выполнения
-            - Баланс работы и отдыха
-            
-            Отвечай в формате JSON с полями:
-            - suggested_time: рекомендуемое время
-            - duration: продолжительность
-            - frequency: частота повторения
-            - reasoning: обоснование выбора
+            Ты — персональный планировщик. Дай конкретный план без абстракций.
+
+            Ответ в строгом JSON:
+            {
+              "suggested_time": string,   // ISO 8601 интервал или описательный слот
+              "duration": string,         // например, "60m"
+              "frequency": string,        // например, "3 раза в неделю"
+              "reasoning": string,
+              "suggested_events"?: Array<{
+                 "title": string,
+                 "description": string,
+                 "start_time": string,   // ISO 8601
+                 "end_time": string,     // ISO 8601
+                 "priority": number
+              }>
+            }
+
+            Учитывай энергию, баланс работы и отдыха. Не давай расплывчатых советов.
             """
 
             user_message = f"""
             Помоги запланировать работу над целью в свободное время.
-            
+
             ЦЕЛЬ:
             {json.dumps(goal, ensure_ascii=False, indent=2)}
-            
+
             СВОБОДНЫЕ СЛОТЫ:
             {json.dumps(free_time_slots, ensure_ascii=False, indent=2)}
-            
+
             КОНТЕКСТ:
             {context}
-            
-            Предложи оптимальное время для работы над этой целью.
+
+            Верни строго JSON по описанной схеме, без лишнего текста.
             """
 
             messages = [{"role": "user", "content": user_message}]
@@ -282,7 +305,8 @@ class OpenAIService:
             response = await self.create_chat_completion(
                 messages=messages,
                 system_prompt=system_prompt,
-                temperature=0.6
+                temperature=0.6,
+                response_format={"type": "json_object"}
             )
 
             ai_response = response["choices"][0]["message"]["content"]
