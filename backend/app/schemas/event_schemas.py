@@ -141,6 +141,35 @@ class ScheduleChange(BaseModel):
     priority: Optional[str] = "medium"
 
 
+class UpdateEventRequest(BaseModel):
+    """Запрос на обновление события календаря"""
+    summary: Optional[str] = None
+    description: Optional[str] = None
+    location: Optional[str] = None
+    start: Optional[GoogleCalendarDateTime] = None
+    end: Optional[GoogleCalendarDateTime] = None
+    attendees: Optional[List[GoogleCalendarAttendee]] = None
+    visibility: Optional[str] = None
+    transparency: Optional[str] = None
+    recurrence: Optional[List[str]] = None
+    reminders: Optional[GoogleCalendarReminders] = None
+
+    class Config:
+        # Разрешаем дополнительные поля
+        extra = "allow"
+        # Используем enum значения
+        use_enum_values = True
+
+
+class EventUpdateResponse(BaseModel):
+    """Ответ на обновление события"""
+    status: str  # success, error
+    event_id: str
+    updated_fields: List[str]
+    message: str
+    error_details: Optional[str] = None
+
+
 class CalendarAnalysisResponse(BaseModel):
     """Ответ анализа календаря"""
     summary: str

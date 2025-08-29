@@ -1,4 +1,4 @@
-import { CalendarEvent, CalendarEventsResponse } from './calendarService';
+import { CalendarEvent } from './calendarService';
 
 interface CachedEvents {
   events: CalendarEvent[];
@@ -62,7 +62,7 @@ class EventCacheService {
   }
 
   // Сравнить новые события с кешированными и обновить кеш
-  updateEventsCache(newEventsResponse: CalendarEventsResponse): {
+  updateEventsCache(newEventsResponse: { items?: CalendarEvent[]; events?: CalendarEvent[]; etag?: string }): {
     updatedEvents: CalendarEvent[];
     hasChanges: boolean;
   } {
@@ -103,7 +103,7 @@ class EventCacheService {
     let hasChanges = false;
 
     // ИСПРАВЛЕНИЕ: Более точное определение типа синхронизации с детальным логированием
-    const hasNextSyncToken = !!newEventsResponse.nextSyncToken;
+    const hasNextSyncToken = !!(newEventsResponse as any).nextSyncToken;
     const isCacheEmpty = cachedEvents.length === 0;
     const isManyEvents = newEvents.length > 20;
 
