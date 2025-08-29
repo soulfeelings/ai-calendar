@@ -99,7 +99,7 @@ class CalendarService {
    */
   async getCalendars(): Promise<Calendar[]> {
     try {
-      const response = await api.get('/calendar/calendars');
+      const response = await api.get('/calendar/list');
       return response.data.items || [];
     } catch (error: any) {
       console.error('Error getting calendars:', error);
@@ -297,7 +297,7 @@ class CalendarService {
    */
   async getCalendarList(): Promise<CalendarListResponse> {
     try {
-      const response = await api.get('/calendar/calendars');
+      const response = await api.get('/calendar/list');
       return response.data;
     } catch (error: any) {
       console.error('Error getting calendar list:', error);
@@ -331,7 +331,7 @@ class CalendarService {
    */
   async sendCalendarCode(code: string): Promise<any> {
     try {
-      const response = await api.post('/auth/google/calendar/callback', { code });
+      const response = await api.post('/calendar/code', { code });
       return response.data;
     } catch (error: any) {
       console.error('Error sending calendar code:', error);
@@ -349,7 +349,7 @@ class CalendarService {
    */
   async setupWebhookIfNeeded(): Promise<boolean> {
     try {
-      const response = await api.post('/calendar/webhook/setup');
+      const response = await api.post('/calendar/webhook-setup');
       return response.data.success || true;
     } catch (error: any) {
       console.error('Error setting up webhook:', error);
