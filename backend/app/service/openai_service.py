@@ -136,18 +136,39 @@ class OpenAIService:
                     logger.warning("aiohttp_socks not installed, proxy will be ignored")
 
             async with aiohttp.ClientSession(connector=connector) as session:
-                async with session.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=self._get_headers(),
-                    json=payload
-                ) as response:
-                    response_data = await response.json()
+                async def _post(pld: Dict[str, Any]) -> Dict[str, Any]:
+                    async with session.post(
+                        f"{self.base_url}/chat/completions",
+                        headers=self._get_headers(),
+                        json=pld
+                    ) as response:
+                        data = await response.json()
+                        return {"status": response.status, "data": data}
 
-                    if response.status != 200:
-                        logger.error(f"OpenAI API error: {response.status}, {response_data}")
-                        raise Exception(f"OpenAI API error: {response_data.get('error', {}).get('message', 'Unknown error')}")
+                result = await _post(payload)
+                status = result["status"]
+                data = result["data"]
 
-                    return response_data
+                if status != 200:
+                    # Если модель не поддерживает response_format — повторяем без него
+                    msg = str(data)
+                    if response_format and (
+                        "response_format" in msg or "Invalid parameter" in msg or "not supported" in msg
+                    ):
+                        logger.info("Model does not support response_format, retrying without it")
+                        payload.pop("response_format", None)
+                        result2 = await _post(payload)
+                        if result2["status"] != 200:
+                            logger.error(f"OpenAI API error: {result2['status']}, {result2['data']}")
+                            raise Exception(
+                                f"OpenAI API error: {result2['data'].get('error', {}).get('message', 'Unknown error')}"
+                            )
+                        return result2["data"]
+
+                    logger.error(f"OpenAI API error: {status}, {data}")
+                    raise Exception(f"OpenAI API error: {data.get('error', {}).get('message', 'Unknown error')}")
+
+                return data
 
         except Exception as e:
             logger.error(f"Error in create_chat_completion: {str(e)}")
@@ -335,7 +356,6 @@ class OpenAIService:
         Анализ событий календаря с помощью OpenAI
         """
         try:
-            # Формируем системный промпт
             system_prompt = """
             Ты - экспертный ИИ-ассистент по тайм-менеджменту и планированию.
             Проанализируй календарь пользователя и предоставь:
@@ -355,7 +375,6 @@ class OpenAIService:
             Отвечай строго в JSON формате.
             """
 
-            # Формируем пользовательский запрос
             user_message = f"""
             Проанализируй мой календарь:
 
@@ -369,42 +388,28 @@ class OpenAIService:
             if context:
                 user_message += f"\n\nДополнительный контекст: {context}"
 
-            # Запрос к OpenAI
-            payload = {
-                "model": self.model,
-                "messages": [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message}
-                ],
-                "max_tokens": self.max_tokens,
-                "temperature": self.temperature,
-                "response_format": {"type": "json_object"}
+            messages = [
+                {"role": "user", "content": user_message}
+            ]
+
+            ai_response = await self.create_chat_completion(
+                messages=messages,
+                system_prompt=system_prompt,
+                max_tokens=self.max_tokens,
+                temperature=self.temperature,
+                response_format={"type": "json_object"}
+            )
+
+            content = ai_response["choices"][0]["message"]["content"]
+            analysis_result = json.loads(content)
+
+            return {
+                "summary": analysis_result.get("summary", "Анализ календаря завершен"),
+                "schedule_changes": analysis_result.get("schedule_changes", []),
+                "recommendations": analysis_result.get("recommendations", []),
+                "productivity_score": analysis_result.get("productivity_score"),
+                "goal_alignment": analysis_result.get("goal_alignment", "Не определено")
             }
-
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=self._get_headers(),
-                    json=payload
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        raise Exception(f"OpenAI API error: {error_text}")
-
-                    result = await response.json()
-                    content = result["choices"][0]["message"]["content"]
-
-                    # Парсим JSON ответ
-                    analysis_result = json.loads(content)
-
-                    # Обеспечиваем правильную структуру ответа
-                    return {
-                        "summary": analysis_result.get("summary", "Анализ календаря завершен"),
-                        "schedule_changes": analysis_result.get("schedule_changes", []),
-                        "recommendations": analysis_result.get("recommendations", []),
-                        "productivity_score": analysis_result.get("productivity_score"),
-                        "goal_alignment": analysis_result.get("goal_alignment", "Не определено")
-                    }
 
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse OpenAI JSON response: {e}")
