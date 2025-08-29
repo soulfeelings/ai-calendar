@@ -93,7 +93,8 @@ class AIService {
    */
   async updateCalendarEvent(eventId: string, updateData: any): Promise<any> {
     try {
-      const response = await api.put(`/calendar/events/${eventId}`, updateData);
+      // Backend использует PATCH /calendar/event/{event_id}
+      const response = await api.patch(`/calendar/event/${eventId}`, updateData);
       return response.data;
     } catch (error) {
       console.error('Error updating calendar event:', error);

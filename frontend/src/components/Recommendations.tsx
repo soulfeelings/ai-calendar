@@ -136,15 +136,36 @@ const Recommendations: React.FC = () => {
       if (cachedEvents) {
         console.log('Loading events from localStorage');
         const parsedEvents = JSON.parse(cachedEvents);
-        setEvents(parsedEvents);
-        return parsedEvents;
+
+        // Проверяем, что в localStorage - массив или объект Google Calendar
+        let eventsArray: CalendarEvent[];
+        if (Array.isArray(parsedEvents)) {
+          // Если это массив событий - используем как есть
+          eventsArray = parsedEvents;
+        } else if (parsedEvents && typeof parsedEvents === 'object' && parsedEvents.items) {
+          // Если это объект Google Calendar - извлекаем массив items
+          console.log('Found Google Calendar object in localStorage, extracting items');
+          eventsArray = parsedEvents.items;
+          // Обновляем localStorage чтобы хранить только массив событий
+          localStorage.setItem('calendar_events', JSON.stringify(eventsArray));
+        } else {
+          // Неожиданный формат - очищаем и загружаем заново
+          console.warn('Unexpected format in localStorage, clearing cache');
+          localStorage.removeItem('calendar_events');
+          eventsArray = [];
+        }
+
+        if (eventsArray.length > 0) {
+          setEvents(eventsArray);
+          return eventsArray;
+        }
       }
 
       // Если в localStorage нет событий, запрашиваем с бэкенда
       console.log('No events in localStorage, fetching from backend');
       const eventsFromBackend = await calendarService.getEvents(true); // forcefullsync=true
 
-      // Сохраняем в localStorage
+      // Сохраняем в localStorage (только массив событий)
       localStorage.setItem('calendar_events', JSON.stringify(eventsFromBackend));
       setEvents(eventsFromBackend);
       return eventsFromBackend;
@@ -261,6 +282,13 @@ const Recommendations: React.FC = () => {
     });
   };
 
+  // Очистка кеша
+  const clearCache = () => {
+    localStorage.removeItem('calendar_events');
+    console.log('Cache cleared');
+    alert('Кеш очищен. Нажмите "Обновить анализ" для загрузки свежих данных.');
+  };
+
   // Загружаем анализ при монтировании компонента
   useEffect(() => {
     getCalendarAnalysis();
@@ -307,9 +335,14 @@ const Recommendations: React.FC = () => {
     <div className="recommendations-container">
       <header className="recommendations-header">
         <h2>📊 Анализ календаря</h2>
-        <button onClick={getCalendarAnalysis} className="refresh-button">
-          🔄 Обновить анализ
-        </button>
+        <div className="header-buttons">
+          <button onClick={getCalendarAnalysis} className="refresh-button">
+            🔄 Обновить анализ
+          </button>
+          <button onClick={clearCache} className="clear-cache-button">
+            🗑️ Очистить кеш
+          </button>
+        </div>
       </header>
 
       {/* Краткое резюме */}
