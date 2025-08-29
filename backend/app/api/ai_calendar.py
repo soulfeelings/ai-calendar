@@ -46,12 +46,12 @@ async def analyze_calendar_and_goals(
         ai_response = await openai_service.analyze_calendar_and_goals(
             calendar_events=simplified_events,
             user_goals=request.user_goals,
-            analysis_period_days=request.analysis_period_days
+            analysis_period_days=request.analysis_period_days or 7
         )
 
-        # Формируем ответ
+        # Формируем ответ (поддерживаем оба варианта ключей: summary или analysis)
         response = CalendarAnalysisResponse(
-            analysis=ai_response.get("analysis", "Анализ не получен"),
+            summary=ai_response.get("summary") or ai_response.get("analysis", "Анализ не получен"),
             recommendations=ai_response.get("recommendations", []),
             schedule_changes=ai_response.get("schedule_changes", []),
             goal_alignment=ai_response.get("goal_alignment", "Не определено"),

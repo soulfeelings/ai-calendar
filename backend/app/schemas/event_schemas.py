@@ -87,7 +87,12 @@ class CalendarEvent(BaseModel):
 class CalendarAnalysisRequest(BaseModel):
     """Запрос на анализ календаря"""
     calendar_events: List[CalendarEvent]
+    # Строковые цели (упрощенный набор)
     goals: Optional[List[str]] = None
+    # Полные SMART цели пользователя (избегаем циклических импортов, поэтому Dict)
+    user_goals: Optional[List[Dict[str, Any]]] = None
+    # Период анализа в днях
+    analysis_period_days: Optional[int] = 7
     context: Optional[str] = None
 
     @validator('calendar_events', pre=True)
