@@ -284,7 +284,30 @@ class CalendarService {
         return { hasChanges: true, events: serverEvents };
       }
 
-      const cached = JSON.parse(cachedEvents);
+      let cached: CalendarEvent[];
+      try {
+        cached = JSON.parse(cachedEvents);
+      } catch (parseError) {
+        console.warn('Failed to parse cached events, treating as no cache:', parseError);
+        localStorage.setItem('calendar_events', JSON.stringify(serverEvents));
+        localStorage.setItem('calendar_events_timestamp', Date.now().toString());
+        return { hasChanges: true, events: serverEvents };
+      }
+
+      // Проверяем, что cached - это массив
+      if (!Array.isArray(cached)) {
+        console.warn('Cached events is not an array:', cached);
+        localStorage.setItem('calendar_events', JSON.stringify(serverEvents));
+        localStorage.setItem('calendar_events_timestamp', Date.now().toString());
+        return { hasChanges: true, events: serverEvents };
+      }
+
+      // Проверяем, что serverEvents - это массив
+      if (!Array.isArray(serverEvents)) {
+        console.warn('Server events is not an array:', serverEvents);
+        // Возвращаем кешированные данные если сервер вернул что-то странное
+        return { hasChanges: false, events: cached };
+      }
 
       // Простое сравнение по количеству и updated полям
       const hasChanges = serverEvents.length !== cached.length ||
