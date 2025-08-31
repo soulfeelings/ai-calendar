@@ -463,18 +463,110 @@
 }
 
 /* Sections */
-.recommendations-list, .schedule-changes-list {
+.recommendations-section, .schedule-changes-section, .events-stats {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--border-radius-large);
+  padding: 2.5rem;
   margin-bottom: 3rem;
+  box-shadow: var(--shadow-light);
+  position: relative;
 }
 
-.recommendations-list h3, .schedule-changes-list h3 {
+/* Увеличенные отступы для секции изменений расписания */
+.schedule-changes-section {
+  margin-top: 4rem;
+  margin-bottom: 4rem;
+}
+
+.recommendations-section h3, .schedule-changes-section h3, .events-stats h3 {
   color: white;
   font-size: 2rem;
   font-weight: 700;
-  margin-bottom: 2rem;
+  margin: 0 0 2rem 0;
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+/* Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 2rem;
+  margin-top: 1.5rem;
+}
+
+.stat-item {
+  text-align: center;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1.5rem;
+  border-radius: var(--border-radius);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.stat-value {
+  display: block;
+  font-size: 2.5rem;
+  font-weight: 800;
+  color: white;
+  margin-bottom: 0.5rem;
+}
+
+.stat-label {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Applied/Rejected Changes */
+.applied-changes, .rejected-changes {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1rem 1.5rem;
+  border-radius: var(--border-radius);
+  margin-top: 2rem;
+  border-left: 4px solid;
+}
+
+.applied-changes {
+  border-left-color: #48bb78;
+}
+
+.applied-changes h4 {
+  color: #48bb78;
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.rejected-changes {
+  border-left-color: #ff6b6b;
+}
+
+.rejected-changes h4 {
+  color: #ff6b6b;
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+/* Productivity Score and Goal Alignment */
+.productivity-score, .goal-alignment {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1rem 1.5rem;
+  border-radius: var(--border-radius-small);
+  margin-top: 1.5rem;
+  color: white;
+  border-left: 3px solid rgba(255, 255, 255, 0.3);
+}
+
+.productivity-score strong, .goal-alignment strong {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.recommendations-list, .schedule-changes-list {
+  margin-bottom: 0;
 }
 
 /* Responsive Design */
