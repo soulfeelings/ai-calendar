@@ -282,29 +282,14 @@ const Recommendations: React.FC = () => {
     });
   };
 
-  // Очистка кеша
-  const clearCache = () => {
-    localStorage.removeItem('calendar_events');
-    console.log('Cache cleared');
-    alert('Кеш очищен. Нажмите "Обновить анализ" для загрузки свежих данных.');
-  };
-
-  // Очистка кеша ИИ
-  const clearAICache = () => {
+  // Обновление анализа календаря (очистка кеша + новый запрос)
+  const refreshCalendarAnalysis = async () => {
+    // Очищаем кеш ИИ перед новым запросом
     aiService.clearAICache();
-    console.log('AI cache cleared');
-    alert('Кеш ИИ очищен. Нажмите "Обновить анализ" для получения свежих рекомендаций.');
+    // Получаем свежий анализ
+    await getCalendarAnalysis(true);
   };
 
-  // Получение информации о кеше
-  const getCacheInfo = () => {
-    const cacheInfo = aiService.getCacheInfo();
-    console.log('Cache info:', cacheInfo);
-
-    const sizeInKB = (cacheInfo.totalSize / 1024).toFixed(2);
-    const message = `Кеш ИИ содержит ${cacheInfo.totalEntries} записей, размер: ${sizeInKB} КБ`;
-    alert(message);
-  };
 
   // Загружаем анализ при монтировании компонента
   useEffect(() => {
@@ -353,20 +338,8 @@ const Recommendations: React.FC = () => {
       <header className="recommendations-header">
         <h2>📊 Анализ календаря</h2>
         <div className="header-buttons">
-          <button onClick={() => getCalendarAnalysis(false)} className="refresh-button">
-            🔄 Обновить анализ
-          </button>
-          <button onClick={() => getCalendarAnalysis(true)} className="refresh-button force-refresh">
-            ⚡ Принудительное обновление
-          </button>
-          <button onClick={clearCache} className="clear-cache-button">
-            🗑️ Очистить кеш событий
-          </button>
-          <button onClick={clearAICache} className="clear-cache-button ai-cache">
-            🧠 Очистить кеш ИИ
-          </button>
-          <button onClick={getCacheInfo} className="info-button">
-            ℹ️ Инфо кеша
+          <button onClick={refreshCalendarAnalysis} className="refresh-button">
+            🔄 Обновить анализ календаря
           </button>
         </div>
       </header>
