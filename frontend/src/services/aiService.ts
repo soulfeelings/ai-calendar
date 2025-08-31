@@ -1,4 +1,5 @@
 import api from './api';
+import cacheService from './cacheService';
 
 // Интерфейсы для работы с ИИ сервисом
 export interface ScheduleChange {
@@ -42,16 +43,31 @@ export interface CalendarAnalysisRequest {
 }
 
 class AIService {
+  private readonly AI_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 часа в миллисекундах
+
   /**
-   * Анализ календаря с помощью ИИ
+   * Анализ календаря с помощью ИИ с кешированием
    */
-  async analyzeCalendar(requestData: CalendarAnalysisRequest): Promise<CalendarAnalysis> {
+  async analyzeCalendar(requestData: CalendarAnalysisRequest, forceRefresh: boolean = false): Promise<CalendarAnalysis> {
     try {
+      // Проверяем кеш, если не требуется принудительное обновление
+      if (!forceRefresh) {
+        const cachedResult = cacheService.getByData<CalendarAnalysis>(requestData);
+        if (cachedResult) {
+          console.log('📋 Using cached AI analysis');
+          return cachedResult;
+        }
+      }
+
+      console.log('🤖 Requesting fresh AI analysis...');
       console.log('Sending analysis request:', requestData);
 
       const response = await api.post('/ai/analyze-calendar', requestData);
 
       console.log('Analysis response:', response.data);
+
+      // Кешируем результат на 24 часа
+      cacheService.setByData(requestData, response.data, this.AI_CACHE_TTL);
 
       return response.data;
     } catch (error: any) {
@@ -73,6 +89,20 @@ class AIService {
 
       throw new Error('Ошибка при анализе календаря');
     }
+  }
+
+  /**
+   * Очистка кеша ИИ
+   */
+  clearAICache(): void {
+    cacheService.clearAICache();
+  }
+
+  /**
+   * Получение информации о кеше ИИ
+   */
+  getCacheInfo() {
+    return cacheService.getCacheInfo();
   }
 
   /**
