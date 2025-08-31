@@ -284,7 +284,7 @@ class CalendarService {
         return { hasChanges: true, events: serverEvents };
       }
 
-      let cached;
+      let cached: CalendarEvent[];
       try {
         cached = JSON.parse(cachedEvents);
       } catch (parseError) {
