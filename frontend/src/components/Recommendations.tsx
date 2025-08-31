@@ -204,7 +204,7 @@ const Recommendations: React.FC = () => {
   };
 
   // Получение анализа календаря
-  const getCalendarAnalysis = async () => {
+  const getCalendarAnalysis = async (forceRefresh: boolean = false) => {
     setLoading(true);
     setError(null);
 
@@ -220,12 +220,12 @@ const Recommendations: React.FC = () => {
         return;
       }
 
-      // Отправляем события на анализ ИИ
+      // Отправляем события на анализ ИИ с возможностью принудительного обновления
       const analysisResult = await aiService.analyzeCalendar({
         calendar_events: eventsList,
         user_goals: goalsList,
         analysis_period_days: 7
-      });
+      }, forceRefresh);
 
       setAnalysis(analysisResult);
 
@@ -289,6 +289,23 @@ const Recommendations: React.FC = () => {
     alert('Кеш очищен. Нажмите "Обновить анализ" для загрузки свежих данных.');
   };
 
+  // Очистка кеша ИИ
+  const clearAICache = () => {
+    aiService.clearAICache();
+    console.log('AI cache cleared');
+    alert('Кеш ИИ очищен. Нажмите "Обновить анализ" для получения свежих рекомендаций.');
+  };
+
+  // Получение информации о кеше
+  const getCacheInfo = () => {
+    const cacheInfo = aiService.getCacheInfo();
+    console.log('Cache info:', cacheInfo);
+
+    const sizeInKB = (cacheInfo.totalSize / 1024).toFixed(2);
+    const message = `Кеш ИИ содержит ${cacheInfo.totalEntries} записей, размер: ${sizeInKB} КБ`;
+    alert(message);
+  };
+
   // Загружаем анализ при монтировании компонента
   useEffect(() => {
     getCalendarAnalysis();
@@ -312,7 +329,7 @@ const Recommendations: React.FC = () => {
         <div className="error-message">
           <h3>⚠️ Ошибка</h3>
           <p>{error}</p>
-          <button onClick={getCalendarAnalysis} className="retry-button">
+          <button onClick={() => getCalendarAnalysis()} className="retry-button">
             Попробовать снова
           </button>
         </div>
@@ -324,7 +341,7 @@ const Recommendations: React.FC = () => {
     return (
       <div className="recommendations-container">
         <p>Нет данных для отображения</p>
-        <button onClick={getCalendarAnalysis} className="retry-button">
+        <button onClick={() => getCalendarAnalysis()} className="retry-button">
           Загрузить анализ
         </button>
       </div>
@@ -336,11 +353,20 @@ const Recommendations: React.FC = () => {
       <header className="recommendations-header">
         <h2>📊 Анализ календаря</h2>
         <div className="header-buttons">
-          <button onClick={getCalendarAnalysis} className="refresh-button">
+          <button onClick={() => getCalendarAnalysis(false)} className="refresh-button">
             🔄 Обновить анализ
           </button>
+          <button onClick={() => getCalendarAnalysis(true)} className="refresh-button force-refresh">
+            ⚡ Принудительное обновление
+          </button>
           <button onClick={clearCache} className="clear-cache-button">
-            🗑️ Очистить кеш
+            🗑️ Очистить кеш событий
+          </button>
+          <button onClick={clearAICache} className="clear-cache-button ai-cache">
+            🧠 Очистить кеш ИИ
+          </button>
+          <button onClick={getCacheInfo} className="info-button">
+            ℹ️ Инфо кеша
           </button>
         </div>
       </header>
