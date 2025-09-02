@@ -5,7 +5,6 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 import aiohttp
 from enum import Enum
-
 from fastapi import HTTPException, status
 from repository.calendar_repo import CalendarRepo
 from service.calendar_cache_service import CalendarCacheService
@@ -28,7 +27,7 @@ class CalendarService:
     google_oauth_service: GoogleOauthService
     google_token_url: str = "https://oauth2.googleapis.com/token"
     calendat_list: str = "https://www.googleapis.com/calendar/v3/users/me/calendarList"
-    all_event: str = "https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events" #TODO: syncTOKEN
+    all_event: str = "https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events"
     specific_event: str = all_event+"/{eventId}"
     watch_url: str = "https://www.googleapis.com/calendar/v3/calendars/{calendarId}/events/watch"
     stop_watch_url: str = "https://www.googleapis.com/calendar/v3/channels/stop"

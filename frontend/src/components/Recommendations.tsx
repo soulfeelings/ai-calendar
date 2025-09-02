@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { aiService, CalendarAnalysis, SmartGoal, ScheduleChange } from '../services/aiService';
 import { calendarService, CalendarEvent } from '../services/calendarService';
+import { RRuleParser } from '../utils/rruleParser';
 import './Recommendations.css';
 
 interface RecommendationCardProps {
@@ -145,6 +146,82 @@ const Recommendations: React.FC = () => {
     return `gen_${Math.abs(hash).toString(36)}`;
   };
 
+  // ВСПОМОГАТЕЛЬНО: поиск исходного события для изменения
+  const findEventForChange = (change: ScheduleChange): CalendarEvent | undefined => {
+    if (!events || events.length === 0) return undefined;
+    // По id
+    if (change.id) {
+      const byId = events.find(e => e.id === change.id);
+      if (byId) return byId;
+    }
+    // По заголовку (первое совпадение)
+    if (change.title) {
+      const titleLower = change.title.toLowerCase();
+      const byTitle = events.find(e => (e.summary || '').toLowerCase() === titleLower);
+      if (byTitle) return byTitle;
+    }
+    return undefined;
+  };
+
+  // ВСПОМОГАТЕЛЬНО: проверка, что строка это только время без даты
+  const isTimeOnly = (value?: string): boolean => {
+    if (!value) return false;
+    const hasDate = /^\d{4}-\d{2}-\d{2}/.test(value) || value.includes('T');
+    if (hasDate) return false;
+    // HH:mm[:ss][ AM/PM]
+    return /^(\d{1,2}):(\d{2})(?::(\d{2}))?(\s*(AM|PM))?$/i.test(value.trim());
+  };
+
+  // ВСПОМОГАТЕЛЬНО: за��енить время в RFC3339, сохраняя дату и смещение
+  const replaceTimeInRFC3339 = (baseDateTime: string, timeStr: string, fallbackOffset?: string): string => {
+    // Извлекаем дату и смещение из baseDateTime, если есть
+    const m = baseDateTime.match(/^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}:?\d{0,2}(?:\.\d+)?(Z|[+\-]\d{2}:\d{2})?$/);
+    const datePart = baseDateTime.slice(0, 10); // YYYY-MM-DD
+    // Парсим время
+    const t = timeStr.trim();
+    const timeMatch = t.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(\s*(AM|PM))?$/i);
+    if (!timeMatch) return baseDateTime; // не смогли распарсить
+    let hh = parseInt(timeMatch[1], 10);
+    const mm = parseInt(timeMatch[2] || '0', 10);
+    const ss = parseInt(timeMatch[3] || '0', 10);
+    const ampm = (timeMatch[5] || '').toUpperCase();
+    if (ampm === 'AM' && hh === 12) hh = 0;
+    if (ampm === 'PM' && hh < 12) hh += 12;
+
+    const offsetPart = (m && m[2]) ? m[2] : (fallbackOffset || 'Z');
+    const hhStr = String(hh).padStart(2, '0');
+    const mmStr = String(mm).padStart(2, '0');
+    const ssStr = String(ss).padStart(2, '0');
+    return `${datePart}T${hhStr}:${mmStr}:${ssStr}${offsetPart || ''}`;
+  };
+
+  // Нормализуем new_start/new_end если пришло только время
+  const normalizeChangeDateTimes = (change: ScheduleChange): ScheduleChange => {
+    const event = findEventForChange(change);
+    if (!event) return change;
+
+    const baseStart = event.start?.dateTime || (event.start?.date ? `${event.start.date}T00:00:00Z` : undefined);
+    const baseEnd = event.end?.dateTime || (event.end?.date ? `${event.end.date}T23:59:59Z` : undefined);
+
+    const getOffset = (dt?: string) => {
+      if (!dt) return undefined;
+      const m = dt.match(/(Z|[+\-]\d{2}:\d{2})$/);
+      return m ? m[1] : undefined;
+    };
+
+    const startOffset = getOffset(baseStart);
+    const endOffset = getOffset(baseEnd);
+
+    const normalized: ScheduleChange = { ...change };
+    if (change.new_start && isTimeOnly(change.new_start) && baseStart) {
+      normalized.new_start = replaceTimeInRFC3339(baseStart, change.new_start, startOffset);
+    }
+    if (change.new_end && isTimeOnly(change.new_end) && baseEnd) {
+      normalized.new_end = replaceTimeInRFC3339(baseEnd, change.new_end, endOffset);
+    }
+    return normalized;
+  };
+
   // Загрузка/сохранение списков обработанных изменений
   const loadHandledChanges = () => {
     try {
@@ -244,6 +321,31 @@ const Recommendations: React.FC = () => {
     }
   };
 
+  // Проверка: актуальное или повторяющееся событие
+  const isEventActiveOrRecurring = (event: CalendarEvent): boolean => {
+    if (!event || event.status === 'cancelled') return false;
+
+    const now = new Date();
+
+    // Повторяющиеся события (master) — учитываем окончание серии по RRULE:UNTIL
+    if (event.recurrence && event.recurrence.length > 0) {
+      try {
+        const rule = RRuleParser.parseRRule(event.recurrence[0]);
+        if (rule.until && rule.until < now) return false; // серия закончилась
+        return true; // серия активна или без ограничения
+      } catch {
+        return true; // на всякий случай считаем активным
+      }
+    }
+
+    // Экземпляры повторяющихся и одиночные — проверяем дату окончания
+    const endISO = event.end?.dateTime || (event.end?.date ? `${event.end.date}T23:59:59` : undefined);
+    if (!endISO) return false;
+
+    const end = new Date(endISO);
+    return end >= now;
+  };
+
   // Получение анализа календаря
   const getCalendarAnalysis = async (forceRefresh: boolean = false) => {
     setLoading(true);
@@ -261,14 +363,24 @@ const Recommendations: React.FC = () => {
         return;
       }
 
+      // Фильтруем только актуальные/повторяющиеся события для анализа
+      const filteredEvents = eventsList.filter(isEventActiveOrRecurring);
+
+      if (filteredEvents.length === 0) {
+        console.warn('Нет актуальных событий для анализа, отправляем пустой список');
+      }
+
       // Отправляем события на анализ ИИ с возможностью принудительного обновления
       const analysisResult = await aiService.analyzeCalendar({
-        calendar_events: eventsList,
+        calendar_events: filteredEvents,
         user_goals: goalsList,
         analysis_period_days: 7
       }, forceRefresh);
 
-      setAnalysis(analysisResult);
+      // Нормализуем предложенные изменения: подставляем дату из исходного события, если ИИ вернул только время
+      const normalizedChanges = (analysisResult.schedule_changes || []).map(ch => normalizeChangeDateTimes(ch));
+
+      setAnalysis({ ...analysisResult, schedule_changes: normalizedChanges });
 
     } catch (err: any) {
       console.error('Error getting calendar analysis:', err);
@@ -285,20 +397,24 @@ const Recommendations: React.FC = () => {
     const key = getChangeKey(change);
 
     try {
+      // Перед применением — нормализуе�� даты/время ещё раз на всякий случай
+      const normalized = normalizeChangeDateTimes(change);
+
       // Вызываем бэкенд только если можем однозначно применить
-      if ((change.action === 'update' || change.action?.toLowerCase() === 'reschedule' || change.action?.toLowerCase() === 'move' || change.action?.toLowerCase() === 'optimize') && change.id) {
-        await aiService.updateCalendarEvent(change.id, {
-          summary: change.title,
-          description: change.reason,
-          start: change.new_start ? { dateTime: change.new_start } : undefined,
-          end: change.new_end ? { dateTime: change.new_end } : undefined
-        });
-      } else if (change.action?.toLowerCase() === 'cancel') {
-        // Для отмены требуется endpoint удаления; пока помечаем как применено локально
+      if ((normalized.action === 'update' || normalized.action?.toLowerCase() === 'reschedule' || normalized.action?.toLowerCase() === 'move' || normalized.action?.toLowerCase() === 'optimize') && normalized.id) {
+        // Если меняем время, желательно передавать обе границы
+        const patchBody: any = {
+          summary: normalized.title,
+          description: normalized.reason
+        };
+        if (normalized.new_start) patchBody.start = { dateTime: normalized.new_start };
+        if (normalized.new_end) patchBody.end = { dateTime: normalized.new_end };
+
+        await aiService.updateCalendarEvent(normalized.id, patchBody);
+      } else if (normalized.action?.toLowerCase() === 'cancel') {
         console.warn('Cancel action is not implemented on backend DELETE endpoint; marking as applied locally');
-      } else if (change.action?.toLowerCase() === 'create') {
-        // Для создания требуется endpoint создания; пока помечаем как применено локально
-        console.warn('Create action is not implemented on backend POST endpoint; marking as applied локально');
+      } else if (normalized.action?.toLowerCase() === 'create') {
+        console.warn('Create action is not implemented on backend POST endpoint; marking as applied locally');
       }
 
       // Помечаем изменение как применённое и персистим
@@ -309,8 +425,10 @@ const Recommendations: React.FC = () => {
         return next;
       });
 
-      // Обновляем события после применения изменения
-      await loadEvents();
+      // Выполняем полную синхронизацию событий, чтобы избежать потери элементов в кэше
+      const freshEvents = await calendarService.forceRefreshEvents();
+      setEvents(freshEvents);
+      localStorage.setItem('calendar_events', JSON.stringify(freshEvents));
 
     } catch (error: any) {
       console.error('Error applying schedule change:', error);
@@ -469,8 +587,8 @@ const Recommendations: React.FC = () => {
         <h3>📈 Статистика</h3>
         <div className="stats-grid">
           <div className="stat-item">
-            <span className="stat-value">{events.length}</span>
-            <span className="stat-label">Событий</span>
+            <span className="stat-value">{events.filter(isEventActiveOrRecurring).length}</span>
+            <span className="stat-label">Актуальные</span>
           </div>
           <div className="stat-item">
             <span className="stat-value">{goals.length}</span>
