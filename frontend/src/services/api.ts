@@ -26,6 +26,8 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  // Трактуем 304 как успешный ответ (некоторые PATCH могут возвращать 304 без тела)
+  validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
 });
 
 // Interceptor для добавления токена авторизации
