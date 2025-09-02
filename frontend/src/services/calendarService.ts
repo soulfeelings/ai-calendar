@@ -73,6 +73,20 @@ export interface CalendarEventsResponse {
 }
 
 class CalendarService {
+  /** Получение события по ID */
+  async getEvent(eventId: string): Promise<CalendarEvent> {
+    try {
+      const response = await api.get(`/calendar/event/${eventId}`);
+      return response.data as CalendarEvent;
+    } catch (error: any) {
+      console.error('Error getting calendar event:', error);
+      if (error.response?.data?.detail) {
+        throw new Error(error.response.data.detail);
+      }
+      throw new Error('Ошибка при получении события');
+    }
+  }
+
   /**
    * Получение событий календаря с поддержкой forcefullsync
    */
@@ -328,7 +342,7 @@ class CalendarService {
   }
 
   /**
-   * Проверка обновлений с полным ответом
+   * Проверка обновлений с полным отве��ом
    */
   async checkEventsUpdatesWithFullResponse(): Promise<{ hasChanges: boolean; events: CalendarEvent[] }> {
     return this.checkEventsUpdates();
