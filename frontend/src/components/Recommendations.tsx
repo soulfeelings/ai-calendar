@@ -123,9 +123,50 @@ const Recommendations: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [goals, setGoals] = useState<SmartGoal[]>([]);
-  const [appliedChanges, setAppliedChanges] = useState<Set<number>>(new Set());
-  const [rejectedChanges, setRejectedChanges] = useState<Set<number>>(new Set());
+  // Храним идентификаторы изменений (а не индексы) и персистим их в localStorage
+  const [appliedChanges, setAppliedChanges] = useState<Set<string>>(new Set());
+  const [rejectedChanges, setRejectedChanges] = useState<Set<string>>(new Set());
   const [applyingChange, setApplyingChange] = useState<number | null>(null);
+
+  // Ключи в localStorage для персистентности
+  const APPLIED_KEY = 'ai_applied_schedule_change_ids';
+  const REJECTED_KEY = 'ai_rejected_schedule_change_ids';
+
+  // Генерируем стабильный ключ изменения: используем id, иначе хеш от содержимого
+  const getChangeKey = (change: ScheduleChange): string => {
+    if (change.id) return change.id;
+    const payload = `${change.action}|${change.title}|${change.reason}|${change.new_start || ''}|${change.new_end || ''}|${change.priority || ''}`;
+    let hash = 0;
+    for (let i = 0; i < payload.length; i++) {
+      const chr = payload.charCodeAt(i);
+      hash = ((hash << 5) - hash) + chr;
+      hash |= 0;
+    }
+    return `gen_${Math.abs(hash).toString(36)}`;
+  };
+
+  // Загрузка/сохранение списков обработанных изменений
+  const loadHandledChanges = () => {
+    try {
+      const appliedRaw = localStorage.getItem(APPLIED_KEY);
+      const rejectedRaw = localStorage.getItem(REJECTED_KEY);
+      setAppliedChanges(new Set(appliedRaw ? JSON.parse(appliedRaw) : []));
+      setRejectedChanges(new Set(rejectedRaw ? JSON.parse(rejectedRaw) : []));
+    } catch (e) {
+      console.warn('Failed to load handled changes from localStorage', e);
+      setAppliedChanges(new Set());
+      setRejectedChanges(new Set());
+    }
+  };
+
+  const persistHandledChanges = (applied: Set<string>, rejected: Set<string>) => {
+    try {
+      localStorage.setItem(APPLIED_KEY, JSON.stringify([...applied]));
+      localStorage.setItem(REJECTED_KEY, JSON.stringify([...rejected]));
+    } catch (e) {
+      console.warn('Failed to persist handled changes to localStorage', e);
+    }
+  };
 
   // Загрузка событий из localStorage или с бэкенда
   const loadEvents = async (): Promise<CalendarEvent[]> => {
@@ -241,25 +282,31 @@ const Recommendations: React.FC = () => {
   const applyScheduleChange = async (change: ScheduleChange, index: number) => {
     setApplyingChange(index);
 
+    const key = getChangeKey(change);
+
     try {
-      if (change.action === 'create') {
-        // Создание нового события - пока что просто помечаем как применено
-        console.log('Creating event:', change);
-      } else if (change.action === 'update' && change.id) {
-        // Обновление существующего события
+      // Вызываем бэкенд только если можем однозначно применить
+      if ((change.action === 'update' || change.action?.toLowerCase() === 'reschedule' || change.action?.toLowerCase() === 'move' || change.action?.toLowerCase() === 'optimize') && change.id) {
         await aiService.updateCalendarEvent(change.id, {
           summary: change.title,
           description: change.reason,
           start: change.new_start ? { dateTime: change.new_start } : undefined,
           end: change.new_end ? { dateTime: change.new_end } : undefined
         });
+      } else if (change.action?.toLowerCase() === 'cancel') {
+        // Для отмены требуется endpoint удаления; пока помечаем как применено локально
+        console.warn('Cancel action is not implemented on backend DELETE endpoint; marking as applied locally');
+      } else if (change.action?.toLowerCase() === 'create') {
+        // Для создания требуется endpoint создания; пока помечаем как применено локально
+        console.warn('Create action is not implemented on backend POST endpoint; marking as applied локально');
       }
 
-      // Помечаем изменение как примененное
+      // Помечаем изменение как применённое и персистим
       setAppliedChanges(prev => {
-        const newSet = new Set(prev);
-        newSet.add(index);
-        return newSet;
+        const next = new Set(prev);
+        next.add(key);
+        persistHandledChanges(next, rejectedChanges);
+        return next;
       });
 
       // Обновляем события после применения изменения
@@ -267,32 +314,35 @@ const Recommendations: React.FC = () => {
 
     } catch (error: any) {
       console.error('Error applying schedule change:', error);
-      alert(`Ошибка при применении изменения: ${error.message}`);
+      alert(`Ошибка при применении изменения: ${error.message || error}`);
     } finally {
       setApplyingChange(null);
     }
   };
 
   // Отклонение изменения
-  const rejectScheduleChange = (index: number) => {
+  const rejectScheduleChange = (change: ScheduleChange) => {
+    const key = getChangeKey(change);
     setRejectedChanges(prev => {
-      const newSet = new Set(prev);
-      newSet.add(index);
-      return newSet;
+      const next = new Set(prev);
+      next.add(key);
+      persistHandledChanges(appliedChanges, next);
+      return next;
     });
   };
 
   // Обновление анализа календаря (очистка кеша + новый запрос)
   const refreshCalendarAnalysis = async () => {
-    // Очищаем кеш ИИ перед новым запросом
     aiService.clearAICache();
-    // Получаем свежий анализ
+    // Сбрасываем локальные пометки, если нужен полный пересчёт
+    // При необходимости можно оставить, чтобы скрывать даже после обновления
     await getCalendarAnalysis(true);
   };
 
 
   // Загружаем анализ при монтировании компонента
   useEffect(() => {
+    loadHandledChanges();
     getCalendarAnalysis();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -383,16 +433,17 @@ const Recommendations: React.FC = () => {
           <h3>📅 Предлагаемые изменения</h3>
           <div className="schedule-changes-list">
             {analysis.schedule_changes.map((change: ScheduleChange, index: number) => {
-              if (appliedChanges.has(index) || rejectedChanges.has(index)) {
+              const key = getChangeKey(change);
+              if (appliedChanges.has(key) || rejectedChanges.has(key)) {
                 return null;
               }
 
               return (
                 <ScheduleChangeCard
-                  key={index}
+                  key={key}
                   change={change}
                   onApply={() => applyScheduleChange(change, index)}
-                  onReject={() => rejectScheduleChange(index)}
+                  onReject={() => rejectScheduleChange(change)}
                   isApplying={applyingChange === index}
                 />
               );
