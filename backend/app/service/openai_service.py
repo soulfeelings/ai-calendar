@@ -1,7 +1,7 @@
 import aiohttp
 import json
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from settings import settings
 import logging
@@ -32,23 +32,54 @@ class OpenAIService:
         """
         simplified_events = []
 
+        def _parse_iso(dt: Optional[str]) -> Optional[datetime]:
+            if not dt:
+                return None
+            try:
+                # Приводим Z к формату +00:00, чтобы fromisoformat понимал
+                if isinstance(dt, str) and dt.endswith('Z'):
+                    dt = dt.replace('Z', '+00:00')
+                # Если передана только дата (YYYY-MM-DD), с��итаем полночь
+                if isinstance(dt, str) and len(dt) == 10 and dt[4] == '-' and dt[7] == '-':
+                    return datetime.fromisoformat(dt + 'T00:00:00+00:00')
+                return datetime.fromisoformat(dt)
+            except Exception:
+                return None
+
         for event in calendar_events:
             try:
                 # Извлекаем время начала и окончания
                 start_time = None
                 end_time = None
+                time_zone = None
 
                 if event.get('start'):
                     if isinstance(event['start'], dict):
                         start_time = event['start'].get('dateTime') or event['start'].get('date')
+                        time_zone = event['start'].get('timeZone') or time_zone
                     else:
                         start_time = str(event['start'])
 
                 if event.get('end'):
                     if isinstance(event['end'], dict):
                         end_time = event['end'].get('dateTime') or event['end'].get('date')
+                        time_zone = event['end'].get('timeZone') or time_zone
                     else:
                         end_time = str(event['end'])
+
+                # Признаки «весь день» и «многодневность»
+                is_all_day = isinstance(start_time, str) and len(start_time) == 10 and start_time.count('-') == 2
+                # Если есть оба времени, пробуем посчитать длительность и многодневность
+                dt_start = _parse_iso(start_time)
+                dt_end = _parse_iso(end_time)
+                duration_minutes: Optional[int] = None
+                spans_multiple_days = False
+                if dt_start and dt_end:
+                    delta = dt_end - dt_start
+                    # Защита от отрицательной длительности
+                    if isinstance(delta, timedelta):
+                        duration_minutes = int(delta.total_seconds() // 60)
+                        spans_multiple_days = dt_start.date() != dt_end.date() or (duration_minutes is not None and duration_minutes >= 24 * 60)
 
                 # Обрабатываем участников
                 attendees = []
@@ -59,16 +90,20 @@ class OpenAIService:
                         elif isinstance(attendee, str):
                             attendees.append(attendee)
 
-                # Упрощенная структура для AI
+                # Упрощенная структура для AI + сигналы о долгих событиях
                 simplified_event = {
                     'id': event.get('id', ''),
                     'title': event.get('summary', ''),
                     'description': event.get('description', ''),
                     'start_time': start_time,
                     'end_time': end_time,
+                    'time_zone': time_zone,
                     'location': event.get('location', ''),
                     'attendees': attendees,
-                    'is_recurring': bool(event.get('recurrence'))
+                    'is_recurring': bool(event.get('recurrence')),
+                    'is_all_day': bool(is_all_day),
+                    'spans_multiple_days': bool(spans_multiple_days),
+                    'duration_minutes': duration_minutes
                 }
 
                 simplified_events.append(simplified_event)
@@ -150,7 +185,7 @@ class OpenAIService:
                 data = result["data"]
 
                 if status != 200:
-                    # Если модель не поддерживает response_format — повторяем без него
+                    # Е��ли модель не поддерживает response_format — повторяем без него
                     msg = str(data)
                     if response_format and (
                         "response_format" in msg or "Invalid parameter" in msg or "not supported" in msg
@@ -208,7 +243,14 @@ class OpenAIService:
                 "reason": string,            // почему это полезно
                 "new_start"?: string,        // ISO 8601, если перенос/перепланирование/создание
                 "new_end"?: string,          // ISO 8601
-                "priority"?: "high" | "medium" | "low"
+                "priority"?: "high" | "medium" | "low",
+                "recurrence"?: {             // НЕОБЯЗАТЕЛЬНО: предложение по повторяемости
+                  "rrule"?: string,          // RRULE iCal строка, например: FREQ=WEEKLY;BYDAY=MO,WE
+                  "days_of_week"?: string[], // Список дней недели: MO,TU,WE,TH,FR,SA,SU
+                  "frequency"?: string,      // daily|weekly|monthly|yearly
+                  "interval"?: number,       // шаг повторения, напр. 1
+                  "until"?: string           // дата окончания ISO 8601
+                }
               }>,
               "goal_alignment": string,
               "productivity_score"?: number  // 1..10
@@ -223,7 +265,23 @@ class OpenAIService:
             - Учитывай приоритеты целей и интервалы отдыха, избегай пересечений с существующими событиями.
             - Используй локальную временную зону пользователя, если она видна в данных, иначе оставь как есть (ISO 8601).
             - Минимизируй количество абстрактных рекомендаций; давай 3–7 точечных изменений в schedule_changes.
-            
+
+            ВАЖНО: учитывай долгие события
+            - События с признаками is_all_day=true, spans_multiple_days=true или duration_minutes >= 180 следует считать «длинными».
+            - Не предлагай их дробить или переносить без веской причины; сначала пробуй двигать гибкие короткие задачи вокруг них.
+            - Если предлагаешь перенос длинного события, укажи полный интервал new_start/new_end с датами (ISO 8601), учитывая буферы до/после.
+            - Для событий all-day (date-only) при переносе возвращай new_start/new_end c временем T00:00:00 и T23:59:59 соответствующего дня (или реальный диапазон, если он известен).
+            - Избегай перекрытий с длинными событиями и оставляй разумные буферы (например, 15–30 минут) рядом с длительными встречами, поездками и перелётами.
+
+            Повторяемость (необязательно):
+            - Если считаешь, что задаче нужна повторяемость, ��аполни поле recurrence. Предпочтительно дать rrule.
+            - При отсутствии rrule можно вернуть frequency + interval + days_of_week (+ until при необходимости).
+            - Не назначай повторяемость, если это разовое событие или перенос существующего нерецуррентного события без явной причины.
+
+            Формат дат/времени:
+            - Всегда возвращай new_start/new_end как полный ISO 8601 с ДАТОЙ и временем (не только время!).
+            - Пример: 2025-03-15T14:00:00+03:00.
+
             ОТВЕЧАЙ НА РУССКОМ!
             """
 
@@ -370,7 +428,7 @@ class OpenAIService:
                - new_start: новое время начала (если применимо)
                - new_end: новое время окончания (если применимо)
                - priority: приоритет (high, medium, low)
-            3. Общие рекомендации (recommendations) - массив строк
+            3. Общие реко��ендации (recommendations) - массив строк
             4. Оценку продуктивности (productivity_score) от 1 до 10
             5. Соответствие целям (goal_alignment)
 

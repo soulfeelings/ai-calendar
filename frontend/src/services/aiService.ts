@@ -2,6 +2,14 @@ import api from './api';
 import cacheService from './cacheService';
 
 // Интерфейсы для работы с ИИ сервисом
+export interface RecurrenceSuggestion {
+  rrule?: string;           // например: FREQ=WEEKLY;BYDAY=MO,WE
+  days_of_week?: string[];  // MO,TU,WE,TH,FR,SA,SU
+  frequency?: string;       // daily|weekly|monthly|yearly
+  interval?: number;        // шаг повторения
+  until?: string;           // ISO 8601
+}
+
 export interface ScheduleChange {
   id: string;
   action: string;
@@ -10,6 +18,7 @@ export interface ScheduleChange {
   new_start?: string;
   new_end?: string;
   priority?: string;
+  recurrence?: RecurrenceSuggestion; // НЕОБЯЗАТЕЛЬНО: предложение по повторяемости
 }
 
 export interface CalendarAnalysis {

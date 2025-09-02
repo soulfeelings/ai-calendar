@@ -135,6 +135,15 @@ class SimplifiedCalendarEvent(BaseModel):
     is_recurring: bool = False
 
 
+class RecurrenceSuggestion(BaseModel):
+    """Необязательное описание повторяемости, которое может вернуть ИИ"""
+    rrule: Optional[str] = Field(None, description="RRULE строка iCal, например: FREQ=WEEKLY;BYDAY=MO,WE")
+    days_of_week: Optional[List[str]] = Field(None, description="Дни недели в формате MO,TU,WE,TH,FR,SA,SU")
+    frequency: Optional[str] = Field(None, description="daily|weekly|monthly|yearly")
+    interval: Optional[int] = Field(None, description="Интервал повторения, например 1 для еженедельно")
+    until: Optional[str] = Field(None, description="Дата окончания в ISO 8601")
+
+
 class ScheduleChange(BaseModel):
     """Модель изменения в расписании (терпима к неполным ответам ИИ)"""
     id: Optional[str] = None
@@ -146,6 +155,7 @@ class ScheduleChange(BaseModel):
     new_start: Optional[str] = None
     new_end: Optional[str] = None
     priority: Optional[str] = "medium"
+    recurrence: Optional[RecurrenceSuggestion] = Field(None, description="Необязательное предложение по повторяемости")
 
 
 class UpdateEventRequest(BaseModel):
