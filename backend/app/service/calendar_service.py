@@ -131,7 +131,11 @@ class CalendarService:
 
         # Для статусов 204 (No Content) возвращаем пустой словарь
         if response.status == 204:
-            return {"status": "success", "message": "Operation completed successfully"}
+            return {"status": "success", "message": "Operation completed successfully", "status_code": 204}
+
+        # Явная обработка 304 (Not Modified)
+        if response.status == 304:
+            return {"status": "success", "message": "Not Modified", "status_code": 304}
 
         # Для остальных статусов пытаемся получить JSON
         try:
@@ -139,7 +143,7 @@ class CalendarService:
         except Exception:
             res = {"message": "No JSON response", "status_code": response.status}
 
-        if response.status not in [200, 201, 204]:
+        if response.status not in [200, 201, 204, 304]:
             raise HTTPException(status_code=response.status, detail=res)
 
         return res
@@ -473,64 +477,6 @@ class CalendarService:
             print(f"Error processing changed events: {str(e)}")
             raise
 
-    async def setup_calendar_webhook(self, user_id: str) -> Dict[str, Any]:
-        """
-        Настраивает вебхук для получения уведомлений об изменениях в календаре.
-        """
-        try:
-            webhook_info = await self.calendar_repo.get_user_webhook_info_if_exists(user_id)
-            if webhook_info:
-                return webhook_info
-
-            email_and_access = await self.calendar_repo.get_access_and_email(user_id)
-            
-            # Генерируем уникальный channel_idsdfs
-            channel_id = str(uuid.uuid4())
-            
-            # Настраиваем webhook
-            webhook_payload = {
-                "id": channel_id,
-                "type": "web_hook",
-                "address": f"{settings.WEBHOOK_BASE_URL}/webhook/google-calendar",
-                "token": f"user_{user_id}",  # Токен для верификации
-                "expiration": int((datetime.now() + timedelta(days=7)).timestamp() * 1000)  # 7 дней
-            }
-            
-            url = self.watch_url.format(calendarId=email_and_access[0])
-            
-            res = await self._make_google_api_request(
-                user_id=user_id,
-                url=url,
-                method=HttpMethod.POST,
-                json_data=webhook_payload
-            )
-            
-            # Сохраняем информацию о подписке в БД
-            subscription_data = {
-                "user_id": user_id,
-                "channel_id": channel_id,
-                "resource_id": res.get("resourceId"),
-                "resource_uri": res.get("resourceUri"),
-                "expiration": webhook_payload["expiration"],
-                "created_at": datetime.now()
-            }
-
-            await self.calendar_repo.save_webhook_subscription(
-                user_id=user_id,
-                channel_id=channel_id,
-                resource_id=res.get("resourceId"),
-                expiration=webhook_payload["expiration"]
-            )
-            
-            return {
-                "channel_id": channel_id,
-                "resource_id": res.get("resourceId"),
-                "expiration": webhook_payload["expiration"]
-            }
-            
-        except Exception as e:
-            print(f"Error setting up webhook: {str(e)}")
-            raise
 
     async def get_webhook_status(self, user_id: str) -> Dict[str, Any]:
         """
@@ -629,7 +575,16 @@ class CalendarService:
                     detail=f"Event with ID {event_id} not found"
                 )
 
-            # Обновляем событие в БД и кеше
+            # Если Google вернул 304 или 204, считаем, что менять нечего/успех без контента
+            if res.get("status_code") in [304, 204]:
+                return EventUpdateResponse(
+                    status="success",
+                    event_id=event_id,
+                    updated_fields=updated_fields,
+                    message=("Event not modified (304). Nothing to update." if res.get("status_code") == 304 else "Operation completed successfully (204)")
+                )
+
+            # Обновляем событие в БД и кеше (ожидаем, что res содержит объект события)
             await self.calendar_repo.update_item(user_id=user_id, data=res)
             await self.cache_service.update_event_in_cache(user_id, res)
 
