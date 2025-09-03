@@ -840,6 +840,14 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
                 <span className="nav-icon">🤖</span>
                 <span className="nav-text">ИИ Рекомендации</span>
               </button>
+
+              <button
+                className="nav-item"
+                onClick={() => navigate('/goals')}
+              >
+                <span className="nav-icon">🎯</span>
+                <span className="nav-text">Цели (SMART)</span>
+              </button>
             </nav>
           </aside>
         )}
