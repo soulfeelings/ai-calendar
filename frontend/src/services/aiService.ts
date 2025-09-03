@@ -39,7 +39,7 @@ export interface SmartGoal {
   relevant: string;
   time_bound: string;
   deadline?: string;
-  priority?: string;
+  priority?: string | number; // допускаем number из БД (1..3)
   status?: string;
 }
 

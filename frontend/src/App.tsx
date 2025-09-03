@@ -7,6 +7,7 @@ import Profile from './components/Profile';
 import ProtectedRoute from './components/ProtectedRoute';
 import { authService } from './services/authService';
 import './App.css';
+import Goals from './components/Goals';
 
 // Компонент для безопасного редиректа
 const SafeRedirect: React.FC<{ to: string }> = ({ to }) => {
@@ -148,6 +149,14 @@ function AppContent() {
         element={
           <ProtectedRoute>
             <Profile activeSection="recommendations" />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/goals"
+        element={
+          <ProtectedRoute>
+            <Goals />
           </ProtectedRoute>
         }
       />

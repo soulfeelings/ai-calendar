@@ -184,13 +184,11 @@ class CalendarService:
             scope = []
 
             if "https://www.googleapis.com/auth/calendar.readonly" not in user_scope[0].split():
-                print(1)
                 scope.append("https://www.googleapis.com/auth/calendar.readonly")
 
             if "https://www.googleapis.com/auth/calendar.events" not in user_scope[0].split():
-                print(1)
                 scope.append("https://www.googleapis.com/auth/calendar.events")
-            print(scope)
+
             if scope:
 
                 query_params = {

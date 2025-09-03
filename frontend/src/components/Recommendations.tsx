@@ -404,8 +404,7 @@ const Recommendations: React.FC = () => {
       if ((normalized.action === 'update' || normalized.action?.toLowerCase() === 'reschedule' || normalized.action?.toLowerCase() === 'move' || normalized.action?.toLowerCase() === 'optimize') && normalized.id) {
         // Если меняем время, желательно передавать обе границы
         const patchBody: any = {
-          summary: normalized.title,
-          description: normalized.reason
+
         };
         if (normalized.new_start) patchBody.start = { dateTime: normalized.new_start };
         if (normalized.new_end) patchBody.end = { dateTime: normalized.new_end };
