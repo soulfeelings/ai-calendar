@@ -78,6 +78,14 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
       // Шаг 1: Проверяем кеш и загружаем события
       const cacheResult = await calendarService.getEventsWithCache();
 
+      // Проверяем, требуется ли авторизация календаря
+      if (cacheResult.requires_authorization && cacheResult.authorization_url) {
+        console.log('Calendar authorization required for events, redirecting to:', cacheResult.authorization_url);
+        // Редиректим пользователя на страницу авторизации календаря
+        window.location.href = cacheResult.authorization_url;
+        return;
+      }
+
       if (cacheResult.fromCache) {
         console.log('Events loaded from cache');
         setEvents(cacheResult.events);
@@ -124,6 +132,14 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
 
     } catch (error: any) {
       console.error('Error in events cache logic:', error);
+
+      // Проверяем, если ошибка связана с авторизацией календаря
+      if (error.response?.data?.requires_authorization && error.response?.data?.authorization_url) {
+        console.log('Calendar authorization required (from error), redirecting to:', error.response.data.authorization_url);
+        window.location.href = error.response.data.authorization_url;
+        return;
+      }
+
       setEventsError('Ошибка при загрузке событий');
       setCacheInfo('Ошибка загрузки');
       setIsUpdating(false); // Сбрасываем флаг при ошибке
@@ -212,6 +228,14 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
       console.log('Attempting to load calendars...');
 
       const response = await calendarService.getCalendarList();
+
+      // Проверяем, требуется ли авторизация календаря
+      if (response.requires_authorization && response.authorization_url) {
+        console.log('Calendar authorization required, redirecting to:', response.authorization_url);
+        // Редиректим пользователя на страницу авторизации календаря
+        window.location.href = response.authorization_url;
+        return;
+      }
 
       // Если есть items, значит авторизация прошла успешно
       if (response.items) {
