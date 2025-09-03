@@ -22,7 +22,8 @@ class GoogleOauthService:
             "redirect_uri": settings.GOOGLE_AUTH_REDIRECT_URI,
             "response_type": "code",
             "scope": " ".join([
-                "https://www.googleapis.com/auth/calendar",
+                "https://www.googleapis.com/auth/calendar.readonly",
+                "https://www.googleapis.com/auth/calendar.events",
                 "openid",
                 "profile",
                 "email",
