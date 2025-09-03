@@ -72,6 +72,15 @@ export interface CalendarEventsResponse {
   message?: string;
 }
 
+// Добавляем новый интерфейс для результата кеша событий
+export interface EventsCacheResult {
+  events: CalendarEvent[];
+  fromCache: boolean;
+  requires_authorization?: boolean;
+  authorization_url?: string;
+  message?: string;
+}
+
 class CalendarService {
   /** Получение события по ID */
   async getEvent(eventId: string): Promise<CalendarEvent> {
@@ -210,7 +219,7 @@ class CalendarService {
   /**
    * Получение событий с кешированием
    */
-  async getEventsWithCache(): Promise<{ events: CalendarEvent[]; fromCache: boolean }> {
+  async getEventsWithCache(): Promise<EventsCacheResult> {
     try {
       // Проверяем кеш
       const cachedEvents = localStorage.getItem('calendar_events');
@@ -227,8 +236,32 @@ class CalendarService {
         }
       }
 
-      // Иначе загружаем с сервера
-      const events = await this.getEvents(true);
+      // Иначе загружаем с сервера через прямой API вызов
+      const response = await api.get('/calendar/events', { params: { forcefullsync: 'true' } });
+      const data = response.data;
+
+      // Проверяем, требуется ли авторизация календаря
+      if (data.requires_authorization && data.authorization_url) {
+        return {
+          events: [],
+          fromCache: false,
+          requires_authorization: true,
+          authorization_url: data.authorization_url,
+          message: data.message
+        };
+      }
+
+      // Извлекаем события из ответа
+      const events = data.items || data.events || data;
+
+      // Проверяем, что events - это массив
+      if (!Array.isArray(events)) {
+        console.warn('Server response is not an array:', events);
+        return {
+          events: [],
+          fromCache: false
+        };
+      }
 
       // Сохраняем в кеш
       localStorage.setItem('calendar_events', JSON.stringify(events));
@@ -238,8 +271,19 @@ class CalendarService {
         events,
         fromCache: false
       };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error in getEventsWithCache:', error);
+
+      // Проверяем, если ошибка связана с авторизацией календаря
+      if (error.response?.data?.requires_authorization && error.response?.data?.authorization_url) {
+        return {
+          events: [],
+          fromCache: false,
+          requires_authorization: true,
+          authorization_url: error.response.data.authorization_url,
+          message: error.response.data.message
+        };
+      }
 
       // В случае ошибки пытаемся вернуть кешированные данные
       const cachedEvents = localStorage.getItem('calendar_events');

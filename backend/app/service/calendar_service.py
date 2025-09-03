@@ -1,6 +1,6 @@
 import urllib.parse
-from dataclasses import dataclass
 import uuid
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 import aiohttp
@@ -9,7 +9,6 @@ from fastapi import HTTPException, status
 from repository.calendar_repo import CalendarRepo
 from service.calendar_cache_service import CalendarCacheService
 from service.googleoauth import GoogleOauthService
-from fastapi.responses import RedirectResponse
 from settings import settings
 from schemas.event_schemas import UpdateEventRequest, EventUpdateResponse
 
@@ -182,15 +181,23 @@ class CalendarService:
                 return cached_calendar_list
 
             user_scope = await self.calendar_repo.get_user_scope(user_id)
+            scope = []
 
-            if "https://www.googleapis.com/auth/calendar" not in user_scope[0].split():
+            if "https://www.googleapis.com/auth/calendar.readonly" not in user_scope[0].split():
+                print(1)
+                scope.append("https://www.googleapis.com/auth/calendar.readonly")
+
+            if "https://www.googleapis.com/auth/calendar.events" not in user_scope[0].split():
+                print(1)
+                scope.append("https://www.googleapis.com/auth/calendar.events")
+            print(scope)
+            if scope:
+
                 query_params = {
                     "client_id": settings.CLIENT_ID,
                     "redirect_uri": settings.GOOGLE_CALENDAR_REDIRECT_URI,
                     "response_type": "code",
-                    "scope": " ".join([
-                        "https://www.googleapis.com/auth/calendar",
-                    ]),
+                    "scope": " ".join(scope),
                     "access_type": "offline",
                     "login_hint": user_scope[1],
                     # TODO: "state": ,
@@ -632,55 +639,6 @@ class CalendarService:
 
         return results
 
-    async def get_calendar_list(self, user_id):
-        try:
-            # Сначала проверяем кеш
-            cached_calendar_list = await self.cache_service.get_user_calendar_list(user_id)
-            if cached_calendar_list:
-                return cached_calendar_list
-
-            user_scope = await self.calendar_repo.get_user_scope(user_id)
-
-            if "https://www.googleapis.com/auth/calendar" not in user_scope[0].split():
-                query_params = {
-                    "client_id": settings.CLIENT_ID,
-                    "redirect_uri": settings.GOOGLE_CALENDAR_REDIRECT_URI,
-                    "response_type": "code",
-                    "scope": " ".join([
-                        "https://www.googleapis.com/auth/calendar",
-                    ]),
-                    "access_type": "offline",
-                    "login_hint": user_scope[1],
-                    # TODO: "state": ,
-                }
-
-                query_string = urllib.parse.urlencode(query_params, quote_via=urllib.parse.quote)
-                base_url = "https://accounts.google.com/o/oauth2/v2/auth"
-                auth_url = f'{base_url}?{query_string}'
-
-                # Возвращаем JSON с URL для авторизации вместо редиректа
-                return {
-                    "requires_authorization": True,
-                    "authorization_url": auth_url,
-                    "message": "Calendar access not granted. Please authorize."
-                }
-
-            # Используем универсальный метод с обработкой 401
-            res = await self._make_google_api_request(
-                user_id=user_id,
-                url=self.calendat_list,
-                method=HttpMethod.GET
-            )
-
-            # Сохраняем в БД и кеш
-            await self.calendar_repo.update_user_calendar_list(user_id, res)
-            await self.cache_service.cache_user_calendar_list(user_id, res)
-
-            return res
-
-        except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
-
     async def update_user_scope(self, user_id, code):
         try:
             async with aiohttp.ClientSession() as session:
@@ -932,6 +890,65 @@ class CalendarService:
             
         except Exception as e:
             print(f"Error processing changed events: {str(e)}")
+            raise
+
+    async def setup_calendar_webhook(self, user_id: str) -> Dict[str, Any]:
+        """
+        Настраивает вебхук для получения уведомлений об изменениях в календаре.
+        """
+        try:
+            webhook_info = await self.calendar_repo.get_user_webhook_info_if_exists(user_id)
+            if webhook_info:
+                return webhook_info
+
+            email_and_access = await self.calendar_repo.get_access_and_email(user_id)
+
+            # Генерируем уникальный channel_idsdfs
+            channel_id = str(uuid.uuid4())
+
+            # Настраиваем webhook
+            webhook_payload = {
+                "id": channel_id,
+                "type": "web_hook",
+                "address": f"{settings.WEBHOOK_BASE_URL}/webhook/google-calendar",
+                "token": f"user_{user_id}",  # Токен для верификации
+                "expiration": int((datetime.now() + timedelta(days=7)).timestamp() * 1000)  # 7 дней
+            }
+
+            url = self.watch_url.format(calendarId=email_and_access[0])
+
+            res = await self._make_google_api_request(
+                user_id=user_id,
+                url=url,
+                method=HttpMethod.POST,
+                json_data=webhook_payload
+            )
+
+            # Сохраняем информацию о подписке в БД
+            subscription_data = {
+                "user_id": user_id,
+                "channel_id": channel_id,
+                "resource_id": res.get("resourceId"),
+                "resource_uri": res.get("resourceUri"),
+                "expiration": webhook_payload["expiration"],
+                "created_at": datetime.now()
+            }
+
+            await self.calendar_repo.save_webhook_subscription(
+                user_id=user_id,
+                channel_id=channel_id,
+                resource_id=res.get("resourceId"),
+                expiration=webhook_payload["expiration"]
+            )
+
+            return {
+                "channel_id": channel_id,
+                "resource_id": res.get("resourceId"),
+                "expiration": webhook_payload["expiration"]
+            }
+
+        except Exception as e:
+            print(f"Error setting up webhook: {str(e)}")
             raise
 
 
