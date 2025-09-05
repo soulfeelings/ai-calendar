@@ -111,7 +111,7 @@ class CalendarRepo:
         if not res:
             return None
 
-        return res["data"]["nextSyncToken"]
+        return res["data"].get("nextSyncToken", "")
 
     async def update_synctoken(self, user_id, next_sync_token):
         await mongodb.calendarevents.update_one({"user_sub": user_id},
