@@ -3,7 +3,7 @@ from dependencies import get_user_request_id, get_calendar_service, get_calendar
 from typing import Annotated, Optional, List, Dict, Any
 from service import CalendarService
 from service.calendar_cache_service import CalendarCacheService
-from schemas.event_schemas import UpdateEventRequest, EventUpdateResponse
+from schemas.event_schemas import UpdateEventRequest, EventUpdateResponse, CreateEventRequest, EventCreateResponse, EventDeleteResponse
 
 router = APIRouter(prefix="/calendar", tags=["google_calendar"])
 
@@ -157,3 +157,23 @@ async def bulk_update_events(
         ]
     """
     return await calendar_service.bulk_update_events(user_id, event_updates)
+
+@router.post("/events", response_model=EventCreateResponse)
+async def create_event(
+    user_id: Annotated[str, Depends(get_user_request_id)],
+    event_data: CreateEventRequest,
+    calendar_service: Annotated[CalendarService, Depends(get_calendar_service)]
+):
+    """Создает новое событие в календаре пользователя."""
+    created = await calendar_service.create_event(user_id, event_data.model_dump(exclude_none=True))
+    return {"status": "success", "event": created, "message": "Event created"}
+
+@router.delete("/events/{event_id}", response_model=EventDeleteResponse)
+async def delete_event(
+    user_id: Annotated[str, Depends(get_user_request_id)],
+    event_id: str,
+    calendar_service: Annotated[CalendarService, Depends(get_calendar_service)]
+):
+    """Удаляет событие из календаря пользователя."""
+    await calendar_service.delete_event(user_id, event_id)
+    return {"status": "success", "event_id": event_id, "message": "Event deleted"}

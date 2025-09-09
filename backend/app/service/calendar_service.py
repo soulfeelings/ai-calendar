@@ -481,36 +481,52 @@ class CalendarService:
             print(f"Error processing changed events: {str(e)}")
             raise
 
-
-    async def get_webhook_status(self, user_id: str) -> Dict[str, Any]:
-        """
-        Получает статус вебхука для пользователя.
-        """
+    async def create_event(self, user_id: str, event_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Создает новое событие в календаре пользователя."""
         try:
-            subscriptions = await self.calendar_repo.get_user_webhook_subscriptions(user_id)
-            
-            active_subscriptions = []
-            expired_subscriptions = []
-            
-            current_time = datetime.now().timestamp() * 1000
-            
-            for sub in subscriptions:
-                if sub.get("expiration", 0) > current_time:
-                    active_subscriptions.append(sub)
-                else:
-                    expired_subscriptions.append(sub)
-            
-            return {
-                "user_id": user_id,
-                "active_subscriptions": active_subscriptions,
-                "expired_subscriptions": expired_subscriptions,
-                "total_active": len(active_subscriptions),
-                "total_expired": len(expired_subscriptions)
-            }
-            
+            email_and_access = await self.calendar_repo.get_access_and_email(user_id=user_id)
+            url = self.all_event.format(calendarId=email_and_access[0])
+
+            res = await self._make_google_api_request(
+                user_id=user_id,
+                url=url,
+                method=HttpMethod.POST,
+                json_data=event_data
+            )
+
+            # Если Google вернул объект события — сохраняем
+            if res.get("id"):
+                await self.calendar_repo.add_item(user_id, res)
+                await self.cache_service.update_event_in_cache(user_id, res)
+
+            return res
         except Exception as e:
-            print(f"Error getting webhook status: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to create event: {str(e)}")
+
+    async def delete_event(self, user_id: str, event_id: str) -> Dict[str, Any]:
+        """Удаляет событие из календаря пользователя."""
+        try:
+            email_and_access = await self.calendar_repo.get_access_and_email(user_id=user_id)
+            url = self.specific_event.format(calendarId=email_and_access[0], eventId=event_id)
+
+            res = await self._make_google_api_request(
+                user_id=user_id,
+                url=url,
+                method=HttpMethod.DELETE
+            )
+
+            # Удаляем из локального хранилища (БД + кеш)
+            try:
+                await self.calendar_repo.remove_event_from_cache(user_id, event_id)
+            except Exception:
+                pass
+            await self.cache_service.remove_event_from_cache(user_id, event_id)
+
+            return res if res else {"status": "success", "message": "Event deleted"}
+        except HTTPException:
             raise
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to delete event: {str(e)}")
 
     async def update_event(self, user_id: str, event_id: str, update_data: UpdateEventRequest) -> EventUpdateResponse:
         """

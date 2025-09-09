@@ -397,26 +397,33 @@ const Recommendations: React.FC = () => {
     const key = getChangeKey(change);
 
     try {
-      // Перед применением — нормализуе�� даты/время ещё раз на всякий случай
       const normalized = normalizeChangeDateTimes(change);
+      const action = normalized.action?.toLowerCase();
 
-      // Вызываем бэкенд только если можем однозначно применить
-      if ((normalized.action === 'update' || normalized.action?.toLowerCase() === 'reschedule' || normalized.action?.toLowerCase() === 'move' || normalized.action?.toLowerCase() === 'optimize') && normalized.id) {
-        // Если меняем время, желательно передавать обе границы
-        const patchBody: any = {
-
-        };
+      if ((action === 'update' || action === 'reschedule' || action === 'move' || action === 'optimize') && normalized.id) {
+        const patchBody: any = {};
         if (normalized.new_start) patchBody.start = { dateTime: normalized.new_start };
         if (normalized.new_end) patchBody.end = { dateTime: normalized.new_end };
-
         await aiService.updateCalendarEvent(normalized.id, patchBody);
-      } else if (normalized.action?.toLowerCase() === 'cancel') {
-        console.warn('Cancel action is not implemented on backend DELETE endpoint; marking as applied locally');
-      } else if (normalized.action?.toLowerCase() === 'create') {
-        console.warn('Create action is not implemented on backend POST endpoint; marking as applied locally');
+      } else if (action === 'cancel') {
+        if (!normalized.id) {
+          throw new Error('Нельзя отменить: отсутствует ID события');
+        }
+        await calendarService.deleteEvent(normalized.id);
+      } else if (action === 'create') {
+        if (!normalized.new_start || !normalized.new_end) {
+          throw new Error('Для создания события нужны new_start и new_end');
+        }
+        const eventPayload = {
+          summary: normalized.title || 'Новое событие',
+            description: normalized.reason || 'Создано ИИ',
+            start: { dateTime: normalized.new_start },
+            end: { dateTime: normalized.new_end },
+            reminders: { useDefault: true }
+        };
+        await calendarService.createEvent(eventPayload);
       }
 
-      // Помечаем изменение как применённое и персистим
       setAppliedChanges(prev => {
         const next = new Set(prev);
         next.add(key);
@@ -424,7 +431,6 @@ const Recommendations: React.FC = () => {
         return next;
       });
 
-      // Выполняем полную синхронизацию событий, чтобы избежать потери элементов в кэше
       const freshEvents = await calendarService.forceRefreshEvents();
       setEvents(freshEvents);
       localStorage.setItem('calendar_events', JSON.stringify(freshEvents));
