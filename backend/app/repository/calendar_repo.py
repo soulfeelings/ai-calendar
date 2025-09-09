@@ -91,6 +91,15 @@ class CalendarRepo:
 
         return True
 
+    async def add_item(self, user_id, data: dict):
+        """Добавляет новое событие в список событий пользователя. Создает документ если его нет."""
+        await mongodb.calendarevents.update_one(
+            {"user_sub": user_id},
+            {"$push": {"data.items": data}},
+            upsert=True
+        )
+        return True
+
     async def get_event_from_id(self, user_id, event_id):
         res: dict = await mongodb.calendarevents.find_one({"user_sub": user_id})
 

@@ -194,3 +194,33 @@ class CalendarAnalysisResponse(BaseModel):
     recommendations: List[str]
     productivity_score: Optional[int] = Field(None, ge=1, le=10)
     goal_alignment: Optional[str] = None
+
+
+class CreateEventRequest(BaseModel):
+    """Запрос на создание нового события"""
+    summary: str
+    start: GoogleCalendarDateTime
+    end: GoogleCalendarDateTime
+    description: Optional[str] = None
+    location: Optional[str] = None
+    attendees: Optional[List[GoogleCalendarAttendee]] = None
+    visibility: Optional[str] = None
+    transparency: Optional[str] = None
+    recurrence: Optional[List[str]] = None
+    reminders: Optional[GoogleCalendarReminders] = None
+
+    class Config:
+        extra = "allow"
+        use_enum_values = True
+
+
+class EventCreateResponse(BaseModel):
+    status: str
+    event: Dict[str, Any]
+    message: Optional[str] = None
+
+
+class EventDeleteResponse(BaseModel):
+    status: str
+    event_id: str
+    message: Optional[str] = None
