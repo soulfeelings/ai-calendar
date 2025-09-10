@@ -12,7 +12,7 @@ const priorityOptions = [
 const Goals: React.FC = () => {
   const navigate = useNavigate();
 
-  // С��стояние этапов: 'input' | 'analysis' | 'saved'
+  // С����остояние этапов: 'input' | 'analysis' | 'saved'
   const [currentStep, setCurrentStep] = useState<'input' | 'analysis' | 'saved'>('input');
 
   const [form, setForm] = useState<SmartGoal>({
@@ -93,7 +93,16 @@ const Goals: React.FC = () => {
         relevant: goalAnalysis.improved_goal!.relevant,
         time_bound: goalAnalysis.improved_goal!.time_bound,
       }));
+      // Возвращаемся к форме для редактирования
+      setCurrentStep('input');
+      setGoalAnalysis(null);
     }
+  };
+
+  const editGoal = () => {
+    // Возвращаемся к форме редактирования с текущими данными
+    setCurrentStep('input');
+    setGoalAnalysis(null);
   };
 
   const handleSaveGoal = async () => {
