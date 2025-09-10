@@ -245,8 +245,16 @@ const Goals: React.FC = () => {
 
     const payload: SmartGoal = {
       ...form,
-      deadline: deadlineISO,
+      deadline: deadlineISO, // будет undefined если дата не указана
     };
+
+    // Удаляем пустые поля чтобы не отправлять пустые строки
+    Object.keys(payload).forEach(key => {
+      const value = (payload as any)[key];
+      if (value === '' || value === null) {
+        delete (payload as any)[key];
+      }
+    });
 
     try {
       setSaving(true);
@@ -256,7 +264,7 @@ const Goals: React.FC = () => {
       // Обновляем список
       await loadGoals();
     } catch (e: any) {
-      setError(e?.message || 'Не уд��лось сохранить цель');
+      setError(e?.message || 'Не удалось сохранить цель');
     } finally {
       setSaving(false);
     }
