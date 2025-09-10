@@ -10,7 +10,8 @@ from schemas.openai_schemas import (
     SchedulePlanningResponse,
     SMARTGoal,
     OpenAIRequest,
-    OpenAIResponse
+    OpenAIResponse,
+    GoalAnalysisResponse
 )
 from service import OpenAIService
 from dependencies import get_user_request_id, get_openai_service, get_goals_repo
@@ -27,7 +28,7 @@ async def analyze_calendar_and_goals(
     user_id: str = Depends(get_user_request_id),
 ):
     """
-    Анализ календаря пользователя и его SMART целей
+    Анализ календаря пользователя �� его SMART целей
 
     Этот эндпоинт отправляет данные календаря и цели пользователя в OpenAI,
     получает анализ и рекомендации по оптимизации расписания
@@ -139,7 +140,7 @@ async def chat_with_ai(
     """
     Прямое общение с OpenAI для кастомных запросов
 
-    Позволяет отправить произвольный запрос в OpenAI для получения консультации
+    Позволяет отправить произвольный запрос в OpenAI для получения консул��тации
     по тайм-менеджменту и планированию
     """
     try:
@@ -257,4 +258,45 @@ async def get_user_goals(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ошибка при получении целей: {str(e)}"
+        )
+
+
+@router.post("/analyze-goal", response_model=GoalAnalysisResponse)
+async def analyze_goal(
+    goal: SMARTGoal,
+    openai_service: Annotated[OpenAIService, Depends(get_openai_service)],
+    user_id: str = Depends(get_user_request_id),
+):
+    """
+    Анализ SMART цели с помощью ИИ
+
+    Этот эндпоинт отправляет цель пользователя в OpenAI,
+    получает детальный анализ по критериям SMART и предложения по улучшению
+    """
+    try:
+        logger.info(f"Starting goal analysis for user {user_id}")
+
+        # Преобразуем цель в словарь для отправки в ИИ
+        goal_dict = goal.model_dump()
+
+        # Вызываем сервис OpenAI для анализа цели
+        ai_response = await openai_service.analyze_smart_goal(goal_dict)
+
+        # Формируем ответ с правильной структурой
+        response = GoalAnalysisResponse(
+            is_smart=ai_response.get("is_smart", False),
+            score=ai_response.get("score", 0),
+            analysis=ai_response.get("analysis", {}),
+            suggestions=ai_response.get("suggestions", []),
+            improved_goal=ai_response.get("improved_goal")
+        )
+
+        logger.info(f"Goal analysis completed successfully for user {user_id}")
+        return response
+
+    except Exception as e:
+        logger.error(f"Error in analyze_goal: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при анализе цели: {str(e)}"
         )

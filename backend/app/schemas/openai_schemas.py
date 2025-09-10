@@ -74,3 +74,38 @@ class SchedulePlanningResponse(BaseModel):
     frequency: str
     reasoning: str
     suggested_events: List[SuggestedEvent]
+
+
+class GoalAnalysisItem(BaseModel):
+    """Анализ отдельного критерия SMART"""
+    score: int = Field(..., ge=0, le=100, description="Оценка от 0 до 100")
+    feedback: str = Field(..., description="Обратная связь и рекомендации")
+
+
+class GoalAnalysisDetails(BaseModel):
+    """Детальный анализ по всем критериям SMART"""
+    specific: GoalAnalysisItem
+    measurable: GoalAnalysisItem
+    achievable: GoalAnalysisItem
+    relevant: GoalAnalysisItem
+    time_bound: GoalAnalysisItem
+
+
+class ImprovedGoal(BaseModel):
+    """Улучшенная версия цели"""
+    title: str
+    description: str
+    specific: str
+    measurable: str
+    achievable: str
+    relevant: str
+    time_bound: str
+
+
+class GoalAnalysisResponse(BaseModel):
+    """Ответ анализа цели от ИИ"""
+    is_smart: bool = Field(..., description="Соответствует ли цель принципам SMART")
+    score: int = Field(..., ge=0, le=100, description="Общий балл цели")
+    analysis: GoalAnalysisDetails = Field(..., description="Детальный анализ по критериям")
+    suggestions: List[str] = Field(default=[], description="Рекомендации для улучшения")
+    improved_goal: Optional[ImprovedGoal] = Field(None, description="Предлагаемая улучшенная версия цели")
