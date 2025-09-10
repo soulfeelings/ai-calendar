@@ -13,7 +13,7 @@ const priorityOptions = [
 const Goals: React.FC = () => {
   const navigate = useNavigate();
 
-  // С��������остояние этапов: 'input' | 'analysis' | 'saved'
+  // Состояние этапов: 'input' | 'analysis' | 'saved'
   const [currentStep, setCurrentStep] = useState<'input' | 'analysis' | 'saved'>('input');
 
   const [form, setForm] = useState<SmartGoal>({
@@ -42,9 +42,66 @@ const Goals: React.FC = () => {
   const [goals, setGoals] = useState<SmartGoal[]>([]);
   const [loadingGoals, setLoadingGoals] = useState(false);
   const [creatingEvents, setCreatingEvents] = useState<{[goalId: string]: boolean}>({});
+  const [createdEvents, setCreatedEvents] = useState<{[goalId: string]: string}>({});
 
-  // Проверяем, заполнены ли основные поля ��ля получения анализа
+  // Проверяем, заполнены ли основные поля для получения анализа
   const canAnalyze = form.title.trim().length > 0 && form.description.trim().length > 0;
+
+  // Загружаем информацию о созданных событиях из localStorage
+  useEffect(() => {
+    const savedEvents = localStorage.getItem('goalCalendarEvents');
+    if (savedEvents) {
+      try {
+        setCreatedEvents(JSON.parse(savedEvents));
+      } catch (e) {
+        console.error('Error parsing saved events:', e);
+      }
+    }
+  }, []);
+
+  // Сохраняем информацию о созданных событиях в localStorage
+  const saveCreatedEvent = (goalId: string, eventId: string) => {
+    const updatedEvents = { ...createdEvents, [goalId]: eventId };
+    setCreatedEvents(updatedEvents);
+    localStorage.setItem('goalCalendarEvents', JSON.stringify(updatedEvents));
+  };
+
+  // Удаляем информацию о созданном событии
+  const removeCreatedEvent = (goalId: string) => {
+    const updatedEvents = { ...createdEvents };
+    delete updatedEvents[goalId];
+    setCreatedEvents(updatedEvents);
+    localStorage.setItem('goalCalendarEvents', JSON.stringify(updatedEvents));
+  };
+
+  // Функция для удаления события из календаря
+  const deleteEventForGoal = async (goal: SmartGoal) => {
+    if (!goal.id || !createdEvents[goal.id]) return;
+
+    const eventId = createdEvents[goal.id];
+    setCreatingEvents(prev => ({ ...prev, [goal.id!]: true }));
+    setError(null);
+
+    try {
+      // Удаляем событие из календаря
+      await api.delete(`/calendar/events/${eventId}`);
+
+      // Удаляем из локального хранилища
+      removeCreatedEvent(goal.id);
+      setSuccess(`Событие "${goal.title}" удалено из календаря`);
+
+    } catch (e: any) {
+      console.error('Error deleting calendar event:', e);
+      setError(e?.response?.data?.detail || e?.message || 'Не удалось удалить событие из календаря');
+    } finally {
+      setCreatingEvents(prev => ({ ...prev, [goal.id!]: false }));
+      // Очищаем сообщение через 3 секунды
+      setTimeout(() => {
+        setError(null);
+        setSuccess(null);
+      }, 3000);
+    }
+  };
 
   const loadGoals = async () => {
     try {
@@ -85,7 +142,7 @@ const Goals: React.FC = () => {
         summary: `Работа над целью: ${goal.title}`,
         description: `🎯 SMART Цель: ${goal.description}
 
-📋 Критерии SMART:
+📋 Кри��ерии SMART:
 • Конкретность: ${goal.specific || 'Не указано'}
 • Измеримость: ${goal.measurable || 'Не указано'} 
 • Достижимость: ${goal.achievable || 'Не указано'}
@@ -111,6 +168,8 @@ const Goals: React.FC = () => {
       const response = await api.post('/calendar/events', eventData);
 
       setSuccess(`Событие "${goal.title}" создано в календаре`);
+      // Сохраняем созданное событие в localStorage
+      saveCreatedEvent(goal.id, response.data.id);
 
     } catch (e: any) {
       console.error('Error creating calendar event:', e);
@@ -144,7 +203,7 @@ const Goals: React.FC = () => {
       setGoalAnalysis(analysis);
       setCurrentStep('analysis');
     } catch (e: any) {
-      setError(e?.message || 'Не удалось проанализировать цель');
+      setError(e?.message || 'Не удалось проана��изировать цель');
     } finally {
       setAnalyzing(false);
     }
@@ -197,7 +256,7 @@ const Goals: React.FC = () => {
       // Обновляем список
       await loadGoals();
     } catch (e: any) {
-      setError(e?.message || 'Не удалось сохранить цель');
+      setError(e?.message || 'Не уд��лось сохранить цель');
     } finally {
       setSaving(false);
     }
@@ -227,7 +286,7 @@ const Goals: React.FC = () => {
     <div className="card">
       <h3>Создание цели</h3>
       <p className="muted">
-        Опишите вашу цель. ИИ поможет проверить её на соответствие принципам SMART и предлож��т улучшения.
+        Опишите вашу цель. ИИ поможет проверить её на соответствие принципам SMART и предложитт улучшения.
       </p>
 
       <div className="form-group">
@@ -279,7 +338,7 @@ const Goals: React.FC = () => {
         <textarea
           className="input"
           value={form.achievable}
-          placeholder="Что поможет достичь цели? Какие рес��рсы нужны?"
+          placeholder="Что поможет достичь цели? Какие рес��рсы ��ужны?"
           onChange={(e) => handleFieldChange('achievable', e.target.value)}
           rows={2}
         />
@@ -404,7 +463,7 @@ const Goals: React.FC = () => {
           <div className="improved-goal">
             <h4>Предлагаемая улучшенная версия:</h4>
             <div className="improved-preview">
-              <p><strong>Название:</strong> {goalAnalysis.improved_goal.title}</p>
+              <p><strong>На��вание:</strong> {goalAnalysis.improved_goal.title}</p>
               <p><strong>Описа��ие:</strong> {goalAnalysis.improved_goal.description}</p>
             </div>
             <button className="btn secondary" onClick={applyImprovedGoal}>
@@ -475,7 +534,7 @@ const Goals: React.FC = () => {
           <div className="steps">
             <div className={`step ${currentStep === 'input' ? 'active' : (currentStep === 'analysis' || currentStep === 'saved') ? 'done' : ''}`}>
               <span className="step-index">1</span>
-              <span className="step-title">Заполне��ие цели</span>
+              <span className="step-title">Заполнение цели</span>
             </div>
             <div className={`step ${currentStep === 'analysis' ? 'active' : currentStep === 'saved' ? 'done' : ''}`}>
               <span className="step-index">2</span>
@@ -523,15 +582,36 @@ const Goals: React.FC = () => {
                     )}
                   </div>
                   <div className="goal-actions">
-                    <button
-                      className="calendar-btn"
-                      onClick={() => createEventForGoal(goal)}
-                      disabled={creatingEvents[goal.id || ''] || false}
-                      title="Создать событие в календаре"
-                    >
-                      {creatingEvents[goal.id || ''] ? '⏳' : '📅'}
-                      {creatingEvents[goal.id || ''] ? 'Создаём...' : 'В календарь'}
-                    </button>
+                    {createdEvents[goal.id || ''] ? (
+                      // Если событие уже создано - показываем статус и кнопку удаления
+                      <>
+                        <div className="event-status">
+                          <span className="status-badge created">
+                            ✅ В календаре
+                          </span>
+                        </div>
+                        <button
+                          className="delete-btn"
+                          onClick={() => deleteEventForGoal(goal)}
+                          disabled={creatingEvents[goal.id || ''] || false}
+                          title="Удалить событие из календаря"
+                        >
+                          {creatingEvents[goal.id || ''] ? '⏳' : '🗑️'}
+                          {creatingEvents[goal.id || ''] ? 'Удаляем...' : 'Удалить'}
+                        </button>
+                      </>
+                    ) : (
+                      // Если событие не создано - показываем кнопку создания
+                      <button
+                        className="calendar-btn"
+                        onClick={() => createEventForGoal(goal)}
+                        disabled={creatingEvents[goal.id || ''] || false}
+                        title="Создать событие в календаре"
+                      >
+                        {creatingEvents[goal.id || ''] ? '⏳' : '📅'}
+                        {creatingEvents[goal.id || ''] ? 'Создаём...' : 'В календарь'}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -544,3 +624,4 @@ const Goals: React.FC = () => {
 };
 
 export default Goals;
+
