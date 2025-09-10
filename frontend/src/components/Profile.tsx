@@ -186,7 +186,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
   useEffect(() => {
     const loadUserAndCalendars = async () => {
       try {
-        // Загружаем инфор��ацию о пользователе
+        // Загружаем информацию о пользователе
         let userInfo = authService.getSavedUserInfo();
 
         if (!userInfo) {
@@ -414,7 +414,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
             {calendarLoading && (
               <div className="calendar-loading">
                 <div className="spinner small"></div>
-                <p>��агружаем календари...</p>
+                <p>Загружаем календари...</p>
               </div>
             )}
 
@@ -782,7 +782,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     return (
       <div className="profile-error">
         <div className="error-message">
-          <p>Не удалось за��рузить информацию о пользователе</p>
+          <p>Не удалось загрузить информацию о пользователе</p>
           <button onClick={() => navigate('/login')}>
             Вернуться к входу
           </button>
