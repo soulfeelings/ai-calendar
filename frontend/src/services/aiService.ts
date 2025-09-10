@@ -51,6 +51,28 @@ export interface CalendarAnalysisRequest {
   context?: string;
 }
 
+export interface GoalAnalysis {
+  is_smart: boolean;
+  score: number; // от 0 до 100
+  analysis: {
+    specific: { score: number; feedback: string };
+    measurable: { score: number; feedback: string };
+    achievable: { score: number; feedback: string };
+    relevant: { score: number; feedback: string };
+    time_bound: { score: number; feedback: string };
+  };
+  suggestions: string[];
+  improved_goal?: {
+    title: string;
+    description: string;
+    specific: string;
+    measurable: string;
+    achievable: string;
+    relevant: string;
+    time_bound: string;
+  };
+}
+
 class AIService {
   private readonly AI_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 часа в миллисекундах
 
@@ -209,6 +231,19 @@ class AIService {
     } catch (error) {
       console.error('Error creating SMART goal:', error);
       throw new Error('Ошибка при создании цели');
+    }
+  }
+
+  /**
+   * Анализ цели с помощью ИИ
+   */
+  async analyzeGoal(goal: SmartGoal): Promise<GoalAnalysis> {
+    try {
+      const response = await api.post('/ai/analyze-goal', goal);
+      return response.data;
+    } catch (error) {
+      console.error('Error analyzing goal:', error);
+      throw new Error('Ошибка при анализе цели');
     }
   }
 }

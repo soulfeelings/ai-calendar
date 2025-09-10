@@ -220,7 +220,7 @@ class OpenAIService:
 
         Args:
             calendar_events: События календаря
-            user_goals: SMART цели пользователя
+            user_goals: SMART цели по��ьзователя
             analysis_period_days: Период анализа в днях
 
         Returns:
@@ -274,7 +274,7 @@ class OpenAIService:
             - Избегай перекрытий с длинными событиями и оставляй разумные буферы (например, 15–30 минут) рядом с длительными встречами, поездками и перелётами.
 
             Повторяемость (необязательно):
-            - Если считаешь, что задаче нужна повторяемость, ��аполни поле recurrence. Предпочтительно дать rrule.
+            - Если считаешь, что задаче нужна повторяемости, заполни поле recurrence. Предпочтительно дать rrule.
             - При отсутствии rrule можно вернуть frequency + interval + days_of_week (+ until при необходимости).
             - Не назначай повторяемость, если это разовое событие или перенос существующего нерецуррентного события без явной причины.
 
@@ -418,17 +418,17 @@ class OpenAIService:
         try:
             system_prompt = """
             Ты - экспертный ИИ-ассистент по тайм-менеджменту и планированию.
-            Проанализируй календарь пользователя и предоставь:
+            Проанализируй календарь пользователя �� предоставь:
             1. Краткое резюме (summary)
             2. Конкретные изменения в расписании (schedule_changes) - массив объектов с полями:
                - id: идентификатор события
                - action: тип действия (move, reschedule, cancel, optimize)
                - title: название изменения
                - reason: причина изменения
-               - new_start: новое время начала (если применимо)
+               - new_start: новое время начала (если п��именимо)
                - new_end: новое время окончания (если применимо)
                - priority: приоритет (high, medium, low)
-            3. Общие реко��ендации (recommendations) - массив строк
+            3. Общие рекомендации (recommendations) - массив строк
             4. Оценку продуктивности (productivity_score) от 1 до 10
             5. Соответствие целям (goal_alignment)
 
@@ -483,6 +483,146 @@ class OpenAIService:
         except Exception as e:
             logger.error(f"Error in OpenAI calendar analysis: {e}")
             raise Exception(f"Ошибка при анализе календаря: {str(e)}")
+
+    async def analyze_smart_goal(self, goal: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Анализ SMART цели с помощью ИИ
+
+        Args:
+            goal: SMART цель для анализа
+
+        Returns:
+            Детальный анализ цели с оценками и предложениями
+        """
+        try:
+            system_prompt = """
+            Ты — эксперт по постановке и анализу SMART целей. Проанализируй переданную цель 
+            по всем критериям SMART и дай детальную обратную связь.
+
+            Верни ответ СТРОГО в JSON формате:
+            {
+              "is_smart": boolean,
+              "score": number,  // общий балл от 0 до 100
+              "analysis": {
+                "specific": {
+                  "score": number,     // от 0 до 100
+                  "feedback": string   // конкретная обратная связь
+                },
+                "measurable": {
+                  "score": number,
+                  "feedback": string
+                },
+                "achievable": {
+                  "score": number,
+                  "feedback": string
+                },
+                "relevant": {
+                  "score": number,
+                  "feedback": string
+                },
+                "time_bound": {
+                  "score": number,
+                  "feedback": string
+                }
+              },
+              "suggestions": string[],  // конкретные рекомендации для улучшения
+              "improved_goal": {        // НЕОБЯЗАТЕЛЬНО: только если нужны серьёзные улучшения
+                "title": string,
+                "description": string,
+                "specific": string,
+                "measurable": string,
+                "achievable": string,
+                "relevant": string,
+                "time_bound": string
+              }
+            }
+
+            Критерии оценки:
+            - Specific (Конкретность): Четко ли определено что именно нужно достичь? (0-100)
+            - Measurable (Измеримость): Можно ли измерить прогресс и результат? (0-100)
+            - Achievable (Достижимость): Реалистична ли цель с учетом ресурсов? (0-100)
+            - Relevant (Актуальность): Важна ли цель для пользователя сейчас? (0-100)
+            - Time-bound (Временные рамки): Есть ли четкие сроки и дедлайны? (0-100)
+
+            Правила:
+            - Давай конкретную и полезную обратную связь в поле feedback
+            - Оценивай строго но справедливо
+            - Если общий score < 70, предложи improved_goal с улучшенной версией
+            - В suggestions включай 3-5 конкретных рекомендаций
+            - is_smart = true только если все критерии >= 70 и общий score >= 80
+            - Общий score = среднее арифметическое всех критериев
+
+            ОТВЕЧАЙ НА РУССКОМ!
+            """
+
+            user_message = f"""
+            Проанализируй мою SMART цель:
+
+            Название: {goal.get('title', 'Не указано')}
+            Описание: {goal.get('description', 'Не указано')}
+            
+            Критерии SMART:
+            - Specific (Конкретность): {goal.get('specific', 'Не заполнено')}
+            - Measurable (Измеримость): {goal.get('measurable', 'Не заполнено')}  
+            - Achievable (Достижимость): {goal.get('achievable', 'Не заполнено')}
+            - Relevant (Актуальность): {goal.get('relevant', 'Не заполнено')}
+            - Time-bound (Временные рамки): {goal.get('time_bound', 'Не заполнено')}
+            
+            Приоритет: {goal.get('priority', 'medium')}
+            Дедлайн: {goal.get('deadline', 'Не указан')}
+
+            Верни строго JSON по описанной схеме, без дополнительного текста.
+            """
+
+            messages = [{"role": "user", "content": user_message}]
+
+            response = await self.create_chat_completion(
+                messages=messages,
+                system_prompt=system_prompt,
+                temperature=0.3,  # Низкая температура для более консистентных оценок
+                response_format={"type": "json_object"}
+            )
+
+            ai_response = response["choices"][0]["message"]["content"]
+
+            try:
+                parsed_response = json.loads(ai_response)
+
+                # Вали��ируем структуру ответа
+                if not isinstance(parsed_response.get("analysis"), dict):
+                    raise ValueError("Invalid analysis structure")
+
+                # Проверяем, что все критерии SMART присутствуют
+                required_criteria = ["specific", "measurable", "achievable", "relevant", "time_bound"]
+                for criterion in required_criteria:
+                    if criterion not in parsed_response["analysis"]:
+                        parsed_response["analysis"][criterion] = {
+                            "score": 0,
+                            "feedback": "Критерий не был проанализирован"
+                        }
+
+                return parsed_response
+
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning(f"Failed to parse AI response as JSON: {e}")
+                # Возвращаем базовый ответ если парсинг не удался
+                return {
+                    "is_smart": False,
+                    "score": 0,
+                    "analysis": {
+                        "specific": {"score": 0, "feedback": "Не удалось проанализировать"},
+                        "measurable": {"score": 0, "feedback": "Не удалось проанализировать"},
+                        "achievable": {"score": 0, "feedback": "Не удалось проанализировать"},
+                        "relevant": {"score": 0, "feedback": "Не удалось проанализировать"},
+                        "time_bound": {"score": 0, "feedback": "Не удалось проанализировать"}
+                    },
+                    "suggestions": ["Попробуйте переформулировать цель более четко"],
+                    "improved_goal": None
+                }
+
+        except Exception as e:
+            logger.error(f"Error in analyze_smart_goal: {str(e)}")
+            raise
 
 
 # Создаем экземпляр сервиса

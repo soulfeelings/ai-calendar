@@ -1,66 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { aiService, SmartGoal } from '../services/aiService';
+import { aiService, SmartGoal, GoalAnalysis } from '../services/aiService';
+import api from '../services/api';
 import './Goals.css';
-
-interface StepField {
-  key: keyof Omit<SmartGoal, 'id' | 'status' | 'deadline'>;
-  label: string;
-  placeholder: string;
-}
-
-const steps: Array<{
-  id: string;
-  title: string;
-  description?: string;
-  fields?: StepField[];
-}> = [
-  {
-    id: 'intro',
-    title: 'SMART цель',
-    description:
-      'Ответьте на несколько вопросов. Мы оформим цель по SMART и поможем встроить её в календарь.',
-    fields: [
-      { key: 'title', label: 'Название', placeholder: 'Например: Подготовить презентацию для команды' },
-      { key: 'description', label: 'Краткое описание', placeholder: 'Зачем и какой ожидаемый результат' },
-    ],
-  },
-  {
-    id: 'specific',
-    title: 'S — Specific (Конкретность)',
-    fields: [
-      { key: 'specific', label: 'Что именно вы хотите достичь?', placeholder: 'Опишите максимально конкретно' },
-    ],
-  },
-  {
-    id: 'measurable',
-    title: 'M — Measurable (Измеримость)',
-    fields: [
-      { key: 'measurable', label: 'Как вы поймёте, что цель достигнута?', placeholder: 'Метрики/критерии успеха' },
-    ],
-  },
-  {
-    id: 'achievable',
-    title: 'A — Achievable (Достижимость)',
-    fields: [
-      { key: 'achievable', label: 'Что поможет достичь цели?', placeholder: 'Ресурсы, навыки, шаги' },
-    ],
-  },
-  {
-    id: 'relevant',
-    title: 'R — Relevant (Актуальность)',
-    fields: [
-      { key: 'relevant', label: 'Почему это важно сейчас?', placeholder: 'Связь с приоритетами/ценностями' },
-    ],
-  },
-  {
-    id: 'time_bound',
-    title: 'T — Time-bound (Сроки)',
-    fields: [
-      { key: 'time_bound', label: 'Какой у цели срок?', placeholder: 'Сроки/вехи, ограничения по времени' },
-    ],
-  },
-];
 
 const priorityOptions = [
   { value: 'high', label: 'Высокий' },
@@ -71,7 +13,9 @@ const priorityOptions = [
 const Goals: React.FC = () => {
   const navigate = useNavigate();
 
-  const [stepIndex, setStepIndex] = useState(0);
+  // С��������остояние этапов: 'input' | 'analysis' | 'saved'
+  const [currentStep, setCurrentStep] = useState<'input' | 'analysis' | 'saved'>('input');
+
   const [form, setForm] = useState<SmartGoal>({
     title: '',
     description: '',
@@ -83,23 +27,24 @@ const Goals: React.FC = () => {
     deadline: '',
     priority: 'medium',
   });
+
   const [deadlineDate, setDeadlineDate] = useState<string>('');
   const [deadlineTime, setDeadlineTime] = useState<string>('');
 
+  // Состояние для анализа ИИ
+  const [goalAnalysis, setGoalAnalysis] = useState<GoalAnalysis | null>(null);
+  const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  // Список существующих целей
   const [goals, setGoals] = useState<SmartGoal[]>([]);
   const [loadingGoals, setLoadingGoals] = useState(false);
+  const [creatingEvents, setCreatingEvents] = useState<{[goalId: string]: boolean}>({});
 
-  const currentStep = steps[stepIndex];
-
-  const canGoNext = useMemo(() => {
-    // Минимальная валидация на каждом шаге: поля текущего шага не пустые
-    if (!currentStep.fields) return true;
-    return currentStep.fields.every((f) => String((form as any)[f.key] || '').trim().length > 0);
-  }, [currentStep, form]);
+  // Проверяем, заполнены ли основные поля ��ля получения анализа
+  const canAnalyze = form.title.trim().length > 0 && form.description.trim().length > 0;
 
   const loadGoals = async () => {
     try {
@@ -113,23 +58,123 @@ const Goals: React.FC = () => {
     }
   };
 
+  const createEventForGoal = async (goal: SmartGoal) => {
+    if (!goal.id) return;
+
+    setCreatingEvents(prev => ({ ...prev, [goal.id!]: true }));
+    setError(null);
+
+    try {
+      // Определяем время события на основе дедлайна или завтра
+      let startTime, endTime;
+
+      if (goal.deadline) {
+        const deadline = new Date(goal.deadline);
+        startTime = deadline.toISOString();
+        endTime = new Date(deadline.getTime() + 60 * 60 * 1000).toISOString(); // +1 час
+      } else {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(9, 0, 0, 0); // 9 утра завтра
+        startTime = tomorrow.toISOString();
+        endTime = new Date(tomorrow.getTime() + 60 * 60 * 1000).toISOString(); // +1 час
+      }
+
+      // Создаем событие на основе данных цели
+      const eventData = {
+        summary: `Работа над целью: ${goal.title}`,
+        description: `🎯 SMART Цель: ${goal.description}
+
+📋 Критерии SMART:
+• Конкретность: ${goal.specific || 'Не указано'}
+• Измеримость: ${goal.measurable || 'Не указано'} 
+• Достижимость: ${goal.achievable || 'Не указано'}
+• Актуальность: ${goal.relevant || 'Не указано'}
+• Временные рамки: ${goal.time_bound || 'Не указано'}
+
+🔔 Приоритет: ${priorityOptions.find(p => p.value === goal.priority)?.label || 'Средний'}`,
+        start: {
+          dateTime: startTime,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        end: {
+          dateTime: endTime,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        },
+        location: "Работа над SMART целью",
+        reminders: {
+          useDefault: true
+        }
+      };
+
+      // Используем прямой API вызов к backend эндпоинту
+      const response = await api.post('/calendar/events', eventData);
+
+      setSuccess(`Событие "${goal.title}" создано в календаре`);
+
+    } catch (e: any) {
+      console.error('Error creating calendar event:', e);
+      setError(e?.response?.data?.detail || e?.message || 'Не удалось создать событие в календаре');
+    } finally {
+      setCreatingEvents(prev => ({ ...prev, [goal.id!]: false }));
+      // Очищаем сообщение через 5 секунд
+      setTimeout(() => {
+        setError(null);
+        setSuccess(null);
+      }, 5000);
+    }
+  };
+
   useEffect(() => {
     loadGoals();
   }, []);
 
-  const handleFieldChange = (key: StepField['key'], value: string) => {
+  const handleFieldChange = (key: keyof SmartGoal, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const next = () => {
-    if (stepIndex < steps.length - 1) setStepIndex((i) => i + 1);
+  const handleAnalyzeGoal = async () => {
+    if (!canAnalyze) return;
+
+    setError(null);
+    setAnalyzing(true);
+
+    try {
+      const analysis = await aiService.analyzeGoal(form);
+      setGoalAnalysis(analysis);
+      setCurrentStep('analysis');
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось проанализировать цель');
+    } finally {
+      setAnalyzing(false);
+    }
   };
 
-  const prev = () => {
-    if (stepIndex > 0) setStepIndex((i) => i - 1);
+  const applyImprovedGoal = () => {
+    if (goalAnalysis?.improved_goal) {
+      setForm(prev => ({
+        ...prev,
+        title: goalAnalysis.improved_goal!.title,
+        description: goalAnalysis.improved_goal!.description,
+        specific: goalAnalysis.improved_goal!.specific,
+        measurable: goalAnalysis.improved_goal!.measurable,
+        achievable: goalAnalysis.improved_goal!.achievable,
+        relevant: goalAnalysis.improved_goal!.relevant,
+        time_bound: goalAnalysis.improved_goal!.time_bound,
+      }));
+      // Возвращаемся к форме для редактирования
+      setCurrentStep('input');
+      setGoalAnalysis(null);
+    }
   };
 
-  const handleSubmit = async () => {
+  const editGoal = () => {
+    // Возвращаемся к форме редактирования с текущими данными
+    setCurrentStep('input');
+    setGoalAnalysis(null);
+  };
+
+  const handleSaveGoal = async () => {
     setError(null);
     setSuccess(null);
 
@@ -148,28 +193,272 @@ const Goals: React.FC = () => {
       setSaving(true);
       await aiService.createSMARTGoal(payload);
       setSuccess('Цель сохранена');
+      setCurrentStep('saved');
       // Обновляем список
       await loadGoals();
-      // Сброс формы
-      setForm({
-        title: '',
-        description: '',
-        specific: '',
-        measurable: '',
-        achievable: '',
-        relevant: '',
-        time_bound: '',
-        deadline: '',
-        priority: 'medium',
-      });
-      setDeadlineDate('');
-      setDeadlineTime('');
-      setStepIndex(0);
     } catch (e: any) {
       setError(e?.message || 'Не удалось сохранить цель');
     } finally {
       setSaving(false);
     }
+  };
+
+  const resetForm = () => {
+    setForm({
+      title: '',
+      description: '',
+      specific: '',
+      measurable: '',
+      achievable: '',
+      relevant: '',
+      time_bound: '',
+      deadline: '',
+      priority: 'medium',
+    });
+    setDeadlineDate('');
+    setDeadlineTime('');
+    setGoalAnalysis(null);
+    setCurrentStep('input');
+    setError(null);
+    setSuccess(null);
+  };
+
+  const renderInputStep = () => (
+    <div className="card">
+      <h3>Создание цели</h3>
+      <p className="muted">
+        Опишите вашу цель. ИИ поможет проверить её на соответствие принципам SMART и предлож��т улучшения.
+      </p>
+
+      <div className="form-group">
+        <label>Название цели *</label>
+        <input
+          type="text"
+          className="input"
+          value={form.title}
+          placeholder="Например: Подготовить презентацию для команды"
+          onChange={(e) => handleFieldChange('title', e.target.value)}
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Описание цели *</label>
+        <textarea
+          className="input"
+          value={form.description}
+          placeholder="Зачем эта цель важна и какой ожидаемый результат"
+          onChange={(e) => handleFieldChange('description', e.target.value)}
+          rows={3}
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Конкретность (Specific)</label>
+        <textarea
+          className="input"
+          value={form.specific}
+          placeholder="Что именно вы хотите достичь?"
+          onChange={(e) => handleFieldChange('specific', e.target.value)}
+          rows={2}
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Измеримость (Measurable)</label>
+        <textarea
+          className="input"
+          value={form.measurable}
+          placeholder="Как вы поймёте, что цель достигнута?"
+          onChange={(e) => handleFieldChange('measurable', e.target.value)}
+          rows={2}
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Достижимость (Achievable)</label>
+        <textarea
+          className="input"
+          value={form.achievable}
+          placeholder="Что поможет достичь цели? Какие рес��рсы нужны?"
+          onChange={(e) => handleFieldChange('achievable', e.target.value)}
+          rows={2}
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Актуальность (Relevant)</label>
+        <textarea
+          className="input"
+          value={form.relevant}
+          placeholder="Почему это важно сейчас?"
+          onChange={(e) => handleFieldChange('relevant', e.target.value)}
+          rows={2}
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Временные рамки (Time-bound)</label>
+        <textarea
+          className="input"
+          value={form.time_bound}
+          placeholder="Какой у цели срок? Промежуточные вехи?"
+          onChange={(e) => handleFieldChange('time_bound', e.target.value)}
+          rows={2}
+        />
+      </div>
+
+      <div className="grid-2">
+        <div className="form-group">
+          <label>Приоритет</label>
+          <select
+            className="input"
+            value={form.priority || 'medium'}
+            onChange={(e) => handleFieldChange('priority', e.target.value)}
+          >
+            {priorityOptions.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
+            ))}
+          </select>
+        </div>
+        <div className="form-group">
+          <label>Дедлайн (необязательно)</label>
+          <div className="deadline-row">
+            <input
+              type="date"
+              className="input"
+              value={deadlineDate}
+              onChange={(e) => setDeadlineDate(e.target.value)}
+            />
+            <input
+              type="time"
+              className="input"
+              value={deadlineTime}
+              onChange={(e) => setDeadlineTime(e.target.value)}
+            />
+          </div>
+        </div>
+      </div>
+
+      {error && <div className="alert error">{error}</div>}
+
+      <div className="wizard-actions">
+        <button
+          className="btn primary"
+          onClick={handleAnalyzeGoal}
+          disabled={!canAnalyze || analyzing}
+        >
+          {analyzing ? 'Анализируем...' : 'Получить анализ от ИИ'}
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderAnalysisStep = () => {
+    if (!goalAnalysis) return null;
+
+    return (
+      <div className="card">
+        <h3>Анализ цели от ИИ</h3>
+
+        <div className="goal-score">
+          <div className="score-circle">
+            <span className="score-value">{goalAnalysis.score}</span>
+            <span className="score-label">/ 100</span>
+          </div>
+          <div className="score-status">
+            {goalAnalysis.is_smart ? (
+              <span className="status-good">✅ Цель соответствует SMART</span>
+            ) : (
+              <span className="status-warning">⚠️ Цель требует доработки</span>
+            )}
+          </div>
+        </div>
+
+        <div className="analysis-details">
+          <h4>Детальный анализ:</h4>
+          {Object.entries(goalAnalysis.analysis).map(([key, analysis]) => (
+            <div key={key} className="analysis-item">
+              <div className="analysis-header">
+                <span className="analysis-title">{getSmartLabel(key)}</span>
+                <span className={`analysis-score ${analysis.score >= 80 ? 'good' : analysis.score >= 50 ? 'medium' : 'poor'}`}>
+                  {analysis.score}/100
+                </span>
+              </div>
+              <p className="analysis-feedback">{analysis.feedback}</p>
+            </div>
+          ))}
+        </div>
+
+        {goalAnalysis.suggestions.length > 0 && (
+          <div className="suggestions">
+            <h4>Рекомендации для улучшения:</h4>
+            <ul>
+              {goalAnalysis.suggestions.map((suggestion, index) => (
+                <li key={index}>{suggestion}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {goalAnalysis.improved_goal && (
+          <div className="improved-goal">
+            <h4>Предлагаемая улучшенная версия:</h4>
+            <div className="improved-preview">
+              <p><strong>Название:</strong> {goalAnalysis.improved_goal.title}</p>
+              <p><strong>Описа��ие:</strong> {goalAnalysis.improved_goal.description}</p>
+            </div>
+            <button className="btn secondary" onClick={applyImprovedGoal}>
+              Применить улучшения
+            </button>
+          </div>
+        )}
+
+        {error && <div className="alert error">{error}</div>}
+
+        <div className="wizard-actions">
+          <button className="btn secondary" onClick={() => setCurrentStep('input')}>
+            ← Вернуться к редактированию
+          </button>
+          <button
+            className="btn primary"
+            onClick={handleSaveGoal}
+            disabled={saving}
+          >
+            {saving ? 'Сохраняем...' : 'Сохранить цель'}
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderSavedStep = () => (
+    <div className="card">
+      <div className="success-message">
+        <div className="success-icon">✅</div>
+        <h3>Цель успешно сохранена!</h3>
+        <p>Ваша SMART-цель добавлена и будет учитываться при анализе календаря.</p>
+
+        <div className="wizard-actions">
+          <button className="btn secondary" onClick={resetForm}>
+            Создать ещё одну цель
+          </button>
+          <button className="btn primary" onClick={() => navigate('/profile')}>
+            К профилю
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const getSmartLabel = (key: string): string => {
+    const labels: { [key: string]: string } = {
+      specific: 'S — Конкретность',
+      measurable: 'M — Измеримость',
+      achievable: 'A — Достижимость',
+      relevant: 'R — Актуальность',
+      time_bound: 'T — Временные рамки'
+    };
+    return labels[key] || key;
   };
 
   return (
@@ -184,123 +473,70 @@ const Goals: React.FC = () => {
       <div className="goals-layout">
         <div className="wizard">
           <div className="steps">
-            {steps.map((s, idx) => (
-              <div key={s.id} className={`step ${idx === stepIndex ? 'active' : ''} ${idx < stepIndex ? 'done' : ''}`}>
-                <span className="step-index">{idx + 1}</span>
-                <span className="step-title">{s.title}</span>
-              </div>
-            ))}
-            <div className={`step ${stepIndex === steps.length ? 'active' : ''}`}>
-              <span className="step-index">{steps.length + 1}</span>
-              <span className="step-title">Приоритет и дедлайн</span>
+            <div className={`step ${currentStep === 'input' ? 'active' : (currentStep === 'analysis' || currentStep === 'saved') ? 'done' : ''}`}>
+              <span className="step-index">1</span>
+              <span className="step-title">Заполне��ие цели</span>
+            </div>
+            <div className={`step ${currentStep === 'analysis' ? 'active' : currentStep === 'saved' ? 'done' : ''}`}>
+              <span className="step-index">2</span>
+              <span className="step-title">Анализ ИИ</span>
             </div>
           </div>
 
-          <div className="card">
-            <h3>{currentStep.title}</h3>
-            {currentStep.description && <p className="muted">{currentStep.description}</p>}
+          {currentStep === 'input' && renderInputStep()}
+          {currentStep === 'analysis' && renderAnalysisStep()}
+          {currentStep === 'saved' && renderSavedStep()}
 
-            {currentStep.fields?.map((f) => (
-              <div className="form-group" key={f.key as string}>
-                <label>{f.label}</label>
-                <textarea
-                  className="input"
-                  value={(form as any)[f.key] || ''}
-                  placeholder={f.placeholder}
-                  onChange={(e) => handleFieldChange(f.key, e.target.value)}
-                  rows={f.key === 'description' ? 3 : 2}
-                />
-              </div>
-            ))}
-
-            {/* Последний объединенный шаг: приоритет + дедлайн */}
-            {stepIndex === steps.length - 1 && (
-              <div className="grid-2">
-                <div className="form-group">
-                  <label>Приоритет</label>
-                  <select
-                    className="input"
-                    value={form.priority || 'medium'}
-                    onChange={(e) => handleFieldChange('priority', e.target.value)}
-                  >
-                    {priorityOptions.map((p) => (
-                      <option key={p.value} value={p.value}>{p.label}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Дедлайн (необязательно)</label>
-                  <div className="deadline-row">
-                    <input
-                      type="date"
-                      className="input"
-                      value={deadlineDate}
-                      onChange={(e) => setDeadlineDate(e.target.value)}
-                    />
-                    <input
-                      type="time"
-                      className="input"
-                      value={deadlineTime}
-                      onChange={(e) => setDeadlineTime(e.target.value)}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {error && <div className="alert error">{error}</div>}
-            {success && <div className="alert success">{success}</div>}
-
-            <div className="wizard-actions">
-              <button className="btn secondary" onClick={prev} disabled={stepIndex === 0}>Назад</button>
-              {stepIndex < steps.length - 1 ? (
-                <button className="btn primary" onClick={next} disabled={!canGoNext}>Далее</button>
-              ) : (
-                <button className="btn primary" onClick={handleSubmit} disabled={!canGoNext || saving}>
-                  {saving ? 'Сохраняем...' : 'Сохранить цель'}
-                </button>
-              )}
-            </div>
-          </div>
+          {success && <div className="alert success">{success}</div>}
         </div>
 
         <div className="goals-list">
-          <div className="card">
-            <div className="list-header">
-              <h3>Текущие цели</h3>
-              <button className="link-btn" onClick={loadGoals} disabled={loadingGoals}>
-                {loadingGoals ? 'Обновляем...' : 'Обновить'}
-              </button>
-            </div>
-
-            {goals.length === 0 ? (
-              <p className="muted">Пока нет целей. Создайте первую справа.</p>
-            ) : (
-              <ul className="items">
-                {goals.map((g) => (
-                  <li key={g.id || g.title} className="item">
-                    <div className={`prio prio-${g.priority || 'medium'}`} />
-                    <div className="item-main">
-                      <div className="item-title">{g.title}</div>
-                      <div className="item-desc">{g.description}</div>
-                      <div className="item-meta">
-                        <span>S</span> {g.specific} · <span>M</span> {g.measurable} · <span>A</span> {g.achievable} · <span>R</span> {g.relevant} · <span>T</span> {g.time_bound}
-                      </div>
-                    </div>
-                    {g.deadline && (
-                      <div className="item-deadline">
-                        Дедлайн:
-                        <br />
-                        {new Date(g.deadline).toLocaleString('ru-RU', {
-                          day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                        })}
-                      </div>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
+          <div className="goals-list-header">
+            <h3>Существующие цели</h3>
+            <button
+              className="refresh-btn"
+              onClick={loadGoals}
+              disabled={loadingGoals}
+              title="Обновить список целей"
+            >
+              {loadingGoals ? '🔄' : '↻'}
+            </button>
           </div>
+          {loadingGoals ? (
+            <p>Загру��аем цели...</p>
+          ) : goals.length === 0 ? (
+            <p className="muted">Пока нет сохранённых целей</p>
+          ) : (
+            <div className="goals-grid">
+              {goals.map((goal) => (
+                <div key={goal.id} className="goal-card">
+                  <h4>{goal.title}</h4>
+                  <p className="muted">{goal.description}</p>
+                  <div className="goal-meta">
+                    <span className={`priority priority-${goal.priority}`}>
+                      {priorityOptions.find(p => p.value === goal.priority)?.label}
+                    </span>
+                    {goal.deadline && (
+                      <span className="deadline">
+                        до {new Date(goal.deadline).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="goal-actions">
+                    <button
+                      className="calendar-btn"
+                      onClick={() => createEventForGoal(goal)}
+                      disabled={creatingEvents[goal.id || ''] || false}
+                      title="Создать событие в календаре"
+                    >
+                      {creatingEvents[goal.id || ''] ? '⏳' : '📅'}
+                      {creatingEvents[goal.id || ''] ? 'Создаём...' : 'В календарь'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
