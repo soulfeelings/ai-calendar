@@ -33,14 +33,10 @@ export interface SmartGoal {
   id?: string;
   title: string;
   description: string;
-  specific: string;
-  measurable: string;
-  achievable: string;
-  relevant: string;
-  time_bound: string;
   deadline?: string;
-  priority?: string | number; // допускаем number из БД (1..3)
+  priority?: string | number;
   status?: string;
+  smart_analysis?: any; // Результат SMART анализа от ИИ
 }
 
 export interface CalendarAnalysisRequest {

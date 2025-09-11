@@ -100,7 +100,7 @@ async def plan_goal_schedule(
     try:
         logger.info(f"Starting goal planning for user {user_id}")
 
-        # Преобразуем данные для отправки в ИИ
+        # Преобразуем свободные слоты в словари
         free_slots_dict = [slot.model_dump() for slot in request.free_time_slots]
         goal_dict = request.goal.model_dump()
 
@@ -108,7 +108,7 @@ async def plan_goal_schedule(
         ai_response = await openai_service.generate_schedule_suggestion(
             free_time_slots=free_slots_dict,
             goal=goal_dict,
-            context=request.context
+            context=request.context or ""
         )
 
         # Формируем ответ
@@ -116,18 +116,148 @@ async def plan_goal_schedule(
             suggested_time=ai_response.get("suggested_time", "Не определено"),
             duration=ai_response.get("duration", "Не определено"),
             frequency=ai_response.get("frequency", "Не определено"),
-            reasoning=ai_response.get("reasoning", "Обоснование не предоставлено"),
+            reasoning=ai_response.get("reasoning", "Причина не указана"),
             suggested_events=ai_response.get("suggested_events", [])
         )
 
-        logger.info(f"Goal planning completed for user {user_id}")
+        logger.info(f"Goal planning completed successfully")
         return response
 
     except Exception as e:
-        logger.error(f"Error in plan_goal_schedule: {str(e)}")
+        logger.error(f"Error in goal planning: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ошибка при планировании цели: {str(e)}"
+        )
+
+
+@router.post("/goals", response_model=dict)
+async def create_goal(
+    goal_data: dict,
+    openai_service: Annotated[OpenAIService, Depends(get_openai_service)],
+    goals_repo: Annotated[GoalsRepository, Depends(get_goals_repo)],
+    user_id: str = Depends(get_user_request_id)
+):
+    """
+    Создание новой цели с SMART анализом
+    """
+    try:
+        # Проводим SMART анализ цели
+        smart_analysis = await openai_service.analyze_goal_smart(
+            title=goal_data.get("title", ""),
+            description=goal_data.get("description", ""),
+            deadline=goal_data.get("deadline")
+        )
+        
+        # Добавляем результат анализа к данным цели
+        goal_data["smart_analysis"] = smart_analysis
+        
+        # Создаем цель в базе данных
+        goal_id = await goals_repo.create_goal(user_id, goal_data)
+        
+        return {
+            "id": goal_id,
+            "message": "Цель создана успешно",
+            "smart_analysis": smart_analysis
+        }
+        
+    except Exception as e:
+        logger.error(f"Error creating goal: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при создании цели: {str(e)}"
+        )
+
+
+@router.get("/goals", response_model=List[dict])
+async def get_user_goals(
+    goals_repo: Annotated[GoalsRepository, Depends(get_goals_repo)],
+    user_id: str = Depends(get_user_request_id),
+    include_completed: bool = False
+):
+    """
+    Получение списка целей пользователя
+    """
+    try:
+        goals = await goals_repo.get_user_goals(user_id, include_completed)
+        return goals
+        
+    except Exception as e:
+        logger.error(f"Error getting goals: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при получении целей: {str(e)}"
+        )
+
+
+@router.put("/goals/{goal_id}", response_model=dict)
+async def update_goal(
+    goal_id: str,
+    goal_data: dict,
+    openai_service: Annotated[OpenAIService, Depends(get_openai_service)],
+    goals_repo: Annotated[GoalsRepository, Depends(get_goals_repo)],
+    user_id: str = Depends(get_user_request_id)
+):
+    """
+    Обновление цели с повторным SMART анализом
+    """
+    try:
+        # Если изменились ключевые поля, проводим повторный анализ
+        if any(key in goal_data for key in ["title", "description", "deadline"]):
+            smart_analysis = await openai_service.analyze_goal_smart(
+                title=goal_data.get("title", ""),
+                description=goal_data.get("description", ""),
+                deadline=goal_data.get("deadline")
+            )
+            goal_data["smart_analysis"] = smart_analysis
+        
+        # Обновляем цель в базе данных
+        success = await goals_repo.update_goal(goal_id, user_id, goal_data)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Цель не найдена"
+            )
+        
+        return {
+            "message": "Цель обновлена успешно",
+            "smart_analysis": goal_data.get("smart_analysis")
+        }
+        
+    except Exception as e:
+        logger.error(f"Error updating goal: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при обновлении цели: {str(e)}"
+        )
+
+
+@router.delete("/goals/{goal_id}", response_model=dict)
+async def delete_goal(
+    goal_id: str,
+    goals_repo: Annotated[GoalsRepository, Depends(get_goals_repo)],
+    user_id: str = Depends(get_user_request_id)
+):
+    """
+    Удаление цели
+    """
+    try:
+        success = await goals_repo.delete_goal(goal_id, user_id)
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Цель не найдена"
+            )
+        
+        return {"message": "Цель удалена успешно"}
+        
+    except Exception as e:
+        logger.error(f"Error deleting goal: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при удалении цели: {str(e)}"
         )
 
 
@@ -180,87 +310,6 @@ async def chat_with_ai(
         )
 
 
-@router.post("/goals", response_model=SMARTGoal)
-async def create_smart_goal(
-    goal: SMARTGoal,
-    goals_repo: Annotated[GoalsRepository, Depends(get_goals_repo)],
-    user_id: str = Depends(get_user_request_id)
-):
-    """
-    Создание новой SMART цели
-
-    Сохраняет SMART цель пользователя для последующего анализа и планирования
-    """
-    try:
-        logger.info(f"Creating SMART goal for user {user_id}")
-
-        # Подготавливаем данные для сохранения
-        goal_data = {
-            "title": goal.title,
-            "description": goal.description,
-            "specific": goal.specific,
-            "measurable": goal.measurable,
-            "achievable": goal.achievable,
-            "relevant": goal.relevant,
-            "time_bound": goal.time_bound,
-            "priority": goal.priority
-        }
-
-        # Сохраняем цель в базе данных
-        goal_id = await goals_repo.create_goal(user_id, goal_data)
-
-        # Возвращаем созданную цель с ID
-        created_goal = SMARTGoal(
-            id=goal_id,
-            user_id=user_id,
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
-            **goal_data
-        )
-
-        logger.info(f"SMART goal created successfully with ID: {goal_id}")
-        return created_goal
-
-    except Exception as e:
-        logger.error(f"Error in create_smart_goal: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка при создании цели: {str(e)}"
-        )
-
-
-@router.get("/goals", response_model=List[SMARTGoal])
-async def get_user_goals(
-    goals_repo: Annotated[GoalsRepository, Depends(get_goals_repo)],
-    user_id: str = Depends(get_user_request_id),
-    include_completed: bool = False
-):
-    """
-    Получение всех SMART целей пользователя
-
-    Args:
-        include_completed: включать ли выполненные цели в результат
-    """
-    try:
-        logger.info(f"Getting goals for user {user_id}")
-
-        # Получаем цели из базы данных
-        goals_data = await goals_repo.get_user_goals(user_id, include_completed)
-
-        # Преобразуем в объекты SMARTGoal
-        goals = [SMARTGoal(**goal_data) for goal_data in goals_data]
-
-        logger.info(f"Retrieved {len(goals)} goals for user {user_id}")
-        return goals
-
-    except Exception as e:
-        logger.error(f"Error in get_user_goals: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка при получении целей: {str(e)}"
-        )
-
-
 @router.post("/analyze-goal", response_model=GoalAnalysisResponse)
 async def analyze_goal(
     goal: SMARTGoal,
@@ -280,7 +329,11 @@ async def analyze_goal(
         goal_dict = goal.model_dump()
 
         # Вызываем сервис OpenAI для анализа цели
-        ai_response = await openai_service.analyze_smart_goal(goal_dict)
+        ai_response = await openai_service.analyze_goal_smart(
+            title=goal.title,
+            description=goal.description,
+            deadline=goal.deadline
+        )
 
         # Формируем ответ с правильной структурой
         response = GoalAnalysisResponse(

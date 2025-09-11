@@ -19,11 +19,6 @@ const Goals: React.FC = () => {
   const [form, setForm] = useState<SmartGoal>({
     title: '',
     description: '',
-    specific: '',
-    measurable: '',
-    achievable: '',
-    relevant: '',
-    time_bound: '',
     deadline: '',
     priority: 'medium',
   });
@@ -91,24 +86,6 @@ const Goals: React.FC = () => {
       setSuccess(`Событие "${goal.title}" удалено из календаря`);
 
     } catch (e: any) {
-      console.error('Error deleting calendar event:', e);
-      setError(e?.response?.data?.detail || e?.message || 'Не удалось удалить событие из календаря');
-    } finally {
-      setCreatingEvents(prev => ({ ...prev, [goal.id!]: false }));
-      // Очищаем сообщение через 3 секунды
-      setTimeout(() => {
-        setError(null);
-        setSuccess(null);
-      }, 3000);
-    }
-  };
-
-  const loadGoals = async () => {
-    try {
-      setLoadingGoals(true);
-      const list = await aiService.getGoals(false);
-      setGoals(list || []);
-    } catch (e) {
       // Молча, список не критичен для создания
     } finally {
       setLoadingGoals(false);
@@ -140,14 +117,16 @@ const Goals: React.FC = () => {
       // Создаем событие на основе данных цели
       const eventData = {
         summary: `Работа над целью: ${goal.title}`,
-        description: `🎯 SMART Цель: ${goal.description}
+        description: `🎯 Цель: ${goal.description}
 
-📋 Кри��ерии SMART:
-• Конкретность: ${goal.specific || 'Не указано'}
-• Измеримость: ${goal.measurable || 'Не указано'} 
-• Достижимость: ${goal.achievable || 'Не указано'}
-• Актуальность: ${goal.relevant || 'Не указано'}
-• Временные рамки: ${goal.time_bound || 'Не указано'}
+${goal.smart_analysis ? `
+📊 SMART Анализ (ИИ):
+• Общий балл: ${goal.smart_analysis.overall_score || 'N/A'}/100
+• Соответствует SMART: ${goal.smart_analysis.is_smart ? 'Да' : 'Нет'}
+
+💡 Рекомендации ИИ:
+${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 'Нет рекомендаций'}
+` : ''}
 
 🔔 Приоритет: ${priorityOptions.find(p => p.value === goal.priority)?.label || 'Средний'}`,
         start: {
@@ -188,6 +167,20 @@ const Goals: React.FC = () => {
     loadGoals();
   }, []);
 
+  const loadGoals = async () => {
+    setLoadingGoals(true);
+    setError(null);
+
+    try {
+      const goalsData = await aiService.getGoals();
+      setGoals(goalsData);
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось загрузить цели');
+    } finally {
+      setLoadingGoals(false);
+    }
+  };
+
   const handleFieldChange = (key: keyof SmartGoal, value: string) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
@@ -199,11 +192,23 @@ const Goals: React.FC = () => {
     setAnalyzing(true);
 
     try {
-      const analysis = await aiService.analyzeGoal(form);
+      // Собираем deadline в ISO формат, если дата указана
+      let deadlineISO = '';
+      if (deadlineDate) {
+        deadlineISO = new Date(`${deadlineDate}T${deadlineTime || '23:59'}:00`).toISOString();
+      }
+
+      // Создаем объект для анализа с правильно сформированным deadline
+      const goalForAnalysis = {
+        ...form,
+        deadline: deadlineISO
+      };
+
+      const analysis = await aiService.analyzeGoal(goalForAnalysis);
       setGoalAnalysis(analysis);
       setCurrentStep('analysis');
     } catch (e: any) {
-      setError(e?.message || 'Не удалось проана��изировать цель');
+      setError(e?.message || 'Не удалось проанализировать цель');
     } finally {
       setAnalyzing(false);
     }
@@ -215,11 +220,6 @@ const Goals: React.FC = () => {
         ...prev,
         title: goalAnalysis.improved_goal!.title,
         description: goalAnalysis.improved_goal!.description,
-        specific: goalAnalysis.improved_goal!.specific,
-        measurable: goalAnalysis.improved_goal!.measurable,
-        achievable: goalAnalysis.improved_goal!.achievable,
-        relevant: goalAnalysis.improved_goal!.relevant,
-        time_bound: goalAnalysis.improved_goal!.time_bound,
       }));
       // Возвращаемся к форме для редактирования
       setCurrentStep('input');
@@ -243,28 +243,34 @@ const Goals: React.FC = () => {
       deadlineISO = new Date(`${deadlineDate}T${deadlineTime || '23:59'}:00`).toISOString();
     }
 
-    const payload: SmartGoal = {
-      ...form,
-      deadline: deadlineISO, // будет undefined если дата не указана
+    const payload: any = {
+      title: form.title,
+      description: form.description,
+      priority: form.priority,
     };
 
-    // Удаляем пустые поля чтобы не отправлять пустые строки
-    Object.keys(payload).forEach(key => {
-      const value = (payload as any)[key];
-      if (value === '' || value === null) {
-        delete (payload as any)[key];
-      }
-    });
+    // Добавляем deadline только если он указан
+    if (deadlineISO) {
+      payload.deadline = deadlineISO;
+    }
 
     try {
       setSaving(true);
-      await aiService.createSMARTGoal(payload);
+      // Используем прямой API вызов вместо aiService.createSMARTGoal
+      const response = await api.post('/ai/goals', payload);
       setSuccess('Цель сохранена');
       setCurrentStep('saved');
       // Обновляем список
       await loadGoals();
     } catch (e: any) {
-      setError(e?.message || 'Не удалось сохранить цель');
+      console.error('Error saving goal:', e);
+      const errorMessage = e?.response?.data?.detail;
+      if (Array.isArray(errorMessage)) {
+        const validationErrors = errorMessage.map((err: any) => `${err.loc?.join('.')} - ${err.msg}`).join('; ');
+        setError(`Ошибки валидации: ${validationErrors}`);
+      } else {
+        setError(errorMessage || e?.message || 'Не удалось сохранить цель');
+      }
     } finally {
       setSaving(false);
     }
@@ -274,11 +280,6 @@ const Goals: React.FC = () => {
     setForm({
       title: '',
       description: '',
-      specific: '',
-      measurable: '',
-      achievable: '',
-      relevant: '',
-      time_bound: '',
       deadline: '',
       priority: 'medium',
     });
@@ -316,61 +317,6 @@ const Goals: React.FC = () => {
           placeholder="Зачем эта цель важна и какой ожидаемый результат"
           onChange={(e) => handleFieldChange('description', e.target.value)}
           rows={3}
-        />
-      </div>
-
-      <div className="form-group">
-        <label>Конкретность (Specific)</label>
-        <textarea
-          className="input"
-          value={form.specific}
-          placeholder="Что именно вы хотите достичь?"
-          onChange={(e) => handleFieldChange('specific', e.target.value)}
-          rows={2}
-        />
-      </div>
-
-      <div className="form-group">
-        <label>Измеримость (Measurable)</label>
-        <textarea
-          className="input"
-          value={form.measurable}
-          placeholder="Как вы поймёте, что цель достигнута?"
-          onChange={(e) => handleFieldChange('measurable', e.target.value)}
-          rows={2}
-        />
-      </div>
-
-      <div className="form-group">
-        <label>Достижимость (Achievable)</label>
-        <textarea
-          className="input"
-          value={form.achievable}
-          placeholder="Что поможет достичь цели? Какие рес��рсы ��ужны?"
-          onChange={(e) => handleFieldChange('achievable', e.target.value)}
-          rows={2}
-        />
-      </div>
-
-      <div className="form-group">
-        <label>Актуальность (Relevant)</label>
-        <textarea
-          className="input"
-          value={form.relevant}
-          placeholder="Почему это важно сейчас?"
-          onChange={(e) => handleFieldChange('relevant', e.target.value)}
-          rows={2}
-        />
-      </div>
-
-      <div className="form-group">
-        <label>Временные рамки (Time-bound)</label>
-        <textarea
-          className="input"
-          value={form.time_bound}
-          placeholder="Какой у цели срок? Промежуточные вехи?"
-          onChange={(e) => handleFieldChange('time_bound', e.target.value)}
-          rows={2}
         />
       </div>
 
@@ -471,8 +417,8 @@ const Goals: React.FC = () => {
           <div className="improved-goal">
             <h4>Предлагаемая улучшенная версия:</h4>
             <div className="improved-preview">
-              <p><strong>На��вание:</strong> {goalAnalysis.improved_goal.title}</p>
-              <p><strong>Описа��ие:</strong> {goalAnalysis.improved_goal.description}</p>
+              <p><strong>Название:</strong> {goalAnalysis.improved_goal.title}</p>
+              <p><strong>Описание:</strong> {goalAnalysis.improved_goal.description}</p>
             </div>
             <button className="btn secondary" onClick={applyImprovedGoal}>
               Применить улучшения
@@ -570,7 +516,7 @@ const Goals: React.FC = () => {
             </button>
           </div>
           {loadingGoals ? (
-            <p>Загру��аем цели...</p>
+            <p>Загружаем цели...</p>
           ) : goals.length === 0 ? (
             <p className="muted">Пока нет сохранённых целей</p>
           ) : (
@@ -589,6 +535,31 @@ const Goals: React.FC = () => {
                       </span>
                     )}
                   </div>
+
+                  {/* Показываем результат SMART анализа от ИИ */}
+                  {goal.smart_analysis && (
+                    <div className="smart-analysis">
+                      <h4>🤖 SMART Анализ от ИИ:</h4>
+                      <div className="analysis-score">
+                        <span>Общий балл: <strong>{goal.smart_analysis.overall_score || 'N/A'}/100</strong></span>
+                        <span className={goal.smart_analysis.is_smart ? 'smart-yes' : 'smart-no'}>
+                          {goal.smart_analysis.is_smart ? '✅ SMART' : '❌ Не SMART'}
+                        </span>
+                      </div>
+
+                      {goal.smart_analysis.suggestions && goal.smart_analysis.suggestions.length > 0 && (
+                        <div className="suggestions">
+                          <strong>Рекомендации:</strong>
+                          <ul>
+                            {goal.smart_analysis.suggestions.map((suggestion: string, index: number) => (
+                              <li key={index}>{suggestion}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <div className="goal-actions">
                     {createdEvents[goal.id || ''] ? (
                       // Если событие уже создано - показываем статус и кнопку удаления
