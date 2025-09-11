@@ -172,7 +172,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
     setError(null);
 
     try {
-      const goalsData = await aiService.getGoals();
+      const goalsData = await aiService.getGoals(true); // Передаем true для получения всех целей включая завершенные
       setGoals(goalsData);
     } catch (e: any) {
       setError(e?.message || 'Не удалось загрузить цели');
@@ -234,6 +234,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
   };
 
   const handleSaveGoal = async () => {
+    console.log('handleSaveGoal called'); // Добавляем логирование
     setError(null);
     setSuccess(null);
 
@@ -254,10 +255,14 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
       payload.deadline = deadlineISO;
     }
 
+    console.log('Payload to send:', payload); // Логируем данные
+
     try {
       setSaving(true);
+      console.log('Sending request to /ai/goals'); // Логируем начало запроса
       // Используем прямой API вызов вместо aiService.createSMARTGoal
       const response = await api.post('/ai/goals', payload);
+      console.log('Response received:', response); // Логируем ответ
       setSuccess('Цель сохранена');
       setCurrentStep('saved');
       // Обновляем список
