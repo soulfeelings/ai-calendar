@@ -13,15 +13,12 @@ class GoalsRepository:
             "user_id": user_id,
             "title": goal_data["title"],
             "description": goal_data.get("description"),
-            "specific": goal_data["specific"],
-            "measurable": goal_data["measurable"],
-            "achievable": goal_data["achievable"],
-            "relevant": goal_data["relevant"],
-            "time_bound": goal_data["time_bound"],
-            "priority": goal_data.get("priority", 1),
+            "deadline": goal_data.get("deadline"),
+            "priority": goal_data.get("priority", "medium"),
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
-            "is_completed": False
+            "status": "active",
+            "smart_analysis": goal_data.get("smart_analysis")  # Результат анализа ИИ
         }
 
         result = await mongodb.smart_goals.insert_one(goal_doc)

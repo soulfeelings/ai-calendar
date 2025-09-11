@@ -33,16 +33,14 @@ class SMARTGoal(BaseModel):
     user_id: Optional[str] = None
     title: str
     description: str
-    specific: str  # Конкретная
-    measurable: str  # Измеримая
-    achievable: str  # Достижимая
-    relevant: str  # Актуальная
-    time_bound: str  # Ограниченная по времени
     deadline: Optional[datetime] = None
     priority: Optional[str] = "medium"
     status: Optional[str] = "active"
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    
+    # Внутренние поля для SMART анализа (не заполняются пользователем)
+    smart_analysis: Optional[dict] = None  # Результат SMART анализа от ИИ
 
 
 class FreeTimeSlot(BaseModel):
@@ -95,11 +93,6 @@ class ImprovedGoal(BaseModel):
     """Улучшенная версия цели"""
     title: str
     description: str
-    specific: str
-    measurable: str
-    achievable: str
-    relevant: str
-    time_bound: str
 
 
 class GoalAnalysisResponse(BaseModel):

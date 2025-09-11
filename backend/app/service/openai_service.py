@@ -206,7 +206,7 @@ class OpenAIService:
                 return data
 
         except Exception as e:
-            logger.error(f"Error in create_chat_completion: {str(e)}")
+            logger.error(f"Error calling OpenAI API: {e}")
             raise
 
     async def analyze_calendar_and_goals(
@@ -418,14 +418,14 @@ class OpenAIService:
         try:
             system_prompt = """
             Ты - экспертный ИИ-ассистент по тайм-менеджменту и планированию.
-            Проанализируй календарь пользователя �� предоставь:
+            Проанализируй календарь пользователя и предоставь:
             1. Краткое резюме (summary)
             2. Конкретные изменения в расписании (schedule_changes) - массив объектов с полями:
                - id: идентификатор события
                - action: тип действия (move, reschedule, cancel, optimize)
                - title: название изменения
                - reason: причина изменения
-               - new_start: новое время начала (если п��именимо)
+               - new_start: новое время начала (если применимо)
                - new_end: новое время окончания (если применимо)
                - priority: приоритет (high, medium, low)
             3. Общие рекомендации (recommendations) - массив строк
@@ -484,146 +484,75 @@ class OpenAIService:
             logger.error(f"Error in OpenAI calendar analysis: {e}")
             raise Exception(f"Ошибка при анализе календаря: {str(e)}")
 
-    async def analyze_smart_goal(self, goal: Dict[str, Any]) -> Dict[str, Any]:
+    async def analyze_goal_smart(self, title: str, description: str, deadline: Optional[str] = None) -> Dict[str, Any]:
         """
-        Анализ SMART цели с помощью ИИ
-
+        Анализ цели по критериям SMART
+        
         Args:
-            goal: SMART цель для анализа
-
+            title: Название цели
+            description: Описание цели
+            deadline: Дедлайн цели (опционально)
+            
         Returns:
-            Детальный анализ цели с оценками и предложениями
+            Результат SMART анализа
         """
         try:
-            system_prompt = """
-            Ты — эксперт по постановке и анализу SMART целей. Проанализируй переданную цель 
-            по всем критериям SMART и дай детальную обратную связь.
-
-            Верни ответ СТРОГО в JSON формате:
+            system_prompt = """Ты эксперт по постановке целей и методологии SMART. 
+            Проанализируй предоставленную цель по критериям SMART (Specific, Measurable, Achievable, Relevant, Time-bound).
+            
+            Ответь СТРОГО в JSON формате:
             {
-              "is_smart": boolean,
-              "score": number,  // общий балл от 0 до 100
-              "analysis": {
-                "specific": {
-                  "score": number,     // от 0 до 100
-                  "feedback": string   // конкретная обратная связь
+                "is_smart": boolean,
+                "overall_score": number (0-100),
+                "analysis": {
+                    "specific": {"score": number (0-100), "feedback": "string"},
+                    "measurable": {"score": number (0-100), "feedback": "string"},
+                    "achievable": {"score": number (0-100), "feedback": "string"},
+                    "relevant": {"score": number (0-100), "feedback": "string"},
+                    "time_bound": {"score": number (0-100), "feedback": "string"}
                 },
-                "measurable": {
-                  "score": number,
-                  "feedback": string
-                },
-                "achievable": {
-                  "score": number,
-                  "feedback": string
-                },
-                "relevant": {
-                  "score": number,
-                  "feedback": string
-                },
-                "time_bound": {
-                  "score": number,
-                  "feedback": string
+                "suggestions": ["string", "string", ...],
+                "improved_goal": {
+                    "title": "string",
+                    "description": "string"
                 }
-              },
-              "suggestions": string[],  // конкретные рекомендации для улучшения
-              "improved_goal": {        // НЕОБЯЗАТЕЛЬНО: только если нужны серьёзные улучшения
-                "title": string,
-                "description": string,
-                "specific": string,
-                "measurable": string,
-                "achievable": string,
-                "relevant": string,
-                "time_bound": string
-              }
-            }
+            }"""
 
-            Критерии оценки:
-            - Specific (Конкретность): Четко ли определено что именно нужно достичь? (0-100)
-            - Measurable (Измеримость): Можно ли измерить прогресс и результат? (0-100)
-            - Achievable (Достижимость): Реалистична ли цель с учетом ресурсов? (0-100)
-            - Relevant (Актуальность): Важна ли цель для пользователя сейчас? (0-100)
-            - Time-bound (Временные рамки): Есть ли четкие сроки и дедлайны? (0-100)
-
-            Правила:
-            - Давай конкретную и полезную обратную связь в поле feedback
-            - Оценивай строго но справедливо
-            - Если общий score < 70, предложи improved_goal с улучшенной версией
-            - В suggestions включай 3-5 конкретных рекомендаций
-            - is_smart = true только если все критерии >= 70 и общий score >= 80
-            - Общий score = среднее арифметическое всех критериев
-
-            ОТВЕЧАЙ НА РУССКОМ!
-            """
-
-            user_message = f"""
-            Проанализируй мою SMART цель:
-
-            Название: {goal.get('title', 'Не указано')}
-            Описание: {goal.get('description', 'Не указано')}
+            user_message = f"""Цель для анализа:
+            Название: {title}
+            Описание: {description}"""
             
-            Критерии SMART:
-            - Specific (Конкретность): {goal.get('specific', 'Не заполнено')}
-            - Measurable (Измеримость): {goal.get('measurable', 'Не заполнено')}  
-            - Achievable (Достижимость): {goal.get('achievable', 'Не заполнено')}
-            - Relevant (Актуальность): {goal.get('relevant', 'Не заполнено')}
-            - Time-bound (Временные рамки): {goal.get('time_bound', 'Не заполнено')}
-            
-            Приоритет: {goal.get('priority', 'medium')}
-            Дедлайн: {goal.get('deadline', 'Не указан')}
-
-            Верни строго JSON по описанной схеме, без дополнительного текста.
-            """
+            if deadline:
+                user_message += f"\nДедлайн: {deadline}"
 
             messages = [{"role": "user", "content": user_message}]
 
             response = await self.create_chat_completion(
                 messages=messages,
                 system_prompt=system_prompt,
-                temperature=0.3,  # Низкая температура для более консистентных оценок
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
+                temperature=0.3
             )
 
-            ai_response = response["choices"][0]["message"]["content"]
-
-            try:
-                parsed_response = json.loads(ai_response)
-
-                # Вали��ируем структуру ответа
-                if not isinstance(parsed_response.get("analysis"), dict):
-                    raise ValueError("Invalid analysis structure")
-
-                # Проверяем, что все критерии SMART присутствуют
-                required_criteria = ["specific", "measurable", "achievable", "relevant", "time_bound"]
-                for criterion in required_criteria:
-                    if criterion not in parsed_response["analysis"]:
-                        parsed_response["analysis"][criterion] = {
-                            "score": 0,
-                            "feedback": "Критерий не был проанализирован"
-                        }
-
-                return parsed_response
-
-            except (json.JSONDecodeError, ValueError) as e:
-                logger.warning(f"Failed to parse AI response as JSON: {e}")
-                # Возвращаем базовый ответ если парсинг не удался
-                return {
-                    "is_smart": False,
-                    "score": 0,
-                    "analysis": {
-                        "specific": {"score": 0, "feedback": "Не удалось проанализировать"},
-                        "measurable": {"score": 0, "feedback": "Не удалось проанализировать"},
-                        "achievable": {"score": 0, "feedback": "Не удалось проанализировать"},
-                        "relevant": {"score": 0, "feedback": "Не удалось проанализировать"},
-                        "time_bound": {"score": 0, "feedback": "Не удалось проанализировать"}
-                    },
-                    "suggestions": ["Попробуйте переформулировать цель более четко"],
-                    "improved_goal": None
-                }
+            content = response["choices"][0]["message"]["content"]
+            return json.loads(content)
 
         except Exception as e:
-            logger.error(f"Error in analyze_smart_goal: {str(e)}")
-            raise
-
-
-# Создаем экземпляр сервиса
-openai_service = OpenAIService()
+            logger.error(f"Error analyzing SMART goal: {e}")
+            # Возвращаем базовый анализ в случае ошибки
+            return {
+                "is_smart": False,
+                "overall_score": 50,
+                "analysis": {
+                    "specific": {"score": 50, "feedback": "Не удалось проанализировать"},
+                    "measurable": {"score": 50, "feedback": "Не удалось проанализировать"},
+                    "achievable": {"score": 50, "feedback": "Не удалось проанализировать"},
+                    "relevant": {"score": 50, "feedback": "Не удалось проанализировать"},
+                    "time_bound": {"score": 50, "feedback": "Не удалось проанализировать"}
+                },
+                "suggestions": ["Уточните цель более детально"],
+                "improved_goal": {
+                    "title": title,
+                    "description": description
+                }
+            }
