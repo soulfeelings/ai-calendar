@@ -339,7 +339,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
           </select>
         </div>
         <div className="form-group">
-          <label>Дедлайн (необязательно)</label>
+          <label>Дедлайн</label>
           <div className="deadline-row">
             <input
               type="date"
