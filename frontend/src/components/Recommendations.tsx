@@ -299,7 +299,7 @@ const Recommendations: React.FC = () => {
     try {
       // Загружаем цели отдельно с более детальной обработкой ошибок
       try {
-        const goalsData = await aiService.getGoals();
+        const goalsData = await aiService.getGoals(true);
 
         // Проверяем, что goalsData это массив
         if (Array.isArray(goalsData)) {
