@@ -403,11 +403,10 @@ const Recommendations: React.FC = () => {
     return end >= now;
   };
 
-  // Получение анализа календаря (полностью асинхронный подход)
+  // Получение анализа календаря (упрощенный асинхронный подход)
   const getCalendarAnalysis = async (forceRefresh: boolean = false): Promise<void> => {
     setLoading(true);
     setError(null);
-    setTaskStatus(null);
 
     try {
       // Загружаем события и цели
@@ -434,27 +433,18 @@ const Recommendations: React.FC = () => {
         analysis_period_days: 7
       };
 
-      // Запускаем полностью асинхронный анализ с polling
-      console.log('🚀 Starting fully async AI analysis...');
-      const analysisResult = await aiService.analyzeCalendarFullyAsync(
-        requestData,
-        (status) => {
-          console.log('📋 Task progress:', status);
-          setTaskStatus(status);
-        }
-      );
+      // Простой асинхронный анализ через FastAPI
+      console.log('🚀 Starting AI analysis...');
+      const analysisResult = await aiService.analyzeCalendar(requestData, forceRefresh);
 
       // Нормализуем предложенные изменения
       const normalizedChanges = (analysisResult.schedule_changes || []).map(ch => normalizeChangeDateTimes(ch));
 
       setAnalysis({ ...analysisResult, schedule_changes: normalizedChanges });
-      setTaskStatus(null);
 
-    } catch (err: any) {
-      console.error('Error getting calendar analysis:', err);
-
-      setError(err.message || 'Произошла ошибка при анализе календаря');
-      setTaskStatus(null);
+    } catch (error) {
+      console.error('AI analysis error:', error);
+      setError(error instanceof Error ? error.message : 'Ошибка при анализе календаря');
     } finally {
       setLoading(false);
     }

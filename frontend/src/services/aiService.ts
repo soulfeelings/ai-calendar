@@ -69,96 +69,13 @@ export interface GoalAnalysis {
   };
 }
 
-// Новые интерфейсы для работы с асинхронными задачами
-export interface TaskResponse {
-  task_id: string;
-  status: string;
-  message: string;
-  user_id: string;
-}
-
-export interface TaskStatus {
-  task_id: string;
-  state: 'PENDING' | 'PROGRESS' | 'SUCCESS' | 'FAILURE';
-  status: 'pending' | 'in_progress' | 'completed' | 'failed';
-  message: string;
-  progress?: number;
-  result?: any;
-  error?: string;
-}
-
 class AIService {
   private readonly AI_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 часа в миллисекундах
-  private readonly POLLING_INTERVAL = 2000; // 2 секунды
-  private readonly MAX_POLLING_TIME = 300000; // 5 минут максимум
 
   /**
-   * Анализ календаря с помощью ИИ (с выбором режима)
+   * Анализ календаря с помощью ИИ (простой асинхронный подход)
    */
   async analyzeCalendar(
-    requestData: CalendarAnalysisRequest,
-    forceRefresh: boolean = false,
-    useAsync: boolean = false  // Параметр для выбора режима
-  ): Promise<CalendarAnalysis> {
-    try {
-      // Если выбран асинхронный режим, используем polling
-      if (useAsync) {
-        return this.analyzeCalendarFullyAsync(requestData);
-      }
-
-      // Проверяем кеш для синхронного режима
-      if (!forceRefresh) {
-        const cachedResult = cacheService.getByData<CalendarAnalysis>(requestData);
-        if (cachedResult) {
-          console.log('📋 Using cached AI analysis');
-          return cachedResult;
-        }
-      }
-
-      console.log('🤖 Requesting sync AI analysis...');
-      const response = await api.post('/ai/analyze-calendar-sync', requestData);
-
-      // Кешируем результат
-      cacheService.setByData(requestData, response.data, this.AI_CACHE_TTL);
-
-      return response.data;
-    } catch (error: any) {
-      console.error('Error in calendar analysis:', error);
-      throw this.handleAPIError(error, 'Ошибка при анализе календаря');
-    }
-  }
-
-  /**
-   * Полностью асинхронный анализ календаря с polling
-   */
-  async analyzeCalendarFullyAsync(
-    requestData: CalendarAnalysisRequest,
-    onProgress?: (status: TaskStatus) => void
-  ): Promise<CalendarAnalysis> {
-    try {
-      console.log('🚀 Starting fully async AI analysis...');
-
-      // 1. Запускаем задачу
-      const taskResponse = await api.post('/ai/analyze-calendar-async', requestData);
-      const taskId = taskResponse.data.task_id;
-
-      console.log('📋 Analysis task started:', taskId);
-
-      // 2. Ждем выполнения задачи с периодическими проверками
-      const result = await this.pollTaskStatus(taskId, onProgress);
-
-      return result;
-
-    } catch (error: any) {
-      console.error('Error in fully async calendar analysis:', error);
-      throw this.handleAPIError(error, 'Ошибка при асинхронном анализе календаря');
-    }
-  }
-
-  /**
-   * Синхронный анализ календаря (для быстрых случаев)
-   */
-  async analyzeCalendarSync(
     requestData: CalendarAnalysisRequest,
     forceRefresh: boolean = false
   ): Promise<CalendarAnalysis> {
@@ -172,110 +89,31 @@ class AIService {
         }
       }
 
-      console.log('🤖 Requesting sync AI analysis...');
-      const response = await api.post('/ai/analyze-calendar-sync', requestData);
+      console.log('🤖 Requesting AI analysis...');
+      const response = await api.post('/ai/analyze-calendar', requestData);
 
       // Кешируем результат
       cacheService.setByData(requestData, response.data, this.AI_CACHE_TTL);
 
       return response.data;
     } catch (error: any) {
-      console.error('Error in sync calendar analysis:', error);
-      throw this.handleAPIError(error, 'Ошибка при синхронном анализе календаря');
+      console.error('Error in calendar analysis:', error);
+      throw this.handleAPIError(error, 'Ошибка при анализе календаря');
     }
   }
 
   /**
-   * Планирование расписания для цели (асинхронно)
+   * Планирование расписания для цели
    */
-  async planGoalAsync(
-    requestData: any,
-    onProgress?: (status: TaskStatus) => void
-  ): Promise<any> {
+  async planGoal(requestData: any): Promise<any> {
     try {
-      console.log('🎯 Starting async goal planning...');
-
-      // 1. Запускаем задачу
-      const taskResponse = await api.post('/ai/plan-goal', requestData);
-      const taskId = taskResponse.data.task_id;
-
-      console.log('📋 Goal planning task started:', taskId);
-
-      // 2. Ждем выполнения
-      const result = await this.pollTaskStatus(taskId, onProgress);
-
-      return result.suggestion || result;
-
+      console.log('🎯 Requesting goal planning...');
+      const response = await api.post('/ai/plan-goal', requestData);
+      return response.data;
     } catch (error: any) {
       console.error('Error planning goal:', error);
       throw this.handleAPIError(error, 'Ошибка при планировании цели');
     }
-  }
-
-  /**
-   * Синхронное планирование цели
-   */
-  async planGoalSync(requestData: any): Promise<any> {
-    try {
-      console.log('🎯 Requesting sync goal planning...');
-      const response = await api.post('/ai/plan-goal-sync', requestData);
-      return response.data;
-    } catch (error: any) {
-      console.error('Error in sync goal planning:', error);
-      throw this.handleAPIError(error, 'Ошибка при синхронном планировании цели');
-    }
-  }
-
-  /**
-   * Получение статуса задачи
-   */
-  async getTaskStatus(taskId: string): Promise<TaskStatus> {
-    try {
-      const response = await api.get(`/ai/task/${taskId}`);
-      return response.data;
-    } catch (error: any) {
-      console.error('Error getting task status:', error);
-      throw this.handleAPIError(error, 'Ошибка при получении статуса задачи');
-    }
-  }
-
-  /**
-   * Polling задачи до завершения
-   */
-  private async pollTaskStatus(
-    taskId: string,
-    onProgress?: (status: TaskStatus) => void
-  ): Promise<any> {
-    const startTime = Date.now();
-
-    while (Date.now() - startTime < this.MAX_POLLING_TIME) {
-      try {
-        const status = await this.getTaskStatus(taskId);
-
-        // Вызываем callback для обновления UI
-        if (onProgress) {
-          onProgress(status);
-        }
-
-        console.log('📋 Task status:', status.state, status.message);
-
-        if (status.state === 'SUCCESS') {
-          return status.result;
-        } else if (status.state === 'FAILURE') {
-          throw new Error(status.error || 'Задача завершилась с ошибкой');
-        }
-
-        // Ждем перед следующей проверкой
-        await new Promise(resolve => setTimeout(resolve, this.POLLING_INTERVAL));
-
-      } catch (error) {
-        console.error('Error polling task status:', error);
-        // Не бросаем ошибку сразу, пробуем еще раз
-        await new Promise(resolve => setTimeout(resolve, this.POLLING_INTERVAL));
-      }
-    }
-
-    throw new Error('Время ожидания задачи истекло');
   }
 
   /**
