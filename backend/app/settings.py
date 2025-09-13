@@ -18,9 +18,9 @@ class Settings(BaseSettings):
 
     # OpenAI settings
     OPENAI_API_KEY: str = 'your-openai-api-key'
-    OPENAI_MODEL: str = 'gpt-4'
-    OPENAI_MAX_TOKENS: int = 4000
-    OPENAI_TEMPERATURE: float = 0.7
+    OPENAI_MODEL: str = 'gpt-4o-mini'  # Более экономичная модель с отличным качеством
+    OPENAI_MAX_TOKENS: int = 16000     # Увеличиваем лимит токенов для лучшего анализа
+    OPENAI_TEMPERATURE: float = 0.6    # Немного понижаем для более точных ответов
 
     # Webhook settings
     WEBHOOK_BASE_URL: str = 'https://your-domain.com'
