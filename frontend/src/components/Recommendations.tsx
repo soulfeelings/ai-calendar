@@ -25,7 +25,7 @@ interface ScheduleChangeCardProps {
   isApplying: boolean;
 }
 
-const ScheduleChangeCard: React.FC<ScheduleChangeCardProps> = ({
+const ScheduleChangeCard: React.FC<ScheduleChangeCardProps> = ({ 
   change, 
   onApply,
   onReject,
@@ -346,8 +346,8 @@ const Recommendations: React.FC = () => {
     return end >= now;
   };
 
-  // Получение анализа календаря (упрощенный асинхронный подход)
-  const getCalendarAnalysis = async (forceRefresh: boolean = false): Promise<void> => {
+  // Получение анализа календаря
+  const getCalendarAnalysis = async (forceRefresh: boolean = false) => {
     setLoading(true);
     setError(null);
 
@@ -370,24 +370,21 @@ const Recommendations: React.FC = () => {
         console.warn('Нет актуальных событий для анализа, отправляем пустой список');
       }
 
-      const requestData = {
+      // Отправляем события на анализ ИИ с возможностью принудительного обновления
+      const analysisResult = await aiService.analyzeCalendar({
         calendar_events: filteredEvents,
         user_goals: goalsList,
         analysis_period_days: 7
-      };
+      }, forceRefresh);
 
-      // Простой асинхронный анализ через FastAPI
-      console.log('🚀 Starting AI analysis...');
-      const analysisResult = await aiService.analyzeCalendar(requestData, forceRefresh);
-
-      // Нормализуем предложенные изменения
+      // Нормализуем предложенные изменения: подставляем дату из исходного события, если ИИ вернул только время
       const normalizedChanges = (analysisResult.schedule_changes || []).map(ch => normalizeChangeDateTimes(ch));
 
       setAnalysis({ ...analysisResult, schedule_changes: normalizedChanges });
 
-    } catch (error) {
-      console.error('AI analysis error:', error);
-      setError(error instanceof Error ? error.message : 'Ошибка при анализе календаря');
+    } catch (err: any) {
+      console.error('Error getting calendar analysis:', err);
+      setError(err.message || 'Произошла ошибка при анализе календаря');
     } finally {
       setLoading(false);
     }
