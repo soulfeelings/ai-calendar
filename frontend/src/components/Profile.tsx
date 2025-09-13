@@ -120,6 +120,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
             setCacheInfo(`Обновлено: ${updateResult.events.length} событий`);
           } else {
             console.log('No updates found');
+            setEvents(updateResult.events); // Обновляем события на всякий случай
             setCacheInfo(prev => prev + ' (актуальные)');
           }
         } catch (updateError) {
