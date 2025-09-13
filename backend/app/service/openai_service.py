@@ -39,7 +39,7 @@ class OpenAIService:
                 # Приводим Z к формату +00:00, чтобы fromisoformat понимал
                 if isinstance(dt, str) and dt.endswith('Z'):
                     dt = dt.replace('Z', '+00:00')
-                # Если передана только дата (YYYY-MM-DD), считаем полночь
+                # Если передана только дата (YYYY-MM-DD), с��итаем полночь
                 if isinstance(dt, str) and len(dt) == 10 and dt[4] == '-' and dt[7] == '-':
                     return datetime.fromisoformat(dt + 'T00:00:00+00:00')
                 return datetime.fromisoformat(dt)
@@ -220,99 +220,82 @@ class OpenAIService:
 
         Args:
             calendar_events: События календаря
-            user_goals: SMART цели пользователя
+            user_goals: SMART цели по��ьзователя
             analysis_period_days: Период анализа в днях
 
         Returns:
             Анализ и рекомендации от ИИ
         """
         try:
-            # Преобразуем события календаря в упрощенный формат для AI
-            simplified_events = self._convert_calendar_events_for_ai(calendar_events)
-
             # Формируем системный промпт для анализа календаря
             system_prompt = """
-            Ты — эксперт по тайм-менеджменту и productivity coach с опытом работы с занятыми профессионалами.
-            Проанализируй календарь пользователя и его SMART-цели, предложи конкретные, реализуемые изменения.
+            Ты — эксперт по тайм-менеджменту. Проанализируй календарь пользователя и его SMART-цели
+            и предложи конкретные, применимые изменения без абстракций.
 
-            ПРИНЦИПЫ АНАЛИЗА:
-            1. Фокус на результат: каждое предложение должно напрямую помогать достижению целей
-            2. Энергетический менеджмент: учитывай биоритмы (утро = высокая энергия, вечер = низкая)
-            3. Защита от перегрузки: не более 70% времени должно быть занято
-            4. Время на восстановление: минимум 15 минут между встречами
-            5. Правило 2-часов: блоки глубокой работы не менее 2 часов
-
-            ФОРМАТ ОТВЕТА (строго JSON):
+            Правила формата ответа (строго JSON):
             {
-              "summary": "краткий анализ текущего состояния календаря (2-3 предложения)",
-              "productivity_score": number,  // оценка 1-10 эффективности текущего расписания
-              "main_issues": string[],       // 2-3 основные проблемы в планировании
-              "recommendations": string[],   // 3-5 общих рекомендаций
-              "schedule_changes": [{
-                "id"?: string,               // id события для изменения существующего
-                "action": "move" | "reschedule" | "cancel" | "create" | "optimize" | "split",
-                "title": string,             // что именно делать
-                "reason": string,            // зачем это нужно (связь с целями)
-                "priority": "high" | "medium" | "low",
-                "new_start"?: string,        // ISO 8601 с датой и временем
-                "new_end"?: string,          // ISO 8601 с датой и временем
-                "estimated_benefit": string, // какой результат ожидается
-                "recurrence"?: {
-                  "frequency": "daily" | "weekly" | "monthly",
-                  "days_of_week"?: string[], // ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
-                  "interval"?: number,       // каждые N периодов
-                  "until"?: string           // до какой даты ISO 8601
+              "summary": string,
+              "recommendations": string[],
+              "schedule_changes": Array<{
+                "id"?: string,               // id события, если изменение для существующего
+                "action": "move" | "reschedule" | "cancel" | "create" | "optimize",
+                "title": string,             // коротко и конкретно, что сделать
+                "reason": string,            // почему это полезно
+                "new_start"?: string,        // ISO 8601, если перенос/перепланирование/создание
+                "new_end"?: string,          // ISO 8601
+                "priority"?: "high" | "medium" | "low",
+                "recurrence"?: {             // НЕОБЯЗАТЕЛЬНО: предложение по повторяемости
+                  "rrule"?: string,          // RRULE iCal строка, например: FREQ=WEEKLY;BYDAY=MO,WE
+                  "days_of_week"?: string[], // Список дней недели: MO,TU,WE,TH,FR,SA,SU
+                  "frequency"?: string,      // daily|weekly|monthly|yearly
+                  "interval"?: number,       // шаг повторения, напр. 1
+                  "until"?: string           // дата окончания ISO 8601
                 }
-              }],
-              "goal_alignment": {
-                "current_focus": string,     // на какие цели сейчас тратится больше времени
-                "missing_focus": string[],   // какие цели игнорируются
-                "recommended_time_allocation": {
-                  "goal_id": string,
-                  "recommended_hours_per_week": number
-                }[]
-              },
-              "energy_optimization": {
-                "high_energy_tasks": string[], // что делать утром (9-12)
-                "low_energy_tasks": string[],  // что делать вечером (15-18)
-                "deep_work_windows": string[]  // рекомендуемые 2+ часовые блоки
-              }
+              }>,
+              "goal_alignment": string,
+              "productivity_score"?: number  // 1..10
             }
 
-            ТРЕБОВАНИЯ К СОДЕРЖАНИЮ:
-            - Все предложения должны иметь конкретные даты и время в ISO 8601
-            - Учитывай часовой пояс пользователя из событий календаря
-            - Для action="create" обязательны new_start, new_end, title
-            - Для action="move"/"reschedule" обязательны new_start, new_end, id
-            - Не предлагай изменения, которые создают конфликты с существующими событиями
-            - Длинные события (>3 часов, весь день) перемещай осторожно с полным обоснованием
-            - Учитывай дни недели: рабочие/выходные дни имеют разную логику планирования
+            Требования к содержанию:
+            - Предлагай конкретные действия: перенести на конкретное время, сократить длительность, отменить, разбить на блоки с явными слотами, создать новый слот — с датами/временем в ISO 8601.
+            - Не используй общие фразы вида «подумать», «улучшить», «оптимизировать расписание» без конкретики.
+            - Если action = "move" или "reschedule" — обязательно укажи new_start и new_end.
+            - Если action = "create" — обязательно укажи title, new_start и new_end.
+            - Если action = "cancel" — укажи reason, объясняющую отмену.
+            - Учитывай приоритеты целей и интервалы отдыха, избегай пересечений с существующими событиями.
+            - Используй локальную временную зону пользователя, если она видна в данных, иначе оставь как есть (ISO 8601).
+            - Минимизируй количество абстрактных рекомендаций; давай 3–7 точечных изменений в schedule_changes.
 
-            ОСОБЕННОСТИ РАБОТЫ С ЦЕЛЯМИ:
-            - Каждое изменение должно четко связываться с конкретной целью
-            - Приоритизируй цели с ближайшими дедлайнами
-            - Для долгосрочных целей создавай регулярные блоки времени
-            - Учитывай сложность цели при планировании времени
+            ВАЖНО: учитывай долгие события
+            - События с признаками is_all_day=true, spans_multiple_days=true или duration_minutes >= 180 следует считать «длинными».
+            - Не предлагай их дробить или переносить без веской причины; сначала пробуй двигать гибкие короткие задачи вокруг них.
+            - Если предлагаешь перенос длинного события, укажи полный интервал new_start/new_end с датами (ISO 8601), учитывая буферы до/после.
+            - Для событий all-day (date-only) при переносе возвращай new_start/new_end c временем T00:00:00 и T23:59:59 соответствующего дня (или реальный диапазон, если он известен).
+            - Избегай перекрытий с длинными событиями и оставляй разумные буферы (например, 15–30 минут) рядом с длительными встречами, поездками и перелётами.
 
-            ОТВЕЧАЙ НА РУССКОМ ЯЗЫКЕ!
+            Повторяемость (необязательно):
+            - Если считаешь, что задаче нужна повторяемости, заполни поле recurrence. Предпочтительно дать rrule.
+            - При отсутствии rrule можно вернуть frequency + interval + days_of_week (+ until при необходимости).
+            - Не назначай повторяемость, если это разовое событие или перенос существующего нерецуррентного события без явной причины.
+
+            Формат дат/времени:
+            - Всегда возвращай new_start/new_end как полный ISO 8601 с ДАТОЙ и временем (не только время!).
+            - Пример: 2025-03-15T14:00:00+03:00.
+
+            ОТВЕЧАЙ НА РУССКОМ!
             """
 
             # Формируем пользовательский запрос
             user_message = f"""
-            Проанализируй мой календарь на ближайшие {analysis_period_days} дней и помоги оптимизировать его для достижения моих целей.
+            Проанализируй мой календарь на ближайшие {analysis_period_days} дней и мои цели.
 
-            МОИ SMART-ЦЕЛИ:
+            МОИ ЦЕЛИ:
             {json.dumps(user_goals, ensure_ascii=False, indent=2)}
 
-            МОЙ КАЛЕНДАРЬ:
-            {json.dumps(simplified_events, ensure_ascii=False, indent=2)}
+            МОЙ КАЛЕНДАРЬ (упрощённо):
+            {json.dumps(calendar_events, ensure_ascii=False, indent=2)}
 
-            ДОПОЛНИТЕЛЬНАЯ ИНФОРМАЦИЯ:
-            - Период анализа: {analysis_period_days} дней
-            - Количество событий: {len(simplified_events)}
-            - Количество целей: {len(user_goals)}
-
-            Верни строго JSON по описанной схеме, без дополнительных пояснений.
+            Верни строго JSON по описанной схеме, без дополнительного текста и пояснений.
             """
 
             messages = [{"role": "user", "content": user_message}]
@@ -320,8 +303,7 @@ class OpenAIService:
             response = await self.create_chat_completion(
                 messages=messages,
                 system_prompt=system_prompt,
-                temperature=0.4,  # Более низкая температура для точности
-                max_tokens=12000,  # Увеличиваем для подробного анализа
+                temperature=0.6,
                 response_format={"type": "json_object"}
             )
 
@@ -331,40 +313,14 @@ class OpenAIService:
             try:
                 # Пытаемся распарсить JSON ответ
                 parsed_response = json.loads(ai_response)
-
-                # Валидируем и дополняем ответ если нужно
-                if "productivity_score" not in parsed_response:
-                    parsed_response["productivity_score"] = 5
-                if "schedule_changes" not in parsed_response:
-                    parsed_response["schedule_changes"] = []
-                if "goal_alignment" not in parsed_response:
-                    parsed_response["goal_alignment"] = {
-                        "current_focus": "Не определено",
-                        "missing_focus": [],
-                        "recommended_time_allocation": []
-                    }
-
                 return parsed_response
-            except json.JSONDecodeError as e:
-                logger.warning(f"Failed to parse AI response as JSON: {e}")
-                # Если не удалось распарсить JSON, возвращаем базовую структуру
+            except json.JSONDecodeError:
+                # Если не удалось распарсить JSON, возвращаем текстовый ответ
                 return {
-                    "summary": "Анализ выполнен, но возникли проблемы с форматированием ответа",
-                    "productivity_score": 5,
-                    "main_issues": ["Не удалось определить основные проблемы"],
-                    "recommendations": ["Попробуйте повторить анализ"],
+                    "analysis": ai_response,
+                    "recommendations": [],
                     "schedule_changes": [],
-                    "goal_alignment": {
-                        "current_focus": "Не определено",
-                        "missing_focus": [],
-                        "recommended_time_allocation": []
-                    },
-                    "energy_optimization": {
-                        "high_energy_tasks": [],
-                        "low_energy_tasks": [],
-                        "deep_work_windows": []
-                    },
-                    "raw_response": ai_response  # Сохраняем оригинальный ответ для отладки
+                    "goal_alignment": "Не удалось определить"
                 }
 
         except Exception as e:
