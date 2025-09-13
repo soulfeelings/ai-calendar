@@ -98,7 +98,7 @@ class ImprovedGoal(BaseModel):
 class GoalAnalysisResponse(BaseModel):
     """Ответ анализа цели от ИИ"""
     is_smart: bool = Field(..., description="Соответствует ли цель принципам SMART")
-    score: int = Field(..., ge=0, le=100, description="Общий балл цели")
+    overall_score: int = Field(..., ge=0, le=100, description="Общий балл цели")
     analysis: GoalAnalysisDetails = Field(..., description="Детальный анализ по критериям")
-    suggestions: List[str] = Field(default=[], description="Рекомендации для улучшения")
-    improved_goal: Optional[ImprovedGoal] = Field(None, description="Предлагаемая улучшенная версия цели")
+    suggestions: List[str] = Field(..., description="Рекомендации по улучшению")
+    improved_goal: Optional[ImprovedGoal] = Field(None, description="Улучшенная версия цели")
