@@ -332,20 +332,42 @@ class CalendarService {
         }
       });
 
-      // ИСПРАВЛЕНИЕ: Извлекаем события из правильного поля
+      // ИСПРАВЛЕНИЕ: Более надежное извлечение событий из ответа
       const responseData = response.data;
       let serverEvents: CalendarEvent[];
 
+      console.log('Response data structure:', responseData);
+
       // Проверяем различные возможные структуры ответа
-      if (responseData && typeof responseData === 'object' && responseData.items) {
+      if (responseData && typeof responseData === 'object' && responseData.items && Array.isArray(responseData.items)) {
         serverEvents = responseData.items;
+        console.log('Extracted events from items field:', serverEvents.length);
       } else if (Array.isArray(responseData)) {
         serverEvents = responseData;
-      } else if (responseData && typeof responseData === 'object' && responseData.events) {
+        console.log('Using response data as array directly:', serverEvents.length);
+      } else if (responseData && typeof responseData === 'object' && responseData.events && Array.isArray(responseData.events)) {
         serverEvents = responseData.events;
+        console.log('Extracted events from events field:', serverEvents.length);
       } else {
         console.warn('Unexpected response format in checkEventsUpdates:', responseData);
+        console.warn('Available fields:', Object.keys(responseData || {}));
         serverEvents = [];
+      }
+
+      // Проверяем, что serverEvents теперь массив
+      if (!Array.isArray(serverEvents)) {
+        console.error('Failed to extract events array from response:', responseData);
+        // Пытаемся вернуть кешированные данные
+        const cachedEvents = localStorage.getItem('calendar_events');
+        if (cachedEvents) {
+          try {
+            const cached = JSON.parse(cachedEvents);
+            return { hasChanges: false, events: Array.isArray(cached) ? cached : [] };
+          } catch (parseError) {
+            console.error('Failed to parse cached events:', parseError);
+          }
+        }
+        return { hasChanges: false, events: [] };
       }
 
       const cachedEvents = localStorage.getItem('calendar_events');
@@ -375,18 +397,18 @@ class CalendarService {
         return { hasChanges: true, events: serverEvents };
       }
 
-      // Проверяем, что serverEvents - это массив
-      if (!Array.isArray(serverEvents)) {
-        console.warn('Server events is not an array:', serverEvents);
-        // Возвращаем кешированные данные если сервер вернул что-то странное
-        return { hasChanges: false, events: cached };
-      }
-
       // Простое сравнение по количеству и updated полям
       const hasChanges = serverEvents.length !== cached.length ||
-        serverEvents.some((event: CalendarEvent, index: number) =>
-          !cached[index] || event.updated !== cached[index].updated
-        );
+        serverEvents.some((event: CalendarEvent, index: number) => {
+          const cachedEvent = cached.find(c => c.id === event.id);
+          return !cachedEvent || event.updated !== cachedEvent.updated;
+        });
+
+      console.log('Changes check result:', {
+        serverCount: serverEvents.length,
+        cachedCount: cached.length,
+        hasChanges
+      });
 
       if (hasChanges) {
         localStorage.setItem('calendar_events', JSON.stringify(serverEvents));
