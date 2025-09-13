@@ -93,15 +93,20 @@ class AIService {
   private readonly MAX_POLLING_TIME = 300000; // 5 минут максимум
 
   /**
-   * Анализ календаря с помощью ИИ (асинхронно через Celery)
+   * Анализ календаря с помощью ИИ (с выбором режима)
    */
-  async analyzeCalendarAsync(
+  async analyzeCalendar(
     requestData: CalendarAnalysisRequest,
     forceRefresh: boolean = false,
-    onProgress?: (status: TaskStatus) => void
+    useAsync: boolean = false  // Параметр для выбора режима
   ): Promise<CalendarAnalysis> {
     try {
-      // Проверяем кеш, если не требуется принудительное обновление
+      // Если выбран асинхронный режим, используем polling
+      if (useAsync) {
+        return this.analyzeCalendarFullyAsync(requestData);
+      }
+
+      // Проверяем кеш для синхронного режима
       if (!forceRefresh) {
         const cachedResult = cacheService.getByData<CalendarAnalysis>(requestData);
         if (cachedResult) {
@@ -110,11 +115,31 @@ class AIService {
         }
       }
 
-      console.log('🤖 Starting async AI analysis...');
-      console.log('Sending analysis request:', requestData);
+      console.log('🤖 Requesting sync AI analysis...');
+      const response = await api.post('/ai/analyze-calendar-sync', requestData);
+
+      // Кешируем результат
+      cacheService.setByData(requestData, response.data, this.AI_CACHE_TTL);
+
+      return response.data;
+    } catch (error: any) {
+      console.error('Error in calendar analysis:', error);
+      throw this.handleAPIError(error, 'Ошибка при анализе календаря');
+    }
+  }
+
+  /**
+   * Полностью асинхронный анализ календаря с polling
+   */
+  async analyzeCalendarFullyAsync(
+    requestData: CalendarAnalysisRequest,
+    onProgress?: (status: TaskStatus) => void
+  ): Promise<CalendarAnalysis> {
+    try {
+      console.log('🚀 Starting fully async AI analysis...');
 
       // 1. Запускаем задачу
-      const taskResponse = await api.post('/ai/analyze-calendar', requestData);
+      const taskResponse = await api.post('/ai/analyze-calendar-async', requestData);
       const taskId = taskResponse.data.task_id;
 
       console.log('📋 Analysis task started:', taskId);
@@ -122,17 +147,11 @@ class AIService {
       // 2. Ждем выполнения задачи с периодическими проверками
       const result = await this.pollTaskStatus(taskId, onProgress);
 
-      // 3. Кешируем результат
-      if (result.analysis) {
-        cacheService.setByData(requestData, result.analysis, this.AI_CACHE_TTL);
-        return result.analysis;
-      }
-
-      throw new Error('Анализ завершился без результата');
+      return result;
 
     } catch (error: any) {
-      console.error('Error analyzing calendar:', error);
-      throw this.handleAPIError(error, 'Ошибка при анализе календаря');
+      console.error('Error in fully async calendar analysis:', error);
+      throw this.handleAPIError(error, 'Ошибка при асинхронном анализе календаря');
     }
   }
 
@@ -276,22 +295,6 @@ class AIService {
       }
     }
     return new Error(defaultMessage);
-  }
-
-  /**
-   * Основной метод анализа календаря (выбирает async/sync автоматически)
-   */
-  async analyzeCalendar(
-    requestData: CalendarAnalysisRequest,
-    forceRefresh: boolean = false,
-    useAsync: boolean = true,
-    onProgress?: (status: TaskStatus) => void
-  ): Promise<CalendarAnalysis> {
-    if (useAsync) {
-      return this.analyzeCalendarAsync(requestData, forceRefresh, onProgress);
-    } else {
-      return this.analyzeCalendarSync(requestData, forceRefresh);
-    }
   }
 
   /**

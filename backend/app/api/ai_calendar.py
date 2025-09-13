@@ -26,17 +26,16 @@ router = APIRouter(prefix="/ai", tags=["AI Calendar Analysis"])
 logger = logging.getLogger(__name__)
 
 
-@router.post("/analyze-calendar", response_model=dict)
+@router.post("/analyze-calendar", response_model=CalendarAnalysisResponse)
 async def analyze_calendar_and_goals(
     request: CalendarAnalysisRequest,
-    openai_service: Annotated[OpenAIService, Depends(get_openai_service)],
     user_id: str = Depends(get_user_request_id),
 ):
     """
-    Анализ календаря пользователя и его SMART целей (асинхронно через Celery)
+    Анализ календаря пользователя и его SMART целей (асинхронно)
 
-    Этот эндпоинт запускает фоновую задачу анализа календаря и целей пользователя.
-    Возвращает task_id для отслеживания статуса выполнения.
+    Запускает задачу в фоне и сразу возвращает task_id.
+    API не блокируется, результат получается через polling.
     """
     try:
         logger.info(f"Starting async calendar analysis for user {user_id}")
@@ -45,7 +44,7 @@ async def analyze_calendar_and_goals(
         # Преобразуем события календаря в словари
         calendar_events_dict = [event.model_dump() for event in request.calendar_events]
 
-        # Запускаем задачу анализа в фоне через Celery
+        # Запускаем задачу в фоне через Celery (НЕ ждем результат)
         task = start_calendar_analysis(
             calendar_events=calendar_events_dict,
             user_goals=request.user_goals,
@@ -55,10 +54,11 @@ async def analyze_calendar_and_goals(
 
         logger.info(f"Calendar analysis task started with ID: {task.id}")
 
+        # Сразу возвращаем task_id без ожидания
         return {
             "task_id": task.id,
             "status": "started",
-            "message": "Анализ календаря запущен. Используйте task_id для проверки статуса.",
+            "message": "Анализ календаря запущен в фоне. Проверяйте статус по task_id.",
             "user_id": user_id
         }
 
@@ -70,67 +70,43 @@ async def analyze_calendar_and_goals(
         )
 
 
-@router.post("/analyze-calendar-sync", response_model=CalendarAnalysisResponse)
-async def analyze_calendar_and_goals_sync(
+@router.post("/analyze-calendar-async")
+async def analyze_calendar_and_goals_async(
     request: CalendarAnalysisRequest,
-    openai_service: Annotated[OpenAIService, Depends(get_openai_service)],
     user_id: str = Depends(get_user_request_id),
 ):
     """
-    Синхронный анализ календаря (для случаев, когда нужен немедленный ответ)
+    Запуск асинхронного анализа календаря без ожидания результата
 
-    ВНИМАНИЕ: Этот endpoint может быть медленным и использует больше ресурсов.
-    Рекомендуется использовать асинхронную версию /analyze-calendar
+    Returns:
+        task_id для проверки статуса через /ai/task/{task_id}
     """
     try:
-        logger.info(f"Starting sync calendar analysis for user {user_id}")
-        logger.info(f"Received {len(request.calendar_events)} events for analysis")
+        logger.info(f"Starting async calendar analysis for user {user_id}")
 
         # Преобразуем события календаря в словари
         calendar_events_dict = [event.model_dump() for event in request.calendar_events]
 
-        # Преобразуем события в упрощенный формат для AI
-        simplified_events = openai_service._convert_calendar_events_for_ai(calendar_events_dict)
-
-        # Вызываем сервис OpenAI для анализа
-        ai_response = await openai_service.analyze_calendar_and_goals(
-            calendar_events=simplified_events,
+        # Запускаем задачу в фоне
+        task = start_calendar_analysis(
+            calendar_events=calendar_events_dict,
             user_goals=request.user_goals,
+            user_id=user_id,
             analysis_period_days=request.analysis_period_days or 7
         )
 
-        # Нормализуем schedule_changes
-        raw_changes = ai_response.get("schedule_changes", []) or []
-        normalized_changes = []
-        for ch in raw_changes:
-            if isinstance(ch, dict):
-                normalized_changes.append(ch)
-            elif isinstance(ch, str):
-                normalized_changes.append({
-                    "action": "optimize",
-                    "title": ch,
-                    "reason": ch
-                })
-            else:
-                logger.debug(f"Skipping unsupported schedule_change item type: {type(ch)}")
-
-        # Формируем ответ
-        response = CalendarAnalysisResponse(
-            summary=ai_response.get("summary") or ai_response.get("analysis", "Анализ не получен"),
-            recommendations=ai_response.get("recommendations", []),
-            schedule_changes=normalized_changes,
-            goal_alignment=ai_response.get("goal_alignment", "Не определено"),
-            productivity_score=ai_response.get("productivity_score")
-        )
-
-        logger.info(f"Sync calendar analysis completed successfully")
-        return response
+        return {
+            "task_id": task.id,
+            "status": "started",
+            "message": "Анализ запущен в фоне. Проверяйте статус по task_id.",
+            "user_id": user_id
+        }
 
     except Exception as e:
-        logger.error(f"Error in sync calendar analysis: {str(e)}")
+        logger.error(f"Error starting async calendar analysis: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Ошибка при анализе календаря: {str(e)}"
+            detail=f"Ошибка при запуске анализа: {str(e)}"
         )
 
 
@@ -252,17 +228,18 @@ async def get_task_status(
                 "task_id": task_id,
                 "state": result.state,
                 "status": "in_progress",
-                "message": "Задача выполняется",
+                "message": result.info.get('message', 'Задача выполняется') if result.info else "Задача выполняется",
                 "progress": result.info.get('progress', 0) if result.info else 0
             }
         elif result.state == 'SUCCESS':
+            # ИСПРАВЛЕНИЕ: Получаем результат напрямую
             task_result = result.get()
             response = {
                 "task_id": task_id,
                 "state": result.state,
                 "status": "completed",
                 "message": "Задача выполнена успешно",
-                "result": task_result
+                "result": task_result  # Возвращаем результат напрямую
             }
         else:  # FAILURE
             response = {
@@ -273,7 +250,6 @@ async def get_task_status(
                 "error": str(result.info) if result.info else "Неизвестная ошибка"
             }
 
-        logger.info(f"Task {task_id} status: {result.state}")
         return response
 
     except Exception as e:
@@ -419,4 +395,41 @@ async def chat_with_ai(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ошибка при общении с ИИ: {str(e)}"
+        )
+
+
+@router.post("/analyze-calendar-sync")
+async def analyze_calendar_and_goals_sync(
+    request: CalendarAnalysisRequest,
+    openai_service: Annotated[OpenAIService, Depends(get_openai_service)],
+    user_id: str = Depends(get_user_request_id),
+):
+    """
+    Синхронный анализ календаря и целей (БЫСТРЫЙ)
+    
+    Возвращает результат сразу без использования Celery.
+    Рекомендуется для простых случаев.
+    """
+    try:
+        logger.info(f"Starting sync calendar analysis for user {user_id}")
+        logger.info(f"Received {len(request.calendar_events)} events for analysis")
+
+        # Преобразуем события календаря в словари
+        calendar_events_dict = [event.model_dump() for event in request.calendar_events]
+
+        # Выполняем анализ синхронно
+        result = await openai_service.analyze_calendar_and_goals(
+            calendar_events=calendar_events_dict,
+            user_goals=request.user_goals,
+            analysis_period_days=request.analysis_period_days or 7
+        )
+
+        logger.info(f"Sync calendar analysis completed successfully for user {user_id}")
+        return result
+
+    except Exception as e:
+        logger.error(f"Error in sync calendar analysis: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при синхронном анализе календаря: {str(e)}"
         )

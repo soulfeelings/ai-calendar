@@ -39,25 +39,66 @@ def analyze_calendar_and_goals_task(
     try:
         logger.info(f"Starting calendar analysis for user {user_id}")
 
+        # Обновляем статус задачи
+        self.update_state(state='PROGRESS', meta={'progress': 10, 'message': 'Подготовка к анализу...'})
+
         # Получаем сервис OpenAI
         openai_service = get_openai_service()
 
-        # Выполняем асинхронную обработку правильно
-        result = asyncio.run(
-            openai_service.analyze_calendar_and_goals(
-                calendar_events=calendar_events,
-                user_goals=user_goals,
-                analysis_period_days=analysis_period_days
-            )
-        )
+        # Обновляем статус
+        self.update_state(state='PROGRESS', meta={'progress': 30, 'message': 'Анализируем календарь...'})
+
+        # ИСПРАВЛЕНИЕ: Не создаем новый event loop, используем существующий
+        # Выполняем синхронную версию или используем существующий loop
+        try:
+            # Пытаемся получить текущий loop
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # Если loop уже запущен, создаем новый в отдельном потоке
+                import asyncio
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(
+                        asyncio.run,
+                        openai_service.analyze_calendar_and_goals(
+                            calendar_events=calendar_events,
+                            user_goals=user_goals,
+                            analysis_period_days=analysis_period_days
+                        )
+                    )
+                    result = future.result()
+            else:
+                # Если loop не запущен, используем его
+                result = loop.run_until_complete(
+                    openai_service.analyze_calendar_and_goals(
+                        calendar_events=calendar_events,
+                        user_goals=user_goals,
+                        analysis_period_days=analysis_period_days
+                    )
+                )
+        except RuntimeError:
+            # Fallback - создаем новый loop в новом потоке
+            import concurrent.futures
+
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(
+                    asyncio.run,
+                    openai_service.analyze_calendar_and_goals(
+                        calendar_events=calendar_events,
+                        user_goals=user_goals,
+                        analysis_period_days=analysis_period_days
+                    )
+                )
+                result = future.result()
+
+        # Обновляем статус перед завершением
+        self.update_state(state='PROGRESS', meta={'progress': 90, 'message': 'Завершаем анализ...'})
 
         logger.info(f"Successfully completed calendar analysis for user {user_id}")
-        return {
-            "status": "success",
-            "user_id": user_id,
-            "analysis": result,
-            "timestamp": None  # Убираем проблематичное получение времени из event loop
-        }
+
+        # ИСПРАВЛЕНИЕ: Возвращаем просто результат, а не объект с метаданными
+        return result
 
     except Exception as exc:
         logger.error(f"Error analyzing calendar for user {user_id}: {str(exc)}")
@@ -65,20 +106,17 @@ def analyze_calendar_and_goals_task(
         # Повторяем задачу при ошибке
         if self.request.retries < self.max_retries:
             logger.info(f"Retrying calendar analysis for user {user_id}, attempt {self.request.retries + 1}")
-            raise self.retry(countdown=60 * (2 ** self.request.retries))  # Экспоненциальная задержка
+            raise self.retry(countdown=60 * (2 ** self.request.retries))
 
         # Если исчерпаны все попытки
         logger.error(f"Failed to analyze calendar for user {user_id} after {self.max_retries} retries")
+
+        # Возвращаем ошибку в правильном формате
         return {
-            "status": "error",
-            "user_id": user_id,
-            "error": str(exc),
-            "analysis": {
-                "summary": "Ошибка при анализе календаря",
-                "recommendations": ["Попробуйте позже"],
-                "schedule_changes": [],
-                "goal_alignment": "Не удалось определить"
-            }
+            "summary": "Ошибка при анализе календаря",
+            "recommendations": ["Попробуйте позже"],
+            "schedule_changes": [],
+            "goal_alignment": f"Ошибка: {str(exc)}"
         }
 
 
