@@ -403,7 +403,7 @@ const Recommendations: React.FC = () => {
     return end >= now;
   };
 
-  // Получение анализа календаря с поддержкой асинхронных задач
+  // Получение анализа календаря (полностью асинхронный подход)
   const getCalendarAnalysis = async (forceRefresh: boolean = false): Promise<void> => {
     setLoading(true);
     setError(null);
@@ -434,44 +434,24 @@ const Recommendations: React.FC = () => {
         analysis_period_days: 7
       };
 
-      let analysisResult: CalendarAnalysis;
-
-      if (useAsyncAnalysis) {
-        console.log('🚀 Using async analysis with Celery');
-
-        // Используем асинхронный анализ с отслеживанием прогресса
-        analysisResult = await aiService.analyzeCalendarAsync(
-          requestData,
-          forceRefresh,
-          (status: TaskStatus) => {
-            console.log('📋 Task progress:', status);
-            setTaskStatus(status);
-          }
-        );
-      } else {
-        console.log('⚡ Using sync analysis');
-
-        // Используем синхронный анализ для быстрого результата
-        analysisResult = await aiService.analyzeCalendarSync(requestData, forceRefresh);
-      }
+      // Запускаем полностью асинхронный анализ с polling
+      console.log('🚀 Starting fully async AI analysis...');
+      const analysisResult = await aiService.analyzeCalendarFullyAsync(
+        requestData,
+        (status) => {
+          console.log('📋 Task progress:', status);
+          setTaskStatus(status);
+        }
+      );
 
       // Нормализуем предложенные изменения
       const normalizedChanges = (analysisResult.schedule_changes || []).map(ch => normalizeChangeDateTimes(ch));
 
       setAnalysis({ ...analysisResult, schedule_changes: normalizedChanges });
-      setTaskStatus(null); // Сбрасываем статус после успешного завершения
+      setTaskStatus(null);
 
     } catch (err: any) {
       console.error('Error getting calendar analysis:', err);
-
-      // Если асинхронный анализ не удался, пробуем синхронный
-      if (useAsyncAnalysis && err.message.includes('Время ожидания')) {
-        console.log('⚠️ Async analysis timed out, trying sync...');
-        setUseAsyncAnalysis(false);
-        // Рекурсивно пытаемся с синхронным анализом
-        await getCalendarAnalysis(forceRefresh);
-        return;
-      }
 
       setError(err.message || 'Произошла ошибка при анализе календаря');
       setTaskStatus(null);
