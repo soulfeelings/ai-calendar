@@ -332,7 +332,22 @@ class CalendarService {
         }
       });
 
-      const serverEvents = response.data;
+      // ИСПРАВЛЕНИЕ: Извлекаем события из правильного поля
+      const responseData = response.data;
+      let serverEvents: CalendarEvent[];
+
+      // Проверяем различные возможные структуры ответа
+      if (responseData && typeof responseData === 'object' && responseData.items) {
+        serverEvents = responseData.items;
+      } else if (Array.isArray(responseData)) {
+        serverEvents = responseData;
+      } else if (responseData && typeof responseData === 'object' && responseData.events) {
+        serverEvents = responseData.events;
+      } else {
+        console.warn('Unexpected response format in checkEventsUpdates:', responseData);
+        serverEvents = [];
+      }
+
       const cachedEvents = localStorage.getItem('calendar_events');
 
       if (!cachedEvents) {
