@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { aiService, CalendarAnalysis, SmartGoal, ScheduleChange, TaskStatus } from '../services/aiService';
+import { aiService, CalendarAnalysis, SmartGoal, ScheduleChange } from '../services/aiService';
 import { calendarService, CalendarEvent } from '../services/calendarService';
 import { RRuleParser } from '../utils/rruleParser';
 import './Recommendations.css';
@@ -24,59 +24,6 @@ interface ScheduleChangeCardProps {
   onReject: () => void;
   isApplying: boolean;
 }
-
-// Компонент для отображения статуса задачи
-interface TaskProgressProps {
-  taskStatus: TaskStatus | null;
-  taskType: string;
-}
-
-const TaskProgress: React.FC<TaskProgressProps> = ({ taskStatus, taskType }) => {
-  if (!taskStatus) return null;
-
-  const getStatusIcon = (state: string) => {
-    switch (state) {
-      case 'PENDING': return '⏳';
-      case 'PROGRESS': return '🔄';
-      case 'SUCCESS': return '✅';
-      case 'FAILURE': return '❌';
-      default: return '⏳';
-    }
-  };
-
-  const getStatusColor = (state: string) => {
-    switch (state) {
-      case 'PENDING': return '#ffa500';
-      case 'PROGRESS': return '#007bff';
-      case 'SUCCESS': return '#28a745';
-      case 'FAILURE': return '#dc3545';
-      default: return '#6c757d';
-    }
-  };
-
-  return (
-    <div className="task-progress">
-      <div className="task-progress-header">
-        <span className="task-icon" style={{ color: getStatusColor(taskStatus.state) }}>
-          {getStatusIcon(taskStatus.state)}
-        </span>
-        <span className="task-title">{taskType}</span>
-      </div>
-      <div className="task-message">{taskStatus.message}</div>
-      {taskStatus.progress !== undefined && (
-        <div className="task-progress-bar">
-          <div
-            className="progress-fill"
-            style={{
-              width: `${taskStatus.progress}%`,
-              backgroundColor: getStatusColor(taskStatus.state)
-            }}
-          />
-        </div>
-      )}
-    </div>
-  );
-};
 
 const ScheduleChangeCard: React.FC<ScheduleChangeCardProps> = ({
   change, 
@@ -181,10 +128,6 @@ const Recommendations: React.FC = () => {
   const [appliedChanges, setAppliedChanges] = useState<Set<string>>(new Set());
   const [rejectedChanges, setRejectedChanges] = useState<Set<string>>(new Set());
   const [applyingChange, setApplyingChange] = useState<number | null>(null);
-
-  // Состояние для отслеживания асинхронных задач
-  const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
-  const [useAsyncAnalysis, setUseAsyncAnalysis] = useState(true);
 
   // Ключи в localStorage для персистентности
   const APPLIED_KEY = 'ai_applied_schedule_change_ids';
@@ -536,14 +479,6 @@ const Recommendations: React.FC = () => {
         <div className="loading-spinner">
           <div className="spinner"></div>
           <p>Анализируем ваш календарь...</p>
-
-          {/* Показываем прогресс задачи если есть */}
-          {taskStatus && (
-            <TaskProgress
-              taskStatus={taskStatus}
-              taskType="Анализ календаря с ИИ"
-            />
-          )}
         </div>
       </div>
     );
