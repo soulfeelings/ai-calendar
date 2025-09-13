@@ -268,19 +268,17 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     try {
       setEventsLoading(true);
       setEventsError(null);
-      console.log('Attempting to load events...');
+      console.log('Attempting to load events with forcefullsync...');
 
-      const response = await calendarService.getCalendarEvents();
-
-      // Проверяем оба возможных поля для событий
-      const eventsList = response.items || response.events || [];
+      // Используем getEvents(true) для принудительной синхронизации
+      const eventsList = await calendarService.getEvents(true);
 
       if (eventsList.length > 0) {
         setEvents(eventsList);
-        console.log('Events loaded successfully:', eventsList);
+        console.log('Events loaded successfully with forcefullsync:', eventsList);
       } else {
         setEvents([]);
-        console.log('No events found in response:', response);
+        console.log('No events found with forcefullsync');
       }
 
     } catch (error: any) {

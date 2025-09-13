@@ -564,39 +564,6 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
                       )}
                     </div>
                   )}
-
-                  <div className="goal-actions">
-                    {createdEvents[goal.id || ''] ? (
-                      // Если событие уже создано - показываем статус и кнопку удаления
-                      <>
-                        <div className="event-status">
-                          <span className="status-badge created">
-                            ✅ В календаре
-                          </span>
-                        </div>
-                        <button
-                          className="delete-btn"
-                          onClick={() => deleteEventForGoal(goal)}
-                          disabled={creatingEvents[goal.id || ''] || false}
-                          title="Удалить событие из календаря"
-                        >
-                          {creatingEvents[goal.id || ''] ? '⏳' : '🗑️'}
-                          {creatingEvents[goal.id || ''] ? 'Удаляем...' : 'Удалить'}
-                        </button>
-                      </>
-                    ) : (
-                      // Если событие не создано - показываем кнопку создания
-                      <button
-                        className="calendar-btn"
-                        onClick={() => createEventForGoal(goal)}
-                        disabled={creatingEvents[goal.id || ''] || false}
-                        title="Создать событие в календаре"
-                      >
-                        {creatingEvents[goal.id || ''] ? '⏳' : '📅'}
-                        {creatingEvents[goal.id || ''] ? 'Создаём...' : 'В календарь'}
-                      </button>
-                    )}
-                  </div>
                 </div>
               ))}
             </div>
