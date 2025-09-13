@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { aiService, CalendarAnalysis, SmartGoal, ScheduleChange } from '../services/aiService';
+import { aiService, CalendarAnalysis, SmartGoal, ScheduleChange, TaskStatus } from '../services/aiService';
 import { calendarService, CalendarEvent } from '../services/calendarService';
 import { RRuleParser } from '../utils/rruleParser';
 import './Recommendations.css';
@@ -25,7 +25,60 @@ interface ScheduleChangeCardProps {
   isApplying: boolean;
 }
 
-const ScheduleChangeCard: React.FC<ScheduleChangeCardProps> = ({ 
+// Компонент для отображения статуса задачи
+interface TaskProgressProps {
+  taskStatus: TaskStatus | null;
+  taskType: string;
+}
+
+const TaskProgress: React.FC<TaskProgressProps> = ({ taskStatus, taskType }) => {
+  if (!taskStatus) return null;
+
+  const getStatusIcon = (state: string) => {
+    switch (state) {
+      case 'PENDING': return '⏳';
+      case 'PROGRESS': return '🔄';
+      case 'SUCCESS': return '✅';
+      case 'FAILURE': return '❌';
+      default: return '⏳';
+    }
+  };
+
+  const getStatusColor = (state: string) => {
+    switch (state) {
+      case 'PENDING': return '#ffa500';
+      case 'PROGRESS': return '#007bff';
+      case 'SUCCESS': return '#28a745';
+      case 'FAILURE': return '#dc3545';
+      default: return '#6c757d';
+    }
+  };
+
+  return (
+    <div className="task-progress">
+      <div className="task-progress-header">
+        <span className="task-icon" style={{ color: getStatusColor(taskStatus.state) }}>
+          {getStatusIcon(taskStatus.state)}
+        </span>
+        <span className="task-title">{taskType}</span>
+      </div>
+      <div className="task-message">{taskStatus.message}</div>
+      {taskStatus.progress !== undefined && (
+        <div className="task-progress-bar">
+          <div
+            className="progress-fill"
+            style={{
+              width: `${taskStatus.progress}%`,
+              backgroundColor: getStatusColor(taskStatus.state)
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
+const ScheduleChangeCard: React.FC<ScheduleChangeCardProps> = ({
   change, 
   onApply,
   onReject,
@@ -128,6 +181,10 @@ const Recommendations: React.FC = () => {
   const [appliedChanges, setAppliedChanges] = useState<Set<string>>(new Set());
   const [rejectedChanges, setRejectedChanges] = useState<Set<string>>(new Set());
   const [applyingChange, setApplyingChange] = useState<number | null>(null);
+
+  // Состояние для отслеживания асинхронных задач
+  const [taskStatus, setTaskStatus] = useState<TaskStatus | null>(null);
+  const [useAsyncAnalysis, setUseAsyncAnalysis] = useState(true);
 
   // Ключи в localStorage для персистентности
   const APPLIED_KEY = 'ai_applied_schedule_change_ids';
@@ -346,10 +403,11 @@ const Recommendations: React.FC = () => {
     return end >= now;
   };
 
-  // Получение анализа календаря
-  const getCalendarAnalysis = async (forceRefresh: boolean = false) => {
+  // Получение анализа календаря с поддержкой асинхронных задач
+  const getCalendarAnalysis = async (forceRefresh: boolean = false): Promise<void> => {
     setLoading(true);
     setError(null);
+    setTaskStatus(null);
 
     try {
       // Загружаем события и цели
@@ -370,21 +428,53 @@ const Recommendations: React.FC = () => {
         console.warn('Нет актуальных событий для анализа, отправляем пустой список');
       }
 
-      // Отправляем события на анализ ИИ с возможностью принудительного обновления
-      const analysisResult = await aiService.analyzeCalendar({
+      const requestData = {
         calendar_events: filteredEvents,
         user_goals: goalsList,
         analysis_period_days: 7
-      }, forceRefresh);
+      };
 
-      // Нормализуем предложенные изменения: подставляем дату из исходного события, если ИИ вернул только время
+      let analysisResult: CalendarAnalysis;
+
+      if (useAsyncAnalysis) {
+        console.log('🚀 Using async analysis with Celery');
+
+        // Используем асинхронный анализ с отслеживанием прогресса
+        analysisResult = await aiService.analyzeCalendarAsync(
+          requestData,
+          forceRefresh,
+          (status: TaskStatus) => {
+            console.log('📋 Task progress:', status);
+            setTaskStatus(status);
+          }
+        );
+      } else {
+        console.log('⚡ Using sync analysis');
+
+        // Используем синхронный анализ для быстрого результата
+        analysisResult = await aiService.analyzeCalendarSync(requestData, forceRefresh);
+      }
+
+      // Нормализуем предложенные изменения
       const normalizedChanges = (analysisResult.schedule_changes || []).map(ch => normalizeChangeDateTimes(ch));
 
       setAnalysis({ ...analysisResult, schedule_changes: normalizedChanges });
+      setTaskStatus(null); // Сбрасываем статус после успешного завершения
 
     } catch (err: any) {
       console.error('Error getting calendar analysis:', err);
+
+      // Если асинхронный анализ не удался, пробуем синхронный
+      if (useAsyncAnalysis && err.message.includes('Время ожидания')) {
+        console.log('⚠️ Async analysis timed out, trying sync...');
+        setUseAsyncAnalysis(false);
+        // Рекурсивно пытаемся с синхронным анализом
+        await getCalendarAnalysis(forceRefresh);
+        return;
+      }
+
       setError(err.message || 'Произошла ошибка при анализе календаря');
+      setTaskStatus(null);
     } finally {
       setLoading(false);
     }
@@ -476,6 +566,14 @@ const Recommendations: React.FC = () => {
         <div className="loading-spinner">
           <div className="spinner"></div>
           <p>Анализируем ваш календарь...</p>
+
+          {/* Показываем прогресс задачи если есть */}
+          {taskStatus && (
+            <TaskProgress
+              taskStatus={taskStatus}
+              taskType="Анализ календаря с ИИ"
+            />
+          )}
         </div>
       </div>
     );

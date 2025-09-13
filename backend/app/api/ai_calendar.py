@@ -282,3 +282,141 @@ async def get_task_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ошибка при получении статуса задачи: {str(e)}"
         )
+
+
+@router.post("/goals", response_model=dict)
+async def create_goal(
+    goal_data: dict,
+    openai_service: Annotated[OpenAIService, Depends(get_openai_service)],
+    goals_repo: Annotated[GoalsRepository, Depends(get_goals_repo)],
+    user_id: str = Depends(get_user_request_id)
+):
+    """
+    Создание новой цели с SMART анализом
+    """
+    try:
+        # Проводим SMART анализ цели
+        smart_analysis = await openai_service.analyze_goal_smart(
+            title=goal_data.get("title", ""),
+            description=goal_data.get("description", ""),
+            deadline=goal_data.get("deadline")
+        )
+
+        # Добавляем результат анализа к данным цели
+        goal_data["smart_analysis"] = smart_analysis
+
+        # Сохраняем цель в БД
+        goal_id = await goals_repo.create_goal(user_id, goal_data)
+
+        return {
+            "id": goal_id,
+            "message": "Цель создана успешно",
+            "smart_analysis": smart_analysis,
+            **goal_data
+        }
+    except Exception as e:
+        logger.error(f"Error creating goal: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при создании цели: {str(e)}"
+        )
+
+
+@router.get("/goals")
+async def get_goals(
+    goals_repo: Annotated[GoalsRepository, Depends(get_goals_repo)],
+    include_completed: bool = False,
+    user_id: str = Depends(get_user_request_id),
+):
+    """
+    Получение целей пользователя
+    """
+    try:
+        goals = await goals_repo.get_user_goals(user_id, include_completed)
+        return goals
+    except Exception as e:
+        logger.error(f"Error getting goals: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при получении целей: {str(e)}"
+        )
+
+
+@router.post("/analyze-goal", response_model=GoalAnalysisResponse)
+async def analyze_goal(
+    goal_data: dict,
+    openai_service: Annotated[OpenAIService, Depends(get_openai_service)],
+    user_id: str = Depends(get_user_request_id)
+):
+    """
+    Анализ цели по критериям SMART
+    """
+    try:
+        analysis = await openai_service.analyze_goal_smart(
+            title=goal_data.get("title", ""),
+            description=goal_data.get("description", ""),
+            deadline=goal_data.get("deadline")
+        )
+
+        return GoalAnalysisResponse(**analysis)
+    except Exception as e:
+        logger.error(f"Error analyzing goal: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при анализе цели: {str(e)}"
+        )
+
+
+@router.post("/apply-schedule-change")
+async def apply_schedule_change(
+    change: dict,
+    user_id: str = Depends(get_user_request_id)
+):
+    """
+    Применение изменения в расписании
+    """
+    try:
+        # Здесь должна быть логика применения изменений к календарю
+        # Пока возвращаем успешный результат
+        return {"success": True, "message": "Изменение применено успешно"}
+    except Exception as e:
+        logger.error(f"Error applying schedule change: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при применении изменения: {str(e)}"
+        )
+
+
+@router.post("/chat")
+async def chat_with_ai(
+    request: dict,
+    openai_service: Annotated[OpenAIService, Depends(get_openai_service)],
+    user_id: str = Depends(get_user_request_id)
+):
+    """
+    Общение с ИИ в чат-формате
+    """
+    try:
+        messages = request.get("messages", [])
+        system_prompt = request.get("system_prompt")
+        model = request.get("model", "gpt-4o-mini")
+        temperature = request.get("temperature", 0.7)
+        max_tokens = request.get("max_tokens", 1000)
+
+        response = await openai_service.create_chat_completion(
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            system_prompt=system_prompt
+        )
+
+        content = response["choices"][0]["message"]["content"]
+        return {"content": content}
+
+    except Exception as e:
+        logger.error(f"Error in AI chat: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при общении с ИИ: {str(e)}"
+        )

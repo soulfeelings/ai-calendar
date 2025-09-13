@@ -61,12 +61,10 @@ class GoalsRepository:
         """Обновление цели"""
         try:
             update_data["updated_at"] = datetime.now()
-
             result = await mongodb.smart_goals.update_one(
                 {"_id": ObjectId(goal_id), "user_id": user_id},
                 {"$set": update_data}
             )
-
             return result.modified_count > 0
         except Exception:
             return False
@@ -78,7 +76,6 @@ class GoalsRepository:
                 "_id": ObjectId(goal_id),
                 "user_id": user_id
             })
-
             return result.deleted_count > 0
         except Exception:
             return False
@@ -86,19 +83,22 @@ class GoalsRepository:
     async def mark_goal_completed(self, goal_id: str, user_id: str) -> bool:
         """Отметка цели как выполненной"""
         return await self.update_goal(goal_id, user_id, {
+            "status": "completed",
             "is_completed": True,
             "completed_at": datetime.now()
         })
 
-    async def get_goals_by_priority(self, user_id: str, priority: int) -> List[dict]:
-        """Получение целей по приоритету"""
-        cursor = mongodb.smart_goals.find({
+    async def get_active_goals(self, user_id: str) -> List[dict]:
+        """Получение только активных целей пользователя"""
+        query = {
             "user_id": user_id,
-            "priority": priority,
-            "is_completed": False
-        }).sort("created_at", -1)
+            "status": "active",
+            "is_completed": {"$ne": True}
+        }
 
+        cursor = mongodb.smart_goals.find(query).sort("priority", -1)
         goals = []
+
         async for goal_doc in cursor:
             goal_doc["id"] = str(goal_doc["_id"])
             del goal_doc["_id"]

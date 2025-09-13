@@ -69,13 +69,37 @@ export interface GoalAnalysis {
   };
 }
 
+// Новые интерфейсы для работы с асинхронными задачами
+export interface TaskResponse {
+  task_id: string;
+  status: string;
+  message: string;
+  user_id: string;
+}
+
+export interface TaskStatus {
+  task_id: string;
+  state: 'PENDING' | 'PROGRESS' | 'SUCCESS' | 'FAILURE';
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  message: string;
+  progress?: number;
+  result?: any;
+  error?: string;
+}
+
 class AIService {
   private readonly AI_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 часа в миллисекундах
+  private readonly POLLING_INTERVAL = 2000; // 2 секунды
+  private readonly MAX_POLLING_TIME = 300000; // 5 минут максимум
 
   /**
-   * Анализ календаря с помощью ИИ с кешированием
+   * Анализ календаря с помощью ИИ (асинхронно через Celery)
    */
-  async analyzeCalendar(requestData: CalendarAnalysisRequest, forceRefresh: boolean = false): Promise<CalendarAnalysis> {
+  async analyzeCalendarAsync(
+    requestData: CalendarAnalysisRequest,
+    forceRefresh: boolean = false,
+    onProgress?: (status: TaskStatus) => void
+  ): Promise<CalendarAnalysis> {
     try {
       // Проверяем кеш, если не требуется принудительное обновление
       if (!forceRefresh) {
@@ -86,35 +110,187 @@ class AIService {
         }
       }
 
-      console.log('🤖 Requesting fresh AI analysis...');
+      console.log('🤖 Starting async AI analysis...');
       console.log('Sending analysis request:', requestData);
 
-      const response = await api.post('/ai/analyze-calendar', requestData);
+      // 1. Запускаем задачу
+      const taskResponse = await api.post('/ai/analyze-calendar', requestData);
+      const taskId = taskResponse.data.task_id;
 
-      console.log('Analysis response:', response.data);
+      console.log('📋 Analysis task started:', taskId);
 
-      // Кешируем результат на 24 часа
+      // 2. Ждем выполнения задачи с периодическими проверками
+      const result = await this.pollTaskStatus(taskId, onProgress);
+
+      // 3. Кешируем результат
+      if (result.analysis) {
+        cacheService.setByData(requestData, result.analysis, this.AI_CACHE_TTL);
+        return result.analysis;
+      }
+
+      throw new Error('Анализ завершился без результата');
+
+    } catch (error: any) {
+      console.error('Error analyzing calendar:', error);
+      throw this.handleAPIError(error, 'Ошибка при анализе календаря');
+    }
+  }
+
+  /**
+   * Синхронный анализ календаря (для быстрых случаев)
+   */
+  async analyzeCalendarSync(
+    requestData: CalendarAnalysisRequest,
+    forceRefresh: boolean = false
+  ): Promise<CalendarAnalysis> {
+    try {
+      // Проверяем кеш
+      if (!forceRefresh) {
+        const cachedResult = cacheService.getByData<CalendarAnalysis>(requestData);
+        if (cachedResult) {
+          console.log('📋 Using cached AI analysis');
+          return cachedResult;
+        }
+      }
+
+      console.log('🤖 Requesting sync AI analysis...');
+      const response = await api.post('/ai/analyze-calendar-sync', requestData);
+
+      // Кешируем результат
       cacheService.setByData(requestData, response.data, this.AI_CACHE_TTL);
 
       return response.data;
     } catch (error: any) {
-      console.error('Error analyzing calendar:', error);
+      console.error('Error in sync calendar analysis:', error);
+      throw this.handleAPIError(error, 'Ошибка при синхронном анализе календаря');
+    }
+  }
 
-      // Обрабатываем ошибки валидации Pydantic
-      if (error.response?.data?.detail) {
-        if (Array.isArray(error.response.data.detail)) {
-          // Массив ошибок валидации
-          const validationErrors = error.response.data.detail
-            .map((err: any) => `${err.loc?.join('.')} - ${err.msg}`)
-            .join('; ');
-          throw new Error(`Ошибки валидации: ${validationErrors}`);
-        } else if (typeof error.response.data.detail === 'string') {
-          // Строковая ошибка
-          throw new Error(error.response.data.detail);
+  /**
+   * Планирование расписания для цели (асинхронно)
+   */
+  async planGoalAsync(
+    requestData: any,
+    onProgress?: (status: TaskStatus) => void
+  ): Promise<any> {
+    try {
+      console.log('🎯 Starting async goal planning...');
+
+      // 1. Запускаем задачу
+      const taskResponse = await api.post('/ai/plan-goal', requestData);
+      const taskId = taskResponse.data.task_id;
+
+      console.log('📋 Goal planning task started:', taskId);
+
+      // 2. Ждем выполнения
+      const result = await this.pollTaskStatus(taskId, onProgress);
+
+      return result.suggestion || result;
+
+    } catch (error: any) {
+      console.error('Error planning goal:', error);
+      throw this.handleAPIError(error, 'Ошибка при планировании цели');
+    }
+  }
+
+  /**
+   * Синхронное планирование цели
+   */
+  async planGoalSync(requestData: any): Promise<any> {
+    try {
+      console.log('🎯 Requesting sync goal planning...');
+      const response = await api.post('/ai/plan-goal-sync', requestData);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error in sync goal planning:', error);
+      throw this.handleAPIError(error, 'Ошибка при синхронном планировании цели');
+    }
+  }
+
+  /**
+   * Получение статуса задачи
+   */
+  async getTaskStatus(taskId: string): Promise<TaskStatus> {
+    try {
+      const response = await api.get(`/ai/task/${taskId}`);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error getting task status:', error);
+      throw this.handleAPIError(error, 'Ошибка при получении статуса задачи');
+    }
+  }
+
+  /**
+   * Polling задачи до завершения
+   */
+  private async pollTaskStatus(
+    taskId: string,
+    onProgress?: (status: TaskStatus) => void
+  ): Promise<any> {
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < this.MAX_POLLING_TIME) {
+      try {
+        const status = await this.getTaskStatus(taskId);
+
+        // Вызываем callback для обновления UI
+        if (onProgress) {
+          onProgress(status);
         }
-      }
 
-      throw new Error('Ошибка при анализе календаря');
+        console.log('📋 Task status:', status.state, status.message);
+
+        if (status.state === 'SUCCESS') {
+          return status.result;
+        } else if (status.state === 'FAILURE') {
+          throw new Error(status.error || 'Задача завершилась с ошибкой');
+        }
+
+        // Ждем перед следующей проверкой
+        await new Promise(resolve => setTimeout(resolve, this.POLLING_INTERVAL));
+
+      } catch (error) {
+        console.error('Error polling task status:', error);
+        // Не бросаем ошибку сразу, пробуем еще раз
+        await new Promise(resolve => setTimeout(resolve, this.POLLING_INTERVAL));
+      }
+    }
+
+    throw new Error('Время ожидания задачи истекло');
+  }
+
+  /**
+   * Обработка ошибок API
+   */
+  private handleAPIError(error: any, defaultMessage: string): Error {
+    if (error.response?.data?.detail) {
+      if (Array.isArray(error.response.data.detail)) {
+        // Массив ошибок валидации
+        const validationErrors = error.response.data.detail
+          .map((err: any) => `${err.loc?.join('.')} - ${err.msg}`)
+          .join('; ');
+        return new Error(`Ошибки валидации: ${validationErrors}`);
+      } else if (typeof error.response.data.detail === 'string') {
+        // Строковая ошибка
+        return new Error(error.response.data.detail);
+      }
+    }
+    return new Error(defaultMessage);
+  }
+
+  /**
+   * Основной метод анализа календаря (выбирает async/sync автоматически)
+   */
+  async analyzeCalendar(
+    requestData: CalendarAnalysisRequest,
+    forceRefresh: boolean = false,
+    useAsync: boolean = true,
+    onProgress?: (status: TaskStatus) => void
+  ): Promise<CalendarAnalysis> {
+    if (useAsync) {
+      return this.analyzeCalendarAsync(requestData, forceRefresh, onProgress);
+    } else {
+      return this.analyzeCalendarSync(requestData, forceRefresh);
     }
   }
 
@@ -169,28 +345,6 @@ class AIService {
     } catch (error) {
       console.error('Error applying schedule change:', error);
       throw new Error('Ошибка при применении изменения');
-    }
-  }
-
-  /**
-   * Получение рекомендаций по планированию
-   */
-  async getPlanningRecommendations(
-    freeSlots: any[],
-    goal: any,
-    context?: string
-  ): Promise<any> {
-    try {
-      const response = await api.post('/ai/plan-goal', {
-        free_time_slots: freeSlots,
-        goal: goal,
-        context: context
-      });
-
-      return response.data;
-    } catch (error) {
-      console.error('Error getting planning recommendations:', error);
-      throw new Error('Ошибка при получении рекомендаций по планированию');
     }
   }
 
