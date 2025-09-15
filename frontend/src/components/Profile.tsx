@@ -4,6 +4,7 @@ import { calendarService, Calendar, CalendarEvent } from '../services/calendarSe
 import { useNavigate, useLocation } from 'react-router-dom';
 import RecurrenceBadge from './RecurrenceBadge';
 import Recommendations from './Recommendations';
+import { RRuleParser } from '../utils/rruleParser';
 import './Profile.css';
 
 type ActiveSection = 'calendar' | 'events' | 'recommendations';
@@ -29,7 +30,110 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
   const [lastFocusTime, setLastFocusTime] = useState<number>(Date.now()); // Время последнего фокуса
   const [initialLoadDone, setInitialLoadDone] = useState(false); // Флаг первоначальной загрузки
   const [requestInProgress, setRequestInProgress] = useState(false); // Глобальный флаг запроса
-  const [showOnlyActiveEvents, setShowOnlyActiveEvents] = useState(false); // Фильтр актуальных событий
+
+  // Заменяем showOnlyActiveEvents на более гибкую систему фильтрации
+  type EventsFilterType = 'week' | 'all' | 'active';
+  const [eventsFilter, setEventsFilter] = useState<EventsFilterType>('week'); // По умолчанию показываем события за неделю
+
+  // Функция для группировки событий по дням недели
+  const groupEventsByDays = (events: CalendarEvent[]) => {
+    const now = new Date();
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    yesterday.setHours(0, 0, 0, 0);
+
+    const daysOfWeek = [
+      'Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'
+    ];
+
+    const groupedEvents: { [key: string]: { dayName: string; date: string; events: CalendarEvent[]; isToday: boolean } } = {};
+
+    // Инициализируем 7 дней начиная с вчерашнего дня
+    for (let i = 0; i < 7; i++) {
+      const dayDate = new Date(yesterday);
+      dayDate.setDate(yesterday.getDate() + i);
+      const dayOfWeek = dayDate.getDay(); // 0 = воскресенье, 1 = понедельник, ..., 6 = суббота
+      const dayKey = `day_${i}`;
+      const isToday = dayDate.toDateString() === now.toDateString();
+
+      groupedEvents[dayKey] = {
+        dayName: daysOfWeek[dayOfWeek] + (isToday ? ' (сегодня)' : ''),
+        date: dayDate.toLocaleDateString('ru-RU', {
+          day: 'numeric',
+          month: 'short'
+        }),
+        events: [],
+        isToday
+      };
+    }
+
+    // Группируем события по дням
+    events.forEach(event => {
+      const eventStartDate = event.start.dateTime || event.start.date;
+      if (!eventStartDate) return;
+
+      const eventStart = new Date(eventStartDate);
+
+      // Определяем, в какой день попадает событие
+      for (let i = 0; i < 7; i++) {
+        const dayDate = new Date(yesterday);
+        dayDate.setDate(yesterday.getDate() + i);
+        const dayStart = new Date(dayDate);
+        dayStart.setHours(0, 0, 0, 0);
+        const dayEnd = new Date(dayDate);
+        dayEnd.setHours(23, 59, 59, 999);
+
+        // Проверяем, попадает ли событие в этот день
+        const eventEnd = new Date(event.end.dateTime || event.end.date || eventStartDate);
+
+        if ((eventStart >= dayStart && eventStart <= dayEnd) ||
+            (eventEnd >= dayStart && eventEnd <= dayEnd) ||
+            (eventStart <= dayStart && eventEnd >= dayEnd)) {
+          const dayKey = `day_${i}`;
+          // Проверяем, не добавлено ли уже это событие в этот день
+          if (!groupedEvents[dayKey].events.some(e => e.id === event.id)) {
+            groupedEvents[dayKey].events.push(event);
+          }
+        }
+      }
+
+      // Для повторяющихся событий добавляем в соответствующие дни
+      if (event.recurrence && event.recurrence.length > 0) {
+        try {
+          const rule = RRuleParser.parseRRule(event.recurrence[0]);
+
+          if (rule.type === 'weekly' && rule.days && rule.days.length > 0) {
+            const dayMap: { [key: string]: number } = {
+              'Вс': 0, 'Пн': 1, 'Вт': 2, 'Ср': 3, 'Чт': 4, 'Пт': 5, 'Сб': 6
+            };
+
+            rule.days.forEach(dayAbbr => {
+              const dayOfWeek = dayMap[dayAbbr];
+              if (dayOfWeek !== undefined) {
+                // Находим день в нашем диапазоне, который соответствует этому дню недели
+                for (let i = 0; i < 7; i++) {
+                  const dayDate = new Date(yesterday);
+                  dayDate.setDate(yesterday.getDate() + i);
+                  if (dayDate.getDay() === dayOfWeek) {
+                    const dayKey = `day_${i}`;
+                    // Проверяем, не добавлено ли уже это событие в этот день
+                    if (!groupedEvents[dayKey].events.some(e => e.id === event.id)) {
+                      groupedEvents[dayKey].events.push(event);
+                    }
+                    break;
+                  }
+                }
+              }
+            });
+          }
+        } catch (error) {
+          console.warn('Error parsing recurrence rule for grouping:', error);
+        }
+      }
+    });
+
+    return groupedEvents;
+  };
 
   // Очистка таймера при размонтировании
   useEffect(() => {
@@ -472,98 +576,169 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
               <div className="events-list">
                 <div className="events-list-header">
                   <h3>
-                    {showOnlyActiveEvents
+                    {eventsFilter === 'week'
+                      ? `События за 7 дней (${getFilteredEvents().length})`
+                      : eventsFilter === 'active'
                       ? `Актуальные события (${getFilteredEvents().length})`
-                      : `Ваши события (${events.length})`
+                      : `Все события (${events.length})`
                     }
                   </h3>
                   <div className="events-filter">
-                    <label className="filter-checkbox">
-                      <input
-                        type="checkbox"
-                        checked={showOnlyActiveEvents}
-                        onChange={toggleActiveEventsFilter}
-                      />
-                      <span className="checkmark"></span>
-                      Только актуальные
-                    </label>
+                    {eventsFilter === 'week' && (
+                      <button
+                        className="filter-button"
+                        onClick={() => setEventsFilter('all')}
+                      >
+                        Показать все события
+                      </button>
+                    )}
+                    {eventsFilter === 'all' && (
+                      <button
+                        className="filter-button"
+                        onClick={() => setEventsFilter('active')}
+                      >
+                        Только актуальные
+                      </button>
+                    )}
+                    {eventsFilter === 'active' && (
+                      <button
+                        className="filter-button active"
+                        onClick={() => setEventsFilter('week')}
+                      >
+                        За 7 дней
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="events-grid">
-                  {getFilteredEvents().map((event) => (
-                    <div key={event.id} className={`event-card ${!isEventActive(event) ? 'event-past' : ''} ${isEventRecurring(event) ? 'event-recurring' : ''}`}>
-                      <div className="event-card-header">
-                        <div className="event-time-block">
-                          <div className="event-date">
-                            {formatEventDateModern(event).date}
+
+                {eventsFilter === 'week' ? (
+                  // Отображение событий по дням недели
+                  <div className="events-by-days">
+                    {Object.entries(groupEventsByDays(getFilteredEvents())).map(([dayKey, dayData]) => (
+                      <div key={dayKey} className={`events-day-section ${dayData.isToday ? 'today' : ''}`}>
+                        <div className="day-header">
+                          <h4 className="day-name">{dayData.dayName}</h4>
+                          <span className="day-date">{dayData.date}</span>
+                        </div>
+
+                        {dayData.events.length > 0 ? (
+                          <div className="day-events">
+                            {dayData.events.map((event) => (
+                              <div key={`${dayKey}-${event.id}`} className={`event-card-compact ${!isEventActive(event) ? 'event-past' : ''} ${isEventRecurring(event) ? 'event-recurring' : ''}`}>
+                                <div className="event-time-compact">
+                                  {formatEventDateModern(event).time}
+                                </div>
+                                <div className="event-content-compact">
+                                  <div className="event-title-compact">
+                                    {event.summary || 'Без названия'}
+                                    <div className="event-badges-compact">
+                                      <RecurrenceBadge event={event} />
+                                    </div>
+                                  </div>
+                                  {event.location && (
+                                    <div className="event-location-compact">
+                                      📍 {event.location}
+                                    </div>
+                                  )}
+                                </div>
+                                <a
+                                  href={event.htmlLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="event-link-compact"
+                                  title="Открыть в Google Calendar"
+                                >
+                                  📅
+                                </a>
+                              </div>
+                            ))}
                           </div>
-                          <div className="event-time">
-                            {formatEventDateModern(event).time}
+                        ) : (
+                          <div className="no-events-day">
+                            <span>Событий нет</span>
                           </div>
-                          <div className="event-duration">
-                            {formatEventDateModern(event).duration}
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  // Обычное отображение событий для фильтров "все" и "актуальные"
+                  <div className="events-grid">
+                    {getFilteredEvents().map((event) => (
+                      <div key={event.id} className={`event-card ${!isEventActive(event) ? 'event-past' : ''} ${isEventRecurring(event) ? 'event-recurring' : ''}`}>
+                        <div className="event-card-header">
+                          <div className="event-time-block">
+                            <div className="event-date">
+                              {formatEventDateModern(event).date}
+                            </div>
+                            <div className="event-time">
+                              {formatEventDateModern(event).time}
+                            </div>
+                            <div className="event-duration">
+                              {formatEventDateModern(event).duration}
+                            </div>
+                          </div>
+                          <div className="event-main-info">
+                            <div className="event-title-row">
+                              <h4 className="event-title">{event.summary || 'Без названия'}</h4>
+                              <div className="event-badges">
+                                <RecurrenceBadge event={event} />
+                                <span className={`event-status status-${event.status}`}>
+                                  {event.status === 'confirmed' ? '✓' : event.status === 'tentative' ? '?' : '✕'}
+                                </span>
+                              </div>
+                            </div>
+                            {event.location && (
+                              <div className="event-location">
+                                <span className="location-icon">📍</span>
+                                <span>{event.location}</span>
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <div className="event-main-info">
-                          <div className="event-title-row">
-                            <h4 className="event-title">{event.summary || 'Без названия'}</h4>
-                            <div className="event-badges">
-                              <RecurrenceBadge event={event} />
-                              <span className={`event-status status-${event.status}`}>
-                                {event.status === 'confirmed' ? '✓' : event.status === 'tentative' ? '?' : '✕'}
-                              </span>
-                            </div>
+
+                        {(event.description || event.attendees?.length) && (
+                          <div className="event-card-body">
+                            {event.description && (
+                              <div className="event-description">
+                                <p>{event.description.length > 100 ?
+                                  event.description.substring(0, 100) + '...' :
+                                  event.description}
+                                </p>
+                              </div>
+                            )}
+                            {event.attendees && event.attendees.length > 0 && (
+                              <div className="event-attendees">
+                                <span className="attendees-count">
+                                  👥 {event.attendees.length} участник{event.attendees.length > 1 ? 'ов' : ''}
+                                </span>
+                              </div>
+                            )}
                           </div>
-                          {event.location && (
-                            <div className="event-location">
-                              <span className="location-icon">📍</span>
-                              <span>{event.location}</span>
-                            </div>
-                          )}
+                        )}
+
+                        <div className="event-card-footer">
+                          <div className="event-organizer">
+                            <span className="organizer-info">
+                              👤 {event.organizer.displayName || event.organizer.email.split('@')[0]}
+                            </span>
+                          </div>
+                          <a
+                            href={event.htmlLink}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="event-link-btn"
+                            title="Открыть в Google Calendar"
+                          >
+                            <span>📅</span>
+                          </a>
                         </div>
                       </div>
+                    ))}
+                  </div>
+                )}
 
-                      {(event.description || event.attendees?.length) && (
-                        <div className="event-card-body">
-                          {event.description && (
-                            <div className="event-description">
-                              <p>{event.description.length > 100 ?
-                                event.description.substring(0, 100) + '...' :
-                                event.description}
-                              </p>
-                            </div>
-                          )}
-                          {event.attendees && event.attendees.length > 0 && (
-                            <div className="event-attendees">
-                              <span className="attendees-count">
-                                👥 {event.attendees.length} участник{event.attendees.length > 1 ? 'ов' : ''}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      <div className="event-card-footer">
-                        <div className="event-organizer">
-                          <span className="organizer-info">
-                            👤 {event.organizer.displayName || event.organizer.email.split('@')[0]}
-                          </span>
-                        </div>
-                        <a
-                          href={event.htmlLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="event-link-btn"
-                          title="Открыть в Google Calendar"
-                        >
-                          <span>📅</span>
-                        </a>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {showOnlyActiveEvents && getFilteredEvents().length === 0 && (
+                {eventsFilter === 'active' && getFilteredEvents().length === 0 && (
                   <div className="no-active-events">
                     <p>📅 Актуальных событий нет</p>
                     <p>Все ваши события уже завершились</p>
@@ -752,10 +927,86 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
 
   // Фильтрация событий
   const getFilteredEvents = (): CalendarEvent[] => {
-    if (!showOnlyActiveEvents) {
+    if (eventsFilter === 'all') {
       return events;
     }
-    return events.filter(isEventActive);
+
+    if (eventsFilter === 'active') {
+      return events.filter(isEventActive);
+    }
+
+    // eventsFilter === 'week' - показываем события за текущую неделю (воскресенье - суббота)
+    const now = new Date();
+
+    // Находим воскресенье текущей недели
+    const currentDayOfWeek = now.getDay(); // 0 = воскресенье, 1 = понедельник, ..., 6 = суббота
+    const sunday = new Date(now);
+    sunday.setDate(now.getDate() - currentDayOfWeek);
+    sunday.setHours(0, 0, 0, 0); // Начало воскресенья
+
+    // Находим субботу текущей недели
+    const saturday = new Date(sunday);
+    saturday.setDate(sunday.getDate() + 6);
+    saturday.setHours(23, 59, 59, 999); // Конец субботы
+
+    return events.filter(event => {
+      const eventStartDate = event.start.dateTime || event.start.date;
+      const eventEndDate = event.end.dateTime || event.end.date;
+
+      // Проверяем, что даты существуют
+      if (!eventStartDate || !eventEndDate) {
+        return false;
+      }
+
+      // Проверяем повторяющиеся события
+      if (event.recurrence && event.recurrence.length > 0) {
+        try {
+          const rule = RRuleParser.parseRRule(event.recurrence[0]);
+
+          // Если повторяющееся событие уже закончилось (до текущей недели), не показываем
+          if (rule.until && rule.until < sunday) {
+            return false;
+          }
+
+          // Если событие началось после текущей недели, не показываем
+          const recurringEventStart = new Date(eventStartDate);
+          if (recurringEventStart > saturday) {
+            return false;
+          }
+
+          // Для еженедельных событий проверяем дни недели
+          if (rule.type === 'weekly' && rule.days && rule.days.length > 0) {
+            const dayMap: { [key: string]: number } = {
+              'Вс': 0, 'Пн': 1, 'Вт': 2, 'Ср': 3, 'Чт': 4, 'Пт': 5, 'Сб': 6
+            };
+
+            // Проверяем, есть ли хотя бы один день из правила в текущей неделе
+            return rule.days.some(day => dayMap.hasOwnProperty(day));
+          }
+
+          // Для ежедневных событий, если они начались до конца недели и не закончились до начала недели
+          if (rule.type === 'daily') {
+            return recurringEventStart <= saturday && (!rule.until || rule.until >= sunday);
+          }
+
+          // Для других типов повторений считаем активными, если они пересекаются с неделей
+          return recurringEventStart <= saturday && (!rule.until || rule.until >= sunday);
+
+        } catch (error) {
+          console.warn('Error parsing recurrence rule:', error);
+          // В случае ошибки парсинга применяем обычную логику
+        }
+      }
+
+      // Обычная логика для неповторяющихся событий
+      const eventStart = new Date(eventStartDate);
+      const eventEnd = new Date(eventEndDate);
+
+      // Событие попадает в диапазон, если начинается или заканчивается в текущей неделе
+      return (eventStart >= sunday && eventStart <= saturday) ||
+             (eventEnd >= sunday && eventEnd <= saturday) ||
+             (eventStart <= sunday && eventEnd >= saturday);
+    });
   };
 
   // Функция для проверки, является ли событие повторяющимся
@@ -763,10 +1014,6 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     return !!(event.recurrence && event.recurrence.length > 0) || !!event.recurringEventId;
   };
 
-  // Функция переключения фильтра
-  const toggleActiveEventsFilter = () => {
-    setShowOnlyActiveEvents(!showOnlyActiveEvents);
-  };
 
   if (loading) {
     return (
