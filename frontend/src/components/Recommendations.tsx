@@ -4,6 +4,17 @@ import { calendarService, CalendarEvent } from '../services/calendarService';
 import { RRuleParser } from '../utils/rruleParser';
 import './Recommendations.css';
 
+// Добавляем тип анализа
+type AnalysisType = 'week' | 'tomorrow' | 'general';
+
+interface AnalysisTypeOption {
+  type: AnalysisType;
+  title: string;
+  description: string;
+  icon: string;
+  period_days: number;
+}
+
 interface RecommendationCardProps {
   recommendation: string;
 }
@@ -124,14 +135,42 @@ const Recommendations: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [goals, setGoals] = useState<SmartGoal[]>([]);
-  // Храним идентификаторы изменений (а не индексы) и персистим их в localStorage
   const [appliedChanges, setAppliedChanges] = useState<Set<string>>(new Set());
   const [rejectedChanges, setRejectedChanges] = useState<Set<string>>(new Set());
   const [applyingChange, setApplyingChange] = useState<number | null>(null);
 
+  // Новое состояние для выбора типа анализа
+  const [selectedAnalysisType, setSelectedAnalysisType] = useState<AnalysisType | null>(null);
+  const [showAnalysisSelection, setShowAnalysisSelection] = useState(true);
+
   // Ключи в localStorage для персистентности
   const APPLIED_KEY = 'ai_applied_schedule_change_ids';
   const REJECTED_KEY = 'ai_rejected_schedule_change_ids';
+
+  // Опции типов анализа
+  const analysisOptions: AnalysisTypeOption[] = [
+    {
+      type: 'week',
+      title: 'Календарь на неделю',
+      description: 'ИИ проанализирует ваш календарь на ближайшую неделю и предложит оптимизацию с учетом ваших целей',
+      icon: '📅',
+      period_days: 7
+    },
+    {
+      type: 'tomorrow',
+      title: 'Календарь на завтра',
+      description: 'ИИ проанализирует ваши планы на завтра и предложит улучшения',
+      icon: '🌅',
+      period_days: 1
+    },
+    {
+      type: 'general',
+      title: 'Общий анализ',
+      description: 'Комплексный анализ всего календаря с рекомендациями по тайм-менеджменту',
+      icon: '🔍',
+      period_days: 30
+    }
+  ];
 
   // Генерируем стабильный ключ изменения: используем id, иначе хеш от содержимого
   const getChangeKey = (change: ScheduleChange): string => {
@@ -172,10 +211,10 @@ const Recommendations: React.FC = () => {
     return /^(\d{1,2}):(\d{2})(?::(\d{2}))?(\s*(AM|PM))?$/i.test(value.trim());
   };
 
-  // ВСПОМОГАТЕЛЬНО: за��енить время в RFC3339, сохраняя дату и смещение
+  // ВСПОМОГАТЕЛЬНО: заменить время в RFC3339, сохраняя дату и смещение
   const replaceTimeInRFC3339 = (baseDateTime: string, timeStr: string, fallbackOffset?: string): string => {
     // Извлекаем дату и смещение из baseDateTime, если есть
-    const m = baseDateTime.match(/^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}:?\d{0,2}(?:\.\d+)?(Z|[+\-]\d{2}:\d{2})?$/);
+    const m = baseDateTime.match(/^(\d{4}-\d{2}-\d{2})T\d{2}:\d{2}:?\d{0,2}(?:\.\d+)?(Z|[+-]\d{2}:\d{2})?$/);
     const datePart = baseDateTime.slice(0, 10); // YYYY-MM-DD
     // Парсим время
     const t = timeStr.trim();
@@ -205,7 +244,7 @@ const Recommendations: React.FC = () => {
 
     const getOffset = (dt?: string) => {
       if (!dt) return undefined;
-      const m = dt.match(/(Z|[+\-]\d{2}:\d{2})$/);
+      const m = dt.match(/(Z|[+-]\d{2}:\d{2})$/);
       return m ? m[1] : undefined;
     };
 
@@ -346,8 +385,61 @@ const Recommendations: React.FC = () => {
     return end >= now;
   };
 
-  // Получение анализа календаря
-  const getCalendarAnalysis = async (forceRefresh: boolean = false) => {
+  // Фильтрация событий по периоду анализа
+  const filterEventsByPeriod = (events: CalendarEvent[], analysisType: AnalysisType): CalendarEvent[] => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    let endDate: Date;
+
+    switch (analysisType) {
+      case 'tomorrow':
+        // Завтра: от начала завтрашнего дня до конца завтрашнего дня
+        const tomorrow = new Date(startOfToday);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const endOfTomorrow = new Date(tomorrow);
+        endOfTomorrow.setDate(endOfTomorrow.getDate() + 1);
+        endDate = endOfTomorrow;
+        break;
+
+      case 'week':
+        // Неделя: от сегодня до конца недели (7 дней)
+        endDate = new Date(startOfToday);
+        endDate.setDate(endDate.getDate() + 7);
+        break;
+
+      case 'general':
+      default:
+        // Общий анализ: все активные события
+        return events.filter(isEventActiveOrRecurring);
+    }
+
+    return events.filter(event => {
+      if (!isEventActiveOrRecurring(event)) return false;
+
+      // Получаем дату начала события
+      const eventStartStr = event.start?.dateTime || event.start?.date;
+      if (!eventStartStr) return false;
+
+      const eventStart = new Date(eventStartStr);
+
+      // Для завтра: события только завтрашнего дня
+      if (analysisType === 'tomorrow') {
+        const tomorrow = new Date(startOfToday);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const endOfTomorrow = new Date(tomorrow);
+        endOfTomorrow.setDate(endOfTomorrow.getDate() + 1);
+
+        return eventStart >= tomorrow && eventStart < endOfTomorrow;
+      }
+
+      // Для недели: события от сегодня до конца недели
+      return eventStart >= startOfToday && eventStart < endDate;
+    });
+  };
+
+  // Модифицированная функция получения анализа календаря
+  const getCalendarAnalysis = async (analysisType: AnalysisType, forceRefresh: boolean = false) => {
     setLoading(true);
     setError(null);
 
@@ -363,30 +455,59 @@ const Recommendations: React.FC = () => {
         return;
       }
 
-      // Фильтруем только актуальные/повторяющиеся события для анализа
-      const filteredEvents = eventsList.filter(isEventActiveOrRecurring);
+      // Фильтруем события по выбранному периоду
+      const filteredEvents = filterEventsByPeriod(eventsList, analysisType);
 
-      if (filteredEvents.length === 0) {
-        console.warn('Нет актуальных событий для анализа, отправляем пустой список');
+      if (filteredEvents.length === 0 && analysisType !== 'general') {
+        const periodName = analysisType === 'tomorrow' ? 'на завтра' : 'на ближайшую неделю';
+        setError(`Нет событий ${periodName} для анализа`);
+        return;
       }
 
-      // Отправляем события на анализ ИИ с возможностью принудительного обновления
+      // Получаем соответствующий период для API
+      const option = analysisOptions.find(opt => opt.type === analysisType);
+      const periodDays = option?.period_days || 7;
+
+      // Отправляем события на анализ ИИ
       const analysisResult = await aiService.analyzeCalendar({
         calendar_events: filteredEvents,
         user_goals: goalsList,
-        analysis_period_days: 7
+        analysis_period_days: periodDays
       }, forceRefresh);
 
-      // Нормализуем предложенные изменения: подставляем дату из исходного события, если ИИ вернул только время
+      // Нормализуем предложенные изменения
       const normalizedChanges = (analysisResult.schedule_changes || []).map(ch => normalizeChangeDateTimes(ch));
 
       setAnalysis({ ...analysisResult, schedule_changes: normalizedChanges });
+      setShowAnalysisSelection(false);
 
     } catch (err: any) {
       console.error('Error getting calendar analysis:', err);
       setError(err.message || 'Произошла ошибка при анализе календаря');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Обработчик выбора типа анализа
+  const handleAnalysisTypeSelect = (analysisType: AnalysisType) => {
+    setSelectedAnalysisType(analysisType);
+    getCalendarAnalysis(analysisType);
+  };
+
+  // Функция для возврата к выбору типа анализа
+  const goBackToSelection = () => {
+    setShowAnalysisSelection(true);
+    setSelectedAnalysisType(null);
+    setAnalysis(null);
+    setError(null);
+  };
+
+  // Обновление анализа календаря
+  const refreshCalendarAnalysis = async () => {
+    if (selectedAnalysisType) {
+      aiService.clearAICache();
+      await getCalendarAnalysis(selectedAnalysisType, true);
     }
   };
 
@@ -454,28 +575,54 @@ const Recommendations: React.FC = () => {
     });
   };
 
-  // Обновление анализа календаря (очистка кеша + новый запрос)
-  const refreshCalendarAnalysis = async () => {
-    aiService.clearAICache();
-    // Сбрасываем локальные пометки, если нужен полный пересчёт
-    // При необходимости можно оставить, чтобы скрывать даже после обновления
-    await getCalendarAnalysis(true);
-  };
-
-
-  // Загружаем анализ при монтировании компонента
+  // Загружаем обработанные изменения при монтировании
   useEffect(() => {
     loadHandledChanges();
-    getCalendarAnalysis();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Показываем экран выбора типа анализа
+  if (showAnalysisSelection && !loading) {
+    return (
+      <div className="recommendations-container">
+        <div className="analysis-selection">
+          <h2>Выберите тип анализа календаря</h2>
+          <p className="selection-subtitle">
+            ИИ проанализирует ваш календарь и цели, предложит оптимизацию расписания
+          </p>
+
+          <div className="analysis-options">
+            {analysisOptions.map((option) => (
+              <div
+                key={option.type}
+                className="analysis-option"
+                onClick={() => handleAnalysisTypeSelect(option.type)}
+              >
+                <div className="option-icon">{option.icon}</div>
+                <div className="option-content">
+                  <h3>{option.title}</h3>
+                  <p>{option.description}</p>
+                </div>
+                <div className="option-arrow">→</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
+    const selectedOption = analysisOptions.find(opt => opt.type === selectedAnalysisType);
     return (
       <div className="recommendations-container">
         <div className="loading-spinner">
           <div className="spinner"></div>
           <p>Анализируем ваш календарь...</p>
+          {selectedOption && (
+            <p className="analysis-type-hint">
+              {selectedOption.icon} {selectedOption.title}
+            </p>
+          )}
         </div>
       </div>
     );
@@ -487,9 +634,14 @@ const Recommendations: React.FC = () => {
         <div className="error-message">
           <h3>⚠️ Ошибка</h3>
           <p>{error}</p>
-          <button onClick={() => getCalendarAnalysis()} className="retry-button">
-            Попробовать снова
-          </button>
+          <div className="error-actions">
+            <button onClick={() => selectedAnalysisType && getCalendarAnalysis(selectedAnalysisType)} className="retry-button">
+              Попробовать снова
+            </button>
+            <button onClick={goBackToSelection} className="back-button">
+              Выбрать другой тип анализа
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -498,113 +650,90 @@ const Recommendations: React.FC = () => {
   if (!analysis) {
     return (
       <div className="recommendations-container">
-        <p>Нет данных для отображения</p>
-        <button onClick={() => getCalendarAnalysis()} className="retry-button">
-          Загрузить анализ
-        </button>
+        <div className="no-analysis">
+          <p>Нет данных для отображения</p>
+          <button onClick={goBackToSelection} className="back-button">
+            Выбрать тип анализа
+          </button>
+        </div>
       </div>
     );
   }
 
+  // Фильтруем изменения: скрываем те, что уже применены или отклонены
+  const visibleChanges = (analysis.schedule_changes || []).filter(change => {
+    const key = getChangeKey(change);
+    return !appliedChanges.has(key) && !rejectedChanges.has(key);
+  });
+
+  const selectedOption = analysisOptions.find(opt => opt.type === selectedAnalysisType);
+
   return (
     <div className="recommendations-container">
-      <header className="recommendations-header">
-        <h2>📊 Анализ календаря</h2>
-        <div className="header-buttons">
+      <div className="recommendations-header">
+        <div className="header-top">
+          <button onClick={goBackToSelection} className="back-to-selection">
+            ← Выбрать другой анализ
+          </button>
           <button onClick={refreshCalendarAnalysis} className="refresh-button">
-            🔄 Обновить анализ календаря
+            🔄 Обновить анализ
           </button>
         </div>
-      </header>
 
-      {/* Краткое резюме */}
-      <div className="summary-section">
-        <h3>📝 Общий анализ</h3>
-        <p>{analysis.summary}</p>
-
-        {analysis.productivity_score && (
-          <div className="productivity-score">
-            <strong>Оценка продуктивности:</strong> {analysis.productivity_score}/10
-          </div>
-        )}
-
-        {analysis.goal_alignment && (
-          <div className="goal-alignment">
-            <strong>Соответствие целям:</strong> {analysis.goal_alignment}
+        {selectedOption && (
+          <div className="current-analysis-type">
+            <span className="analysis-icon">{selectedOption.icon}</span>
+            <h2>{selectedOption.title}</h2>
           </div>
         )}
       </div>
 
-      {/* Общие рекомендации */}
+      {/* Рекомендации */}
       {analysis.recommendations && analysis.recommendations.length > 0 && (
         <div className="recommendations-section">
           <h3>💡 Рекомендации</h3>
           <div className="recommendations-list">
-            {analysis.recommendations.map((recommendation: string, index: number) => (
-              <RecommendationCard
-                key={index}
-                recommendation={recommendation}
+            {analysis.recommendations.map((recommendation, index) => (
+              <RecommendationCard key={index} recommendation={recommendation} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Предложенные изменения */}
+      {visibleChanges.length > 0 && (
+        <div className="schedule-changes-section">
+          <h3>🔄 Предложенные изменения в расписании</h3>
+          <div className="schedule-changes-list">
+            {visibleChanges.map((change, index) => (
+              <ScheduleChangeCard
+                key={getChangeKey(change)}
+                change={change}
+                onApply={() => applyScheduleChange(change, index)}
+                onReject={() => rejectScheduleChange(change)}
+                isApplying={applyingChange === index}
               />
             ))}
           </div>
         </div>
       )}
 
-      {/* Предлагаемые изменения расписания */}
-      {analysis.schedule_changes && analysis.schedule_changes.length > 0 && (
-        <div className="schedule-changes-section">
-          <h3>📅 Предлагаемые изменения</h3>
-          <div className="schedule-changes-list">
-            {analysis.schedule_changes.map((change: ScheduleChange, index: number) => {
-              const key = getChangeKey(change);
-              if (appliedChanges.has(key) || rejectedChanges.has(key)) {
-                return null;
-              }
-
-              return (
-                <ScheduleChangeCard
-                  key={key}
-                  change={change}
-                  onApply={() => applyScheduleChange(change, index)}
-                  onReject={() => rejectScheduleChange(change)}
-                  isApplying={applyingChange === index}
-                />
-              );
-            })}
+      {/* Если нет видимых изменений */}
+      {(!analysis.recommendations || analysis.recommendations.length === 0) &&
+       visibleChanges.length === 0 && (
+        <div className="no-recommendations">
+          <div className="no-recommendations-content">
+            <span className="no-recommendations-icon">✅</span>
+            <h3>Ваш календарь выглядит отлично!</h3>
+            <p>
+              {selectedAnalysisType === 'tomorrow' && 'На завтра у вас хорошо спланированный день.'}
+              {selectedAnalysisType === 'week' && 'Ваше расписание на неделю хорошо оптимизировано.'}
+              {selectedAnalysisType === 'general' && 'ИИ не нашел критических проблем в вашем календаре.'}
+            </p>
+            <p>Попробуйте обновить анализ позже или выберите другой период.</p>
           </div>
-
-          {appliedChanges.size > 0 && (
-            <div className="applied-changes">
-              <h4>✅ Примененные изменения: {appliedChanges.size}</h4>
-            </div>
-          )}
-
-          {rejectedChanges.size > 0 && (
-            <div className="rejected-changes">
-              <h4>❌ Отклоненные изменения: {rejectedChanges.size}</h4>
-            </div>
-          )}
         </div>
       )}
-
-      {/* Статистика */}
-      <div className="events-stats">
-        <h3>📈 Статистика</h3>
-        <div className="stats-grid">
-          <div className="stat-item">
-            <span className="stat-value">{events.filter(isEventActiveOrRecurring).length}</span>
-            <span className="stat-label">Актуальные</span>
-          </div>
-          <div className="stat-item">
-            <span className="stat-value">{goals.length}</span>
-            <span className="stat-label">Целей</span>
-          </div>
-          <div className="stat-item">
-            <span className="stat-value">{analysis.schedule_changes?.length || 0}</span>
-            <span className="stat-label">Предложений</span>
-          </div>
-        </div>
-      </div>
     </div>
   );
 };

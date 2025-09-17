@@ -30,23 +30,28 @@ async def analyze_calendar_and_goals(
     """
     Анализ календаря пользователя и его SMART целей (асинхронно через FastAPI)
 
-    Выполняется асинхронно, API не блокируется благодаря FastAPI.
+    Поддерживает разные типы анализа:
+    - 'week': анализ на ближайшую неделю
+    - 'tomorrow': анализ на завтра
+    - 'general': общий анализ календаря
     """
     try:
-        logger.info(f"Starting calendar analysis for user {user_id}")
+        analysis_type = request.analysis_type or 'general'
+        logger.info(f"Starting calendar analysis for user {user_id}, type: {analysis_type}")
         logger.info(f"Received {len(request.calendar_events)} events for analysis")
 
         # Преобразуем события календаря в словари
         calendar_events_dict = [event.model_dump() for event in request.calendar_events]
 
-        # Выполняем анализ асинхронно (FastAPI не блокируется)
+        # Выполняем анализ асинхронно с учетом типа анализа
         result = await openai_service.analyze_calendar_and_goals(
             calendar_events=calendar_events_dict,
             user_goals=request.user_goals,
-            analysis_period_days=request.analysis_period_days or 7
+            analysis_period_days=request.analysis_period_days or 7,
+            analysis_type=analysis_type
         )
 
-        logger.info(f"Calendar analysis completed successfully for user {user_id}")
+        logger.info(f"Calendar analysis completed successfully for user {user_id}, type: {analysis_type}")
         return result
 
     except Exception as e:
