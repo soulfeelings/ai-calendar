@@ -472,7 +472,8 @@ const Recommendations: React.FC = () => {
       const analysisResult = await aiService.analyzeCalendar({
         calendar_events: filteredEvents,
         user_goals: goalsList,
-        analysis_period_days: periodDays
+        analysis_period_days: periodDays,
+        analysis_type: analysisType // Добавляем поле analysis_type
       }, forceRefresh);
 
       // Нормализуем предложенные изменения
