@@ -50,55 +50,79 @@ class FreeTimeSlot(BaseModel):
     duration_minutes: int
 
 
+class ScheduledEvent(BaseModel):
+    """Запланированное событие в расписании"""
+    title: str
+    description: Optional[str] = None
+    start_time: str  # ISO 8601 format
+    end_time: str    # ISO 8601 format
+    priority: Optional[str] = "medium"  # low, medium, high
+    category: Optional[str] = None  # work, personal, health, etc.
+    goal_id: Optional[str] = None  # связь с целью
+    is_flexible: Optional[bool] = True  # можно ли перенести
+
+
+class DaySchedule(BaseModel):
+    """Расписание на один день"""
+    date: str  # YYYY-MM-DD format
+    day_name: str  # Monday, Tuesday, etc.
+    events: List[ScheduledEvent]
+    total_productive_hours: Optional[float] = None
+    break_time_hours: Optional[float] = None
+    summary: Optional[str] = None
+
+
+class FullScheduleRequest(BaseModel):
+    """Запрос на создание полного расписания"""
+    schedule_type: str = Field(..., description="'tomorrow' или 'week'")
+    user_goals: List[SMARTGoal]
+    existing_events: Optional[List[CalendarEvent]] = []
+    preferences: Optional[dict] = None  # предпочтения пользователя
+    work_hours_start: Optional[str] = "09:00"  # время начала рабочего дня
+    work_hours_end: Optional[str] = "18:00"    # время окончания рабочего дня
+    break_duration_minutes: Optional[int] = 60  # обеденный перерыв
+    buffer_between_events_minutes: Optional[int] = 15  # буфер между событиями
+
+
+class FullScheduleResponse(BaseModel):
+    """Ответ с полным расписанием"""
+    schedule_type: str
+    schedules: List[DaySchedule]  # расписание по дням
+    recommendations: List[str] = []  # общие рекомендации
+    total_goals_addressed: int = 0  # количество целей, которые учтены
+    productivity_score: Optional[float] = None  # оценка продуктивности (0-10)
+    reasoning: Optional[str] = None  # объяснение ИИ
+
+
 class SchedulePlanningRequest(BaseModel):
-    """Запрос на планирование конкретной цели"""
+    """Запрос на планирование расписания для конкретной цели"""
     goal: SMARTGoal
     free_time_slots: List[FreeTimeSlot]
     context: Optional[str] = None
 
 
-class SuggestedEvent(BaseModel):
-    title: str
-    description: str
-    start_time: datetime
-    end_time: datetime
-    priority: int
-
-
 class SchedulePlanningResponse(BaseModel):
-    """Ответ планирования расписания"""
+    """Ответ на планирование расписания"""
     suggested_time: str
     duration: str
     frequency: str
     reasoning: str
-    suggested_events: List[SuggestedEvent]
+    suggested_events: Optional[List[dict]] = None
 
 
-class GoalAnalysisItem(BaseModel):
-    """Анализ отдельного критерия SMART"""
-    score: int = Field(..., ge=0, le=100, description="Оценка от 0 до 100")
-    feedback: str = Field(..., description="Обратная связь и рекомендации")
-
-
-class GoalAnalysisDetails(BaseModel):
-    """Детальный анализ по всем критериям SMART"""
-    specific: GoalAnalysisItem
-    measurable: GoalAnalysisItem
-    achievable: GoalAnalysisItem
-    relevant: GoalAnalysisItem
-    time_bound: GoalAnalysisItem
-
-
-class ImprovedGoal(BaseModel):
-    """Улучшенная версия цели"""
-    title: str
-    description: str
+class CalendarAnalysisResponse(BaseModel):
+    """Ответ анализа календаря"""
+    summary: str
+    recommendations: List[str]
+    schedule_changes: List[dict]
+    productivity_score: Optional[float] = None
+    goal_alignment: Optional[str] = None
 
 
 class GoalAnalysisResponse(BaseModel):
-    """Ответ анализа цели от ИИ"""
-    is_smart: bool = Field(..., description="Соответствует ли цель принципам SMART")
-    overall_score: int = Field(..., ge=0, le=100, description="Общий балл цели")
-    analysis: GoalAnalysisDetails = Field(..., description="Детальный анализ по критериям")
-    suggestions: List[str] = Field(default=[], description="Рекомендации для улучшения")
-    improved_goal: Optional[ImprovedGoal] = Field(None, description="Предлагаемая улучшенная версия цели")
+    """Ответ анализа цели по SMART критериям"""
+    is_smart: bool
+    overall_score: int
+    analysis: dict
+    suggestions: List[str]
+    improved_goal: Optional[dict] = None

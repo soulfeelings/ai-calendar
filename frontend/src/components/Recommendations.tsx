@@ -29,6 +29,49 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({ recommendation 
   );
 };
 
+interface NoGoalsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onGoToGoals: () => void;
+}
+
+const NoGoalsModal: React.FC<NoGoalsModalProps> = ({ isOpen, onClose, onGoToGoals }) => {
+  console.log('🔔 NoGoalsModal render:', { isOpen });
+
+  // Добавляем эффект для отслеживания изменений состояния модального окна
+  useEffect(() => {
+    console.log('🔔 NoGoalsModal isOpen changed:', isOpen);
+  }, [isOpen]);
+
+  if (!isOpen) {
+    console.log('🔔 NoGoalsModal not rendering - isOpen is false');
+    return null;
+  }
+
+  console.log('🔔 NoGoalsModal rendering modal content');
+
+  return (
+    <div className="no-goals-modal-overlay" onClick={onClose}>
+      <div className="no-goals-modal" onClick={(e) => e.stopPropagation()}>
+        <span className="no-goals-modal-icon">🎯</span>
+        <h3>Нет целей для планирования</h3>
+        <p>
+          Для создания полного расписания необходимо добавить хотя бы одну цель.
+          ИИ создаст оптимальный план на основе ваших целей и лучших практик тайм-менеджмента.
+        </p>
+        <div className="no-goals-modal-actions">
+          <button className="primary-button" onClick={onGoToGoals}>
+            ➕ Добавить цели
+          </button>
+          <button className="secondary-button" onClick={onClose}>
+            Попробовать позже
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface ScheduleChangeCardProps {
   change: ScheduleChange;
   onApply: () => void;
@@ -142,6 +185,7 @@ const Recommendations: React.FC = () => {
   // Новое состояние для выбора типа анализа
   const [selectedAnalysisType, setSelectedAnalysisType] = useState<AnalysisType | null>(null);
   const [showAnalysisSelection, setShowAnalysisSelection] = useState(true);
+  const [showNoGoalsModal, setShowNoGoalsModal] = useState(false);
 
   // Ключи в localStorage для персистентности
   const APPLIED_KEY = 'ai_applied_schedule_change_ids';
@@ -152,14 +196,14 @@ const Recommendations: React.FC = () => {
     {
       type: 'week',
       title: 'Календарь на неделю',
-      description: 'ИИ проанализирует ваш календарь на ближайшую неделю и предложит оптимизацию с учетом ваших целей',
+      description: 'ИИ составит полное расписание на неделю на основе ваших целей и лучших практик тайм-менеджмента',
       icon: '📅',
       period_days: 7
     },
     {
       type: 'tomorrow',
       title: 'Календарь на завтра',
-      description: 'ИИ проанализирует ваши планы на завтра и предложит улучшения',
+      description: 'ИИ составит оптимальное расписание на завтрашний день с учетом ваших целей',
       icon: '🌅',
       period_days: 1
     },
@@ -171,6 +215,22 @@ const Recommendations: React.FC = () => {
       period_days: 30
     }
   ];
+
+  // Добавляем эффект для отслеживания изменений состояния showNoGoalsModal
+  useEffect(() => {
+    console.log('🔄 showNoGoalsModal state changed:', showNoGoalsModal);
+  }, [showNoGoalsModal]);
+
+  // Добавляем эффект для отслеживания изменений состояния loading
+  useEffect(() => {
+    console.log('⏳ loading state changed:', loading);
+  }, [loading]);
+
+  // Тестовая функция для принудительного показа модального окна
+  const testModal = () => {
+    console.log('🧪 Testing modal - setting showNoGoalsModal to true');
+    setShowNoGoalsModal(true);
+  };
 
   // Генерируем стабильный ключ изменения: используем id, иначе хеш от содержимого
   const getChangeKey = (change: ScheduleChange): string => {
@@ -491,6 +551,7 @@ const Recommendations: React.FC = () => {
 
     setLoading(true);
     setError(null);
+    setShowNoGoalsModal(false); // Сбрасываем состояние модального окна
 
     try {
       console.log('📊 Loading events and goals...');
@@ -502,9 +563,43 @@ const Recommendations: React.FC = () => {
 
       console.log('📋 Loaded data:', {
         eventsCount: eventsList?.length || 0,
-        goalsCount: goalsList?.length || 0
+        goalsCount: goalsList?.length || 0,
+        goals: goalsList
       });
 
+      // Для создания полного расписания (tomorrow или week) проверяем наличие целей
+      if (analysisType === 'tomorrow' || analysisType === 'week') {
+        console.log('🎯 Checking goals for full schedule:', {
+          goalsListLength: goalsList?.length,
+          goalsListIsArray: Array.isArray(goalsList),
+          goalsList,
+          analysisType
+        });
+
+        // Более надежная проверка целей
+        const hasGoals = goalsList && Array.isArray(goalsList) && goalsList.length > 0;
+
+        if (!hasGoals) {
+          console.log('❌ No goals found, showing modal. Goals check details:', {
+            goalsList,
+            isArray: Array.isArray(goalsList),
+            length: goalsList?.length,
+            hasGoals
+          });
+
+          setLoading(false); // Останавливаем загрузку
+          setShowNoGoalsModal(true); // Показываем модальное окно
+
+          console.log('✅ Modal state set to true, current showNoGoalsModal:', true);
+          return;
+        }
+
+        console.log('✅ Goals found, creating full schedule');
+        await createFullSchedule(analysisType, eventsList || [], goalsList);
+        return;
+      }
+
+      // Для обычного анализа (general) используем стандартную логику
       if (!eventsList || eventsList.length === 0) {
         setError('Нет событий для анализа');
         return;
@@ -518,22 +613,15 @@ const Recommendations: React.FC = () => {
         analysisType
       });
 
-      // Для анализа "завтра" разрешаем продолжить даже без событий
-      // ИИ может предложить создать события или дать рекомендации по планированию
-      if (filteredEvents.length === 0 && analysisType === 'week') {
-        setError(`Нет событий на ближайшую неделю для анализа`);
-        return;
-      }
-
       // Для общего анализа требуем наличие событий
-      if (filteredEvents.length === 0 && analysisType === 'general') {
-        setError('Нет событий для анализа');
+      if (filteredEvents.length === 0) {
+        setError('Нет событий для анализа в выбранном периоде');
         return;
       }
 
       // Получаем соответствующий период для API
       const option = analysisOptions.find(opt => opt.type === analysisType);
-      const periodDays = option?.period_days || 7;
+      const periodDays = option?.period_days || 30;
 
       console.log('🎯 Preparing AI request:', {
         filteredEventsCount: filteredEvents.length,
@@ -547,7 +635,7 @@ const Recommendations: React.FC = () => {
         calendar_events: filteredEvents,
         user_goals: goalsList,
         analysis_period_days: periodDays,
-        analysis_type: analysisType // Добавляем поле analysis_type
+        analysis_type: analysisType
       }, forceRefresh);
 
       console.log('✅ Analysis completed:', analysisResult);
@@ -566,8 +654,79 @@ const Recommendations: React.FC = () => {
     }
   };
 
+  // Новая функция для создания полного расписания
+  const createFullSchedule = async (scheduleType: 'tomorrow' | 'week', eventsList: CalendarEvent[], goalsList: SmartGoal[]) => {
+    try {
+      console.log('📅 Creating full schedule:', { scheduleType, goalsCount: goalsList.length, eventsCount: eventsList.length });
+
+      // Фильтруем существующие события для периода
+      const filteredEvents = filterEventsByPeriod(eventsList, scheduleType);
+      console.log('🔍 Filtered events for full schedule:', { originalCount: eventsList.length, filteredCount: filteredEvents.length });
+
+      const scheduleRequest = {
+        schedule_type: scheduleType,
+        user_goals: goalsList,
+        existing_events: filteredEvents,
+        work_hours_start: "09:00",
+        work_hours_end: "18:00",
+        break_duration_minutes: 60,
+        buffer_between_events_minutes: 15
+      };
+
+      console.log('📤 Sending full schedule request:', scheduleRequest);
+
+      const fullScheduleResult = await aiService.createFullSchedule(scheduleRequest);
+
+      console.log('✅ Full schedule created:', fullScheduleResult);
+
+      // Преобразуем полное расписание в формат анализа для отображения
+      const scheduleChanges: ScheduleChange[] = [];
+      const recommendations: string[] = [...fullScheduleResult.recommendations];
+
+      // Добавляем краткую сводку по дням
+      fullScheduleResult.schedules.forEach((daySchedule, dayIndex) => {
+        recommendations.push(`📅 ${daySchedule.day_name} (${daySchedule.date}): ${daySchedule.events.length} событий, ${daySchedule.total_productive_hours || 0}ч продуктивного времени`);
+
+        // Создаем изменения для каждого события в расписании
+        daySchedule.events.forEach((event, eventIndex) => {
+          scheduleChanges.push({
+            id: `schedule_${dayIndex}_${eventIndex}`,
+            action: 'create',
+            title: event.title,
+            reason: event.description || `Запланировано в рамках цели. Категория: ${event.category || 'general'}`,
+            new_start: event.start_time,
+            new_end: event.end_time,
+            priority: event.priority || 'medium'
+          });
+        });
+      });
+
+      // Добавляем общие рекомендации
+      if (fullScheduleResult.reasoning) {
+        recommendations.push(`🤖 ИИ: ${fullScheduleResult.reasoning}`);
+      }
+
+      const analysisResult: CalendarAnalysis = {
+        summary: `Создано полное расписание на ${scheduleType === 'tomorrow' ? 'завтра' : 'неделю'}. Учтено целей: ${fullScheduleResult.total_goals_addressed}. Оценка продуктивности: ${fullScheduleResult.productivity_score || 0}/10`,
+        schedule_changes: scheduleChanges,
+        recommendations: recommendations,
+        productivity_score: fullScheduleResult.productivity_score,
+        goal_alignment: `Учтено ${fullScheduleResult.total_goals_addressed} из ${goalsList.length} целей`
+      };
+
+      console.log('🎯 Setting analysis result:', analysisResult);
+      setAnalysis(analysisResult);
+      setShowAnalysisSelection(false);
+
+    } catch (error: any) {
+      console.error('❌ Error creating full schedule:', error);
+      throw error;
+    }
+  };
+
   // Обработчик выбора типа анализа
   const handleAnalysisTypeSelect = (analysisType: AnalysisType) => {
+    console.log('🎯 handleAnalysisTypeSelect called with:', analysisType);
     setSelectedAnalysisType(analysisType);
     getCalendarAnalysis(analysisType);
   };
@@ -683,6 +842,26 @@ const Recommendations: React.FC = () => {
               </div>
             ))}
           </div>
+
+          {/* Тестовая кнопка для проверки модального окна */}
+          <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+            <button
+              onClick={testModal}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: '#ff6b6b',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              🧪 Тест модального окна
+            </button>
+            <p style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.5rem' }}>
+              showNoGoalsModal: {showNoGoalsModal ? 'true' : 'false'}
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -745,6 +924,12 @@ const Recommendations: React.FC = () => {
 
   const selectedOption = analysisOptions.find(opt => opt.type === selectedAnalysisType);
 
+  // Логирование для отладки модального окна
+  console.log('🔧 Rendering NoGoalsModal with props:', {
+    showNoGoalsModal,
+    isOpen: showNoGoalsModal
+  });
+
   return (
     <div className="recommendations-container">
       <div className="recommendations-header">
@@ -795,22 +980,40 @@ const Recommendations: React.FC = () => {
         </div>
       )}
 
-      {/* Если нет видимых изменений */}
-      {(!analysis.recommendations || analysis.recommendations.length === 0) &&
-       visibleChanges.length === 0 && (
-        <div className="no-recommendations">
-          <div className="no-recommendations-content">
-            <span className="no-recommendations-icon">✅</span>
-            <h3>Ваш календарь выглядит отлично!</h3>
-            <p>
-              {selectedAnalysisType === 'tomorrow' && 'На завтра у вас хорошо спланированный день.'}
-              {selectedAnalysisType === 'week' && 'Ваше расписание на неделю хорошо оптимизировано.'}
-              {selectedAnalysisType === 'general' && 'ИИ не нашел критических проблем в вашем календаре.'}
-            </p>
-            <p>Попробуйте обновить анализ позже или выберите другой период.</p>
-          </div>
+      {/* Сводка анализа */}
+      {analysis.summary && (
+        <div className="analysis-summary">
+          <h3>📊 Сводка анализа</h3>
+          <p>{analysis.summary}</p>
+
+          {analysis.productivity_score !== undefined && (
+            <div className="productivity-score">
+              <strong>Оценка продуктивности:</strong> {analysis.productivity_score}/10
+            </div>
+          )}
+
+          {analysis.goal_alignment && (
+            <div className="goal-alignment">
+              <strong>Соответствие целям:</strong> {analysis.goal_alignment}
+            </div>
+          )}
         </div>
       )}
+
+      {/* Модальное окно "Нет целей" */}
+      <NoGoalsModal
+        isOpen={showNoGoalsModal}
+        onClose={() => {
+          console.log('🔔 Closing NoGoalsModal');
+          setShowNoGoalsModal(false);
+        }}
+        onGoToGoals={() => {
+          console.log('🎯 Navigating to goals');
+          setShowNoGoalsModal(false);
+          // Переходим к странице целей (предполагается роутинг через React Router)
+          window.location.href = '/goals';
+        }}
+      />
     </div>
   );
 };

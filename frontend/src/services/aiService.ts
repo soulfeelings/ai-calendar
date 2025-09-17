@@ -48,6 +48,47 @@ export interface CalendarAnalysisRequest {
   context?: string;
 }
 
+// Новые интерфейсы для полного расписания
+export interface ScheduledEvent {
+  title: string;
+  description?: string;
+  start_time: string;  // ISO 8601 format
+  end_time: string;    // ISO 8601 format
+  priority?: string;   // low, medium, high
+  category?: string;   // work, personal, health, etc.
+  goal_id?: string;    // связь с целью
+  is_flexible?: boolean; // можно ли перенести
+}
+
+export interface DaySchedule {
+  date: string;  // YYYY-MM-DD format
+  day_name: string;  // Monday, Tuesday, etc.
+  events: ScheduledEvent[];
+  total_productive_hours?: number;
+  break_time_hours?: number;
+  summary?: string;
+}
+
+export interface FullScheduleRequest {
+  schedule_type: 'tomorrow' | 'week';
+  user_goals: SmartGoal[];
+  existing_events?: any[];
+  preferences?: any;
+  work_hours_start?: string;
+  work_hours_end?: string;
+  break_duration_minutes?: number;
+  buffer_between_events_minutes?: number;
+}
+
+export interface FullScheduleResponse {
+  schedule_type: string;
+  schedules: DaySchedule[];
+  recommendations: string[];
+  total_goals_addressed: number;
+  productivity_score?: number;
+  reasoning?: string;
+}
+
 export interface GoalAnalysis {
   is_smart: boolean;
   score: number; // от 0 до 100
@@ -255,6 +296,27 @@ class AIService {
     } catch (error) {
       console.error('Error analyzing goal:', error);
       throw new Error('Ошибка при анализе цели');
+    }
+  }
+
+  /**
+   * Создание полного расписания на день или неделю
+   */
+  async createFullSchedule(requestData: FullScheduleRequest): Promise<FullScheduleResponse> {
+    try {
+      console.log('📅 Creating full schedule with data:', {
+        schedule_type: requestData.schedule_type,
+        goals_count: requestData.user_goals?.length,
+        existing_events_count: requestData.existing_events?.length
+      });
+
+      const response = await api.post('/ai/create-full-schedule', requestData);
+      
+      console.log('✅ Full schedule created:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ Error creating full schedule:', error);
+      throw this.handleAPIError(error, 'Ошибка при создании расписания');
     }
   }
 }
