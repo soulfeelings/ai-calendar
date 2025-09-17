@@ -43,6 +43,7 @@ export interface CalendarAnalysisRequest {
   calendar_events: any[];
   user_goals?: SmartGoal[];
   analysis_period_days?: number;
+  analysis_type?: 'week' | 'tomorrow' | 'general'; // Добавляем поддержку типов анализа
   goals?: string[];
   context?: string;
 }
