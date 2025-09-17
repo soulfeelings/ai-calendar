@@ -81,6 +81,14 @@ class AIService {
     forceRefresh: boolean = false
   ): Promise<CalendarAnalysis> {
     try {
+      console.log('🔍 Starting analyzeCalendar with data:', {
+        analysis_type: requestData.analysis_type,
+        events_count: requestData.calendar_events?.length,
+        goals_count: requestData.user_goals?.length,
+        analysis_period_days: requestData.analysis_period_days,
+        forceRefresh
+      });
+
       // Проверяем кеш
       if (!forceRefresh) {
         const cachedResult = cacheService.getByData<CalendarAnalysis>(requestData);
@@ -90,15 +98,26 @@ class AIService {
         }
       }
 
-      console.log('🤖 Requesting AI analysis...');
+      console.log('🤖 Requesting AI analysis to:', '/ai/analyze-calendar');
+      console.log('📤 Request payload:', JSON.stringify(requestData, null, 2));
+
       const response = await api.post('/ai/analyze-calendar', requestData);
+
+      console.log('✅ AI analysis response received:', response.status);
+      console.log('📥 Response data:', response.data);
 
       // Кешируем результат
       cacheService.setByData(requestData, response.data, this.AI_CACHE_TTL);
 
       return response.data;
     } catch (error: any) {
-      console.error('Error in calendar analysis:', error);
+      console.error('❌ Error in calendar analysis:', error);
+      console.error('Error details:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data
+      });
       throw this.handleAPIError(error, 'Ошибка при анализе календаря');
     }
   }
