@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, validator
-from typing import Optional, List, Dict, Any, Union
+from typing import Optional, List, Dict, Any, Union, Literal
 from datetime import datetime
 
 
@@ -93,6 +93,11 @@ class CalendarAnalysisRequest(BaseModel):
     user_goals: Optional[List[Dict[str, Any]]] = None
     # Период анализа в днях
     analysis_period_days: Optional[int] = 7
+    # Тип анализа календаря
+    analysis_type: Optional[Literal['week', 'tomorrow', 'general']] = Field(
+        default='general',
+        description="Тип анализа: week (неделя), tomorrow (завтра), general (общий)"
+    )
     context: Optional[str] = None
 
     @validator('calendar_events', pre=True)

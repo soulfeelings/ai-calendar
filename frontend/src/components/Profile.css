@@ -986,7 +986,106 @@
   border: 2px dashed #dee2e6;
 }
 
-/* Адаптивность для мобильных устройств */
+/* Стили для нижней навигации */
+.bottom-nav {
+  display: none; /* По умолчанию скрыта на десктопе */
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-top: 1px solid #e9ecef;
+  padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+  z-index: 1000;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 6px 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #6c757d;
+  font-size: 10px;
+  line-height: 1;
+  min-height: 50px;
+  gap: 2px;
+}
+
+.bottom-nav-item:hover {
+  background: #f8f9fa;
+  color: #495057;
+}
+
+.bottom-nav-item.active {
+  color: #1976d2;
+  background: #f0f8ff;
+}
+
+.bottom-nav-icon {
+  font-size: 20px;
+  margin-bottom: 2px;
+}
+
+.bottom-nav-text {
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+/* Показываем нижнюю навигацию на мобильных устройствах */
+@media (max-width: 768px) {
+  .bottom-nav {
+    display: flex;
+  }
+
+  /* Скрываем боковую панель на мобильных устройствах */
+  .profile-sidebar {
+    display: none !important;
+  }
+
+  /* Добавляем отступ снизу для основного контента */
+  .profile-main {
+    padding-bottom: 80px; /* Учитываем высоту нижней навигации */
+  }
+
+  /* Убираем кнопку переключения боковой панели на мобильных */
+  .toggle-sidebar {
+    display: none;
+  }
+
+  /* Адаптируем заголовок */
+  .header-left {
+    gap: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .bottom-nav-item {
+    min-height: 45px;
+    padding: 4px 2px;
+  }
+
+  .bottom-nav-icon {
+    font-size: 18px;
+  }
+
+  .bottom-nav-text {
+    font-size: 9px;
+  }
+
+  .profile-main {
+    padding-bottom: 70px;
+  }
+}
+
 @media (max-width: 480px) {
   .events-actions {
     flex-direction: column;
@@ -1016,36 +1115,74 @@
 
   .profile-sidebar {
     width: 100%;
-    order: 2;
+    /* Убираем order: 2, чтобы боковая панель оставалась сверху */
+    border-right: none;
+    border-bottom: 1px solid #e9ecef;
   }
 
   .sidebar-nav {
     flex-direction: row;
-    overflow-x: auto;
-    padding: 10px;
+    /* Убираем overflow-x: auto для предотвращения горизонтальной прокрутки */
+    padding: 15px 10px;
+    gap: 5px;
+    justify-content: space-around;
+    flex-wrap: wrap;
   }
 
   .nav-item {
-    flex-shrink: 0;
-    padding: 10px 15px;
-    border-radius: 6px;
-    margin-right: 10px;
+    flex: 1;
+    min-width: 0;
+    padding: 12px 8px;
+    border-radius: 8px;
+    margin-right: 0;
+    text-align: center;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 14px;
   }
 
   .nav-item.active {
     border-right: none;
     border-bottom: 3px solid #1976d2;
+    background: #e3f2fd;
+  }
+
+  .nav-icon {
+    font-size: 20px;
+    margin-bottom: 2px;
+  }
+
+  .nav-text {
+    font-size: 12px;
+    line-height: 1.2;
+    word-break: break-word;
   }
 
   .profile-main {
-    order: 1;
+    /* Убираем order: 1 */
     padding: 20px;
   }
 
   .profile-header {
     padding: 15px 20px;
-    flex-direction: column;
+  }
+
+  .header-left {
     gap: 15px;
+  }
+
+  .profile-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .user-info {
+    gap: 10px;
+    font-size: 14px;
+  }
+
+  .user-avatar {
+    width: 32px;
+    height: 32px;
   }
 
   .events-grid {
@@ -1076,6 +1213,31 @@
 }
 
 @media (max-width: 480px) {
+  .sidebar-nav {
+    padding: 10px 5px;
+  }
+
+  .nav-item {
+    padding: 10px 4px;
+    min-width: 70px;
+  }
+
+  .nav-text {
+    font-size: 11px;
+  }
+
+  .profile-header {
+    padding: 12px 15px;
+  }
+
+  .header-left {
+    gap: 10px;
+  }
+
+  .profile-header h1 {
+    font-size: 1.3rem;
+  }
+
   .event-card-header {
     flex-direction: column;
     gap: 8px;
@@ -1092,34 +1254,5 @@
 
   .event-date {
     margin-bottom: 0;
-  }
-}
-
-@media (max-width: 768px) {
-  .events-day-section {
-    padding: 15px;
-  }
-
-  .day-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 5px;
-  }
-
-  .event-card-compact {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .event-time-compact {
-    min-width: auto;
-    align-self: flex-start;
-  }
-
-  .event-title-compact {
-    white-space: normal;
-    overflow: visible;
-    text-overflow: initial;
   }
 }

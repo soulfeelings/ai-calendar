@@ -1102,6 +1102,41 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
           {renderSectionContent()}
         </main>
       </div>
+
+      {/* Нижняя навигация для мобильных устройств */}
+      <nav className="bottom-nav">
+        <button
+          className={`bottom-nav-item ${activeSection === 'calendar' ? 'active' : ''}`}
+          onClick={() => navigate('/profile')}
+        >
+          <span className="bottom-nav-icon">📅</span>
+          <span className="bottom-nav-text">Календари</span>
+        </button>
+
+        <button
+          className={`bottom-nav-item ${activeSection === 'events' ? 'active' : ''}`}
+          onClick={() => navigate('/events')}
+        >
+          <span className="bottom-nav-icon">🗓️</span>
+          <span className="bottom-nav-text">События</span>
+        </button>
+
+        <button
+          className={`bottom-nav-item ${activeSection === 'recommendations' ? 'active' : ''}`}
+          onClick={() => navigate('/recommendations')}
+        >
+          <span className="bottom-nav-icon">🤖</span>
+          <span className="bottom-nav-text">ИИ</span>
+        </button>
+
+        <button
+          className="bottom-nav-item"
+          onClick={() => navigate('/goals')}
+        >
+          <span className="bottom-nav-icon">🎯</span>
+          <span className="bottom-nav-text">Цели</span>
+        </button>
+      </nav>
     </div>
   );
 };
