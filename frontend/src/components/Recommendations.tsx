@@ -390,65 +390,120 @@ const Recommendations: React.FC = () => {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    let endDate: Date;
+    console.log('🔍 Filter debug info:', {
+      now: now.toISOString(),
+      startOfToday: startOfToday.toISOString(),
+      analysisType,
+      totalEvents: events.length
+    });
 
     switch (analysisType) {
       case 'tomorrow':
         // Завтра: от начала завтрашнего дня до конца завтрашнего дня
         const tomorrow = new Date(startOfToday);
         tomorrow.setDate(tomorrow.getDate() + 1);
-        const endOfTomorrow = new Date(tomorrow);
-        endOfTomorrow.setDate(endOfTomorrow.getDate() + 1);
-        endDate = endOfTomorrow;
-        break;
+        const tomorrowStart = new Date(tomorrow);
+        tomorrowStart.setHours(0, 0, 0, 0);
+        const tomorrowEnd = new Date(tomorrow);
+        tomorrowEnd.setHours(23, 59, 59, 999);
+
+        console.log('📅 Tomorrow filter range:', {
+          tomorrowStart: tomorrowStart.toISOString(),
+          tomorrowEnd: tomorrowEnd.toISOString()
+        });
+
+        const tomorrowEvents = events.filter(event => {
+          if (!isEventActiveOrRecurring(event)) {
+            return false;
+          }
+
+          const eventStartStr = event.start?.dateTime || event.start?.date;
+          const eventEndStr = event.end?.dateTime || event.end?.date;
+          if (!eventStartStr) return false;
+
+          const eventStart = new Date(eventStartStr);
+          const eventEnd = new Date(eventEndStr || eventStartStr);
+
+          // Проверяем пересечение события с завтрашним днем
+          // Событие попадает в день, если:
+          // 1. Начинается в этот день
+          // 2. Заканчивается в этот день
+          // 3. Начинается до этого дня и заканчивается после (долгое событие)
+          const isInRange = (eventStart >= tomorrowStart && eventStart <= tomorrowEnd) ||
+                           (eventEnd >= tomorrowStart && eventEnd <= tomorrowEnd) ||
+                           (eventStart <= tomorrowStart && eventEnd >= tomorrowEnd);
+
+          console.log('📅 Event check:', {
+            eventId: event.id,
+            eventSummary: event.summary,
+            eventStartStr,
+            eventEndStr,
+            eventStart: eventStart.toISOString(),
+            eventEnd: eventEnd.toISOString(),
+            tomorrowStart: tomorrowStart.toISOString(),
+            tomorrowEnd: tomorrowEnd.toISOString(),
+            isInRange,
+            isActive: isEventActiveOrRecurring(event)
+          });
+
+          return isInRange;
+        });
+
+        console.log('✅ Tomorrow filtering completed:', {
+          originalCount: events.length,
+          filteredCount: tomorrowEvents.length
+        });
+
+        return tomorrowEvents;
 
       case 'week':
-        // Неделя: от сегодня до конца недели (7 дней)
-        endDate = new Date(startOfToday);
-        endDate.setDate(endDate.getDate() + 7);
-        break;
+        // Неделя: от сегодня до +7 дней
+        const weekEnd = new Date(startOfToday);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        weekEnd.setHours(23, 59, 59, 999);
+
+        return events.filter(event => {
+          if (!isEventActiveOrRecurring(event)) return false;
+
+          const eventStartStr = event.start?.dateTime || event.start?.date;
+          const eventEndStr = event.end?.dateTime || event.end?.date;
+          if (!eventStartStr) return false;
+
+          const eventStart = new Date(eventStartStr);
+          const eventEnd = new Date(eventEndStr || eventStartStr);
+
+          // Событие попадает в неделю, если пересекается с периодом от сегодня до +7 дней
+          return (eventStart >= startOfToday && eventStart <= weekEnd) ||
+                 (eventEnd >= startOfToday && eventEnd <= weekEnd) ||
+                 (eventStart <= startOfToday && eventEnd >= weekEnd);
+        });
 
       case 'general':
       default:
         // Общий анализ: все активные события
         return events.filter(isEventActiveOrRecurring);
     }
-
-    return events.filter(event => {
-      if (!isEventActiveOrRecurring(event)) return false;
-
-      // Получаем дату начала события
-      const eventStartStr = event.start?.dateTime || event.start?.date;
-      if (!eventStartStr) return false;
-
-      const eventStart = new Date(eventStartStr);
-
-      // Для завтра: события только завтрашнего дня
-      if (analysisType === 'tomorrow') {
-        const tomorrow = new Date(startOfToday);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const endOfTomorrow = new Date(tomorrow);
-        endOfTomorrow.setDate(endOfTomorrow.getDate() + 1);
-
-        return eventStart >= tomorrow && eventStart < endOfTomorrow;
-      }
-
-      // Для недели: события от сегодня до конца недели
-      return eventStart >= startOfToday && eventStart < endDate;
-    });
   };
 
   // Модифицированная функция получения анализа календаря
   const getCalendarAnalysis = async (analysisType: AnalysisType, forceRefresh: boolean = false) => {
+    console.log('🚀 Starting getCalendarAnalysis:', { analysisType, forceRefresh });
+
     setLoading(true);
     setError(null);
 
     try {
+      console.log('📊 Loading events and goals...');
       // Загружаем события и цели
       const [eventsList, goalsList] = await Promise.all([
         loadEvents(),
         loadGoals()
       ]);
+
+      console.log('📋 Loaded data:', {
+        eventsCount: eventsList?.length || 0,
+        goalsCount: goalsList?.length || 0
+      });
 
       if (!eventsList || eventsList.length === 0) {
         setError('Нет событий для анализа');
@@ -457,16 +512,35 @@ const Recommendations: React.FC = () => {
 
       // Фильтруем события по выбранному периоду
       const filteredEvents = filterEventsByPeriod(eventsList, analysisType);
+      console.log('🔍 Filtered events:', {
+        originalCount: eventsList.length,
+        filteredCount: filteredEvents.length,
+        analysisType
+      });
 
-      if (filteredEvents.length === 0 && analysisType !== 'general') {
-        const periodName = analysisType === 'tomorrow' ? 'на завтра' : 'на ближайшую неделю';
-        setError(`Нет событий ${periodName} для анализа`);
+      // Для анализа "завтра" разрешаем продолжить даже без событий
+      // ИИ может предложить создать события или дать рекомендации по планированию
+      if (filteredEvents.length === 0 && analysisType === 'week') {
+        setError(`Нет событий на ближайшую неделю для анализа`);
+        return;
+      }
+
+      // Для общего анализа требуем наличие событий
+      if (filteredEvents.length === 0 && analysisType === 'general') {
+        setError('Нет событий для анализа');
         return;
       }
 
       // Получаем соответствующий период для API
       const option = analysisOptions.find(opt => opt.type === analysisType);
       const periodDays = option?.period_days || 7;
+
+      console.log('🎯 Preparing AI request:', {
+        filteredEventsCount: filteredEvents.length,
+        goalsCount: goalsList.length,
+        periodDays,
+        analysisType
+      });
 
       // Отправляем события на анализ ИИ
       const analysisResult = await aiService.analyzeCalendar({
@@ -476,6 +550,8 @@ const Recommendations: React.FC = () => {
         analysis_type: analysisType // Добавляем поле analysis_type
       }, forceRefresh);
 
+      console.log('✅ Analysis completed:', analysisResult);
+
       // Нормализуем предложенные изменения
       const normalizedChanges = (analysisResult.schedule_changes || []).map(ch => normalizeChangeDateTimes(ch));
 
@@ -483,7 +559,7 @@ const Recommendations: React.FC = () => {
       setShowAnalysisSelection(false);
 
     } catch (err: any) {
-      console.error('Error getting calendar analysis:', err);
+      console.error('❌ Error getting calendar analysis:', err);
       setError(err.message || 'Произошла ошибка при анализе календаря');
     } finally {
       setLoading(false);
