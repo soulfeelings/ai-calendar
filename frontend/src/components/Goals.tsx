@@ -148,7 +148,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
         }
       };
 
-      // Используем прямой API вызов к backend эндпоинту
+      // Исполь��уем прямой API вызов к backend эндпоинту
       const response = await api.post('/calendar/events', eventData);
 
       setSuccess(`Событие "${goal.title}" создано в календаре`);
@@ -264,20 +264,31 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
 
     try {
       setSaving(true);
-      console.log('Sending request to /ai/goals'); // Логируем начало запроса
-      // Используем прямой API вызов вместо aiService.createSMARTGoal
-      const response = await api.post('/ai/goals', payload);
-      console.log('Response received:', response); // Логируем ответ
-      setSuccess('Цель сохранена');
+
+      // Проверяем, редактируем ли мы существующую цель или создаем новую
+      if (editingGoal && editingGoal.id) {
+        // Обновляем существующую цель
+        console.log('Updating existing goal with ID:', editingGoal.id);
+        await aiService.updateGoal(editingGoal.id, payload);
+        setSuccess('Цель успешно обновлена');
+      } else {
+        // Создаем новую цель
+        console.log('Creating new goal');
+        await api.post('/ai/goals', payload);
+        setSuccess('Цель создана');
+      }
+
       setCurrentStep('saved');
       // Обновляем список
       await loadGoals();
+      // Сбрасываем состояние редактирования
+      setEditingGoal(null);
     } catch (e: any) {
       console.error('Error saving goal:', e);
       const errorMessage = e?.response?.data?.detail;
       if (Array.isArray(errorMessage)) {
         const validationErrors = errorMessage.map((err: any) => `${err.loc?.join('.')} - ${err.msg}`).join('; ');
-        setError(`Ошибки валидации: ${validationErrors}`);
+        setError(`Ошибки валидац��и: ${validationErrors}`);
       } else {
         setError(errorMessage || e?.message || 'Не удалось сохранить цель');
       }
@@ -299,14 +310,27 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
     setCurrentStep('input');
     setError(null);
     setSuccess(null);
+    setEditingGoal(null); // Сбрасываем состояние редактирования
   };
 
   const renderInputStep = () => (
     <div className="card">
-      <h3>Создание цели</h3>
+      <h3>{editingGoal ? 'Редактирование цели' : 'Создание цели'}</h3>
       <p className="muted">
-        Опишите вашу цель. ИИ поможет проверить её на соответствие принципам SMART и предложитт улучшения.
+        {editingGoal
+          ? 'Измените данные цели. ИИ поможет проверить её на соответствие принципам SMART и предложит улучшения.'
+          : 'Опишите вашу цель. ИИ поможет проверить её на соответствие принципам SMART и предложит улучшения.'
+        }
       </p>
+
+      {editingGoal && (
+        <div className="editing-notice">
+          <span>🔄 Вы редактируете существующую цель</span>
+          <button className="btn-link" onClick={resetForm}>
+            Отменить редактирование
+          </button>
+        </div>
+      )}
 
       <div className="form-group">
         <label>Название цели *</label>
