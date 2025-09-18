@@ -11,7 +11,9 @@ from schemas.openai_schemas import (
     SMARTGoal,
     OpenAIRequest,
     OpenAIResponse,
-    GoalAnalysisResponse
+    GoalAnalysisResponse,
+    FullScheduleRequest,
+    FullScheduleResponse
 )
 from service import OpenAIService
 from dependencies import get_user_request_id, get_openai_service, get_goals_repo
@@ -268,4 +270,52 @@ async def analyze_calendar_and_goals_sync(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ошибка при синхронном анализе календаря: {str(e)}"
+        )
+
+
+@router.post("/create-full-schedule", response_model=FullScheduleResponse)
+async def create_full_schedule(
+    request: FullScheduleRequest,
+    openai_service: Annotated[OpenAIService, Depends(get_openai_service)],
+    user_id: str = Depends(get_user_request_id)
+):
+    """
+    Создание полного расписания на день или неделю на основе целей пользователя
+    
+    Поддерживает типы:
+    - 'tomorrow': полное расписание на завтра
+    - 'week': полное расписание на неделю
+    """
+    try:
+        logger.info(f"Starting full schedule creation for user {user_id}, type: {request.schedule_type}")
+        logger.info(f"Received {len(request.user_goals)} goals for planning")
+
+        # Преобразуем цели в словари
+        goals_dict = [goal.model_dump() for goal in request.user_goals]
+        
+        # Преобразуем существующие события если есть
+        existing_events_dict = []
+        if request.existing_events:
+            existing_events_dict = [event.model_dump() for event in request.existing_events]
+
+        # Создаем полное расписание
+        result = await openai_service.create_full_schedule(
+            schedule_type=request.schedule_type,
+            user_goals=goals_dict,
+            existing_events=existing_events_dict,
+            work_hours_start=request.work_hours_start,
+            work_hours_end=request.work_hours_end,
+            break_duration_minutes=request.break_duration_minutes,
+            buffer_between_events_minutes=request.buffer_between_events_minutes,
+            preferences=request.preferences
+        )
+
+        logger.info(f"Full schedule creation completed for user {user_id}, type: {request.schedule_type}")
+        return FullScheduleResponse(**result)
+
+    except Exception as e:
+        logger.error(f"Error in full schedule creation: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка при создании расписания: {str(e)}"
         )

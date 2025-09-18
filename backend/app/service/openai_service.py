@@ -646,3 +646,196 @@ class OpenAIService:
                     "description": description
                 }
             }
+
+    async def create_full_schedule(
+        self,
+        schedule_type: str,
+        user_goals: List[Dict],
+        existing_events: List[Dict] = None,
+        work_hours_start: str = "09:00",
+        work_hours_end: str = "18:00",
+        break_duration_minutes: int = 60,
+        buffer_between_events_minutes: int = 15,
+        preferences: Dict = None
+    ) -> Dict[str, Any]:
+        """
+        Создание полного расписания на день или неделю на основе целей пользователя
+        
+        Args:
+            schedule_type: 'tomorrow' или 'week'
+            user_goals: Список целей пользователя
+            existing_events: Существующие события в календаре
+            work_hours_start: Время начала рабочего дня
+            work_hours_end: Время окончания рабочего дня
+            break_duration_minutes: Длительность обеденного перерыва
+            buffer_between_events_minutes: Буфер между событиями
+            preferences: Дополнительные предпочтения пользователя
+            
+        Returns:
+            Полное расписание с событиями по дням
+        """
+        try:
+            # Определяем временной период
+            from datetime import datetime, timedelta
+            import pytz
+            
+            today = datetime.now()
+            
+            if schedule_type == "tomorrow":
+                start_date = today + timedelta(days=1)
+                end_date = start_date
+                period_description = "завтрашний день"
+                days_count = 1
+            elif schedule_type == "week":
+                start_date = today + timedelta(days=1)  # начинаем с завтра
+                end_date = start_date + timedelta(days=6)  # 7 дней включая завтра
+                period_description = "ближайшую неделю"
+                days_count = 7
+            else:
+                raise ValueError(f"Неподдерживаемый тип расписания: {schedule_type}")
+
+            # Создаем системный промпт
+            system_prompt = f"""
+            Ты — экспертный AI-планировщик, специализирующийся на создании оптимальных расписаний на основе целей пользователя и лучших практик тайм-менеджмента.
+
+            ЗАДАЧА: Создать полное расписание на {period_description} ({days_count} дней), которое:
+            1. Учитывает все цели пользователя и их приоритеты
+            2. Следует лучшим практикам продуктивности (матрица Эйзенхауэра, принцип Парето, etc.)
+            3. Включает время на отдых, еду и перерывы
+            4. Оптимально распределяет нагрузку по времени дня и дням недели
+            5. Не конфликтует с существующими событиями
+
+            ПРИНЦИПЫ ПЛАНИРОВАНИЯ:
+            - Сложные и важные задачи планируй на утро (9:00-12:00) когда энергия максимальна
+            - Рутинные задачи и встречи — после обеда (14:00-17:00)
+            - Творческие задачи — в периоды высокой энергии (утро или после короткого отдыха)
+            - Обязательные перерывы каждые 90-120 минут
+            - Обеденный перерыв 60 минут (12:00-13:00 или 13:00-14:00)
+            - Буферы {buffer_between_events_minutes} минут между событиями
+            - Для недельного планирования: равномерно распредели нагрузку, понедельник и вторник — для сложных задач
+
+            КАТЕГОРИИ СОБЫТИЙ:
+            - work: рабочие задачи, проекты
+            - learning: обучение, развитие навыков
+            - health: спорт, медитация, самочувствие
+            - personal: личные дела, хобби
+            - social: встречи, общение
+            - routine: повседневные задачи
+            - break: отдых, перерывы
+
+            ОТВЕТ В СТРОГОМ JSON ФОРМАТЕ:
+            {{
+              "schedule_type": "{schedule_type}",
+              "schedules": [
+                {{
+                  "date": "YYYY-MM-DD",
+                  "day_name": "Monday/Tuesday/etc",
+                  "events": [
+                    {{
+                      "title": "string",
+                      "description": "string",
+                      "start_time": "YYYY-MM-DDTHH:MM:SS+03:00",
+                      "end_time": "YYYY-MM-DDTHH:MM:SS+03:00",
+                      "priority": "high/medium/low",
+                      "category": "work/learning/health/personal/social/routine/break",
+                      "goal_id": "string или null",
+                      "is_flexible": true/false
+                    }}
+                  ],
+                  "total_productive_hours": number,
+                  "break_time_hours": number,
+                  "summary": "краткое описание дня"
+                }}
+              ],
+              "recommendations": ["список общих рекомендаций"],
+              "total_goals_addressed": number,
+              "productivity_score": number (1-10),
+              "reasoning": "объяснение принципов планирования"
+            }}
+
+            ВАЖНО: 
+            - Создавай КОНКРЕТНЫЕ события с точным временем
+            - Учитывай рабочие часы: {work_hours_start}-{work_hours_end}
+            - Все времена в формате ISO 8601 с timezone
+            - Не планируй на время существующих событий
+            - Каждая цель должна иметь конкретные временные блоки
+            - Балансируй работу и отдых
+            """
+
+            # Формируем пользовательское сообщение
+            user_message = f"""
+            Создай полное расписание на {period_description} на основе моих целей.
+
+            ПЕРИОД ПЛАНИРОВАНИЯ:
+            - Начало: {start_date.strftime('%Y-%m-%d')}
+            - Конец: {end_date.strftime('%Y-%m-%d')}
+            - Количество дней: {days_count}
+
+            МОИ ЦЕЛИ:
+            {json.dumps(user_goals, ensure_ascii=False, indent=2)}
+
+            РАБОЧИЕ ЧАСЫ: {work_hours_start} - {work_hours_end}
+            ОБЕДЕННЫЙ ПЕРЕРЫВ: {break_duration_minutes} минут
+            БУФЕРЫ МЕЖДУ СОБЫТИЯМИ: {buffer_between_events_minutes} минут
+            """
+
+            if existing_events:
+                user_message += f"""
+                
+                СУЩЕСТВУЮЩИЕ СОБЫТИЯ (не планируй на это время):
+                {json.dumps(existing_events, ensure_ascii=False, indent=2)}
+                """
+
+            if preferences:
+                user_message += f"""
+                
+                ДОПОЛНИТЕЛЬНЫЕ ПРЕДПОЧТЕНИЯ:
+                {json.dumps(preferences, ensure_ascii=False, indent=2)}
+                """
+
+            user_message += """
+            
+            Создай оптимальное расписание, которое поможет достичь всех целей с максимальной эффективностью.
+            Ответь строго в JSON формате без дополнительного текста.
+            """
+
+            messages = [{"role": "user", "content": user_message}]
+
+            response = await self.create_chat_completion(
+                messages=messages,
+                system_prompt=system_prompt,
+                temperature=0.7,
+                max_tokens=4000,  # увеличиваем лимит для полного расписания
+                response_format={"type": "json_object"}
+            )
+
+            ai_response = response["choices"][0]["message"]["content"]
+            logger.info(f"AI response for full schedule: {ai_response[:500]}...")
+
+            try:
+                schedule_result = json.loads(ai_response)
+                
+                # Валидация структуры ответа
+                if not isinstance(schedule_result.get("schedules"), list):
+                    raise ValueError("Поле 'schedules' должно быть массивом")
+                
+                # Убеждаемся что есть расписание на каждый день
+                if len(schedule_result["schedules"]) != days_count:
+                    logger.warning(f"Expected {days_count} days, got {len(schedule_result['schedules'])}")
+                
+                return schedule_result
+                
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse AI schedule response: {e}")
+                return {
+                    "schedule_type": schedule_type,
+                    "schedules": [],
+                    "recommendations": ["Не удалось создать расписание. Попробуйте еще раз."],
+                    "total_goals_addressed": 0,
+                    "productivity_score": 0,
+                    "reasoning": f"Ошибка парсинга ответа ИИ: {str(e)}"
+                }
+
+        except Exception as e:
+            logger.error(f"Error in create_full_schedule: {str(e)}")
+            raise Exception(f"Ошибка при создании расписания: {str(e)}")

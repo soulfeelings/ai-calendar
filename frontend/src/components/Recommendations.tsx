@@ -29,6 +29,37 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({ recommendation 
   );
 };
 
+interface NoGoalsModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onGoToGoals: () => void;
+}
+
+const NoGoalsModal: React.FC<NoGoalsModalProps> = ({ isOpen, onClose, onGoToGoals }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="no-goals-modal-overlay" onClick={onClose}>
+      <div className="no-goals-modal" onClick={(e) => e.stopPropagation()}>
+        <span className="no-goals-modal-icon">🎯</span>
+        <h3>Нет целей для планирования</h3>
+        <p>
+          Для создания полного расписания необходимо добавить хотя бы одну цель.
+          ИИ создаст оптимальный план на основе ваших целей и лучших практик тайм-менеджмента.
+        </p>
+        <div className="no-goals-modal-actions">
+          <button className="primary-button" onClick={onGoToGoals}>
+            ➕ Добавить цели
+          </button>
+          <button className="secondary-button" onClick={onClose}>
+            Попробовать позже
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface ScheduleChangeCardProps {
   change: ScheduleChange;
   onApply: () => void;
@@ -142,6 +173,7 @@ const Recommendations: React.FC = () => {
   // Новое состояние для выбора типа анализа
   const [selectedAnalysisType, setSelectedAnalysisType] = useState<AnalysisType | null>(null);
   const [showAnalysisSelection, setShowAnalysisSelection] = useState(true);
+  const [showNoGoalsModal, setShowNoGoalsModal] = useState(false);
 
   // Ключи в localStorage для персистентности
   const APPLIED_KEY = 'ai_applied_schedule_change_ids';
@@ -152,14 +184,14 @@ const Recommendations: React.FC = () => {
     {
       type: 'week',
       title: 'Календарь на неделю',
-      description: 'ИИ проанализирует ваш календарь на ближайшую неделю и предложит оптимизацию с учетом ваших целей',
+      description: 'ИИ составит полное расписание на неделю на основе ваших целей и лучших практик тайм-менеджмента',
       icon: '📅',
       period_days: 7
     },
     {
       type: 'tomorrow',
       title: 'Календарь на завтра',
-      description: 'ИИ проанализирует ваши планы на завтра и предложит улучшения',
+      description: 'ИИ составит оптимальное расписание на завтрашний день с учетом ваших целей',
       icon: '🌅',
       period_days: 1
     },
@@ -171,6 +203,22 @@ const Recommendations: React.FC = () => {
       period_days: 30
     }
   ];
+
+  // Добавляем эффект для отслеживания изменений состояния showNoGoalsModal
+  useEffect(() => {
+    // убрано отладочное логирование
+  }, [showNoGoalsModal]);
+
+  // Добавляем эффект для отслеживания изменений состояния loading
+  useEffect(() => {
+    // убрано отладочное логирование
+  }, [loading]);
+
+  // Тестовая функция для принудительного показа модального окна
+  // удалено для продакшена
+  // const testModal = () => {
+  //   setShowNoGoalsModal(true);
+  // };
 
   // Генерируем стабильный ключ изменения: используем id, иначе хеш от содержимого
   const getChangeKey = (change: ScheduleChange): string => {
@@ -287,27 +335,17 @@ const Recommendations: React.FC = () => {
   // Загрузка событий из localStorage или с бэкенда
   const loadEvents = async (): Promise<CalendarEvent[]> => {
     try {
-      // Сначала проверяем localStorage
       const cachedEvents = localStorage.getItem('calendar_events');
 
       if (cachedEvents) {
-        console.log('Loading events from localStorage');
         const parsedEvents = JSON.parse(cachedEvents);
-
-        // Проверяем, что в localStorage - массив или объект Google Calendar
         let eventsArray: CalendarEvent[];
         if (Array.isArray(parsedEvents)) {
-          // Если это массив событий - используем как есть
           eventsArray = parsedEvents;
         } else if (parsedEvents && typeof parsedEvents === 'object' && parsedEvents.items) {
-          // Если это объект Google Calendar - извлекаем массив items
-          console.log('Found Google Calendar object in localStorage, extracting items');
           eventsArray = parsedEvents.items;
-          // Обновляем localStorage чтобы хранить только массив событий
           localStorage.setItem('calendar_events', JSON.stringify(eventsArray));
         } else {
-          // Неожиданный формат - очищаем и загружаем заново
-          console.warn('Unexpected format in localStorage, clearing cache');
           localStorage.removeItem('calendar_events');
           eventsArray = [];
         }
@@ -318,11 +356,7 @@ const Recommendations: React.FC = () => {
         }
       }
 
-      // Если в localStorage нет событий, запрашиваем с бэкенда
-      console.log('No events in localStorage, fetching from backend');
-      const eventsFromBackend = await calendarService.getEvents(true); // forcefullsync=true
-
-      // Сохраняем в localStorage (только массив событий)
+      const eventsFromBackend = await calendarService.getEvents(true);
       localStorage.setItem('calendar_events', JSON.stringify(eventsFromBackend));
       setEvents(eventsFromBackend);
       return eventsFromBackend;
@@ -390,16 +424,8 @@ const Recommendations: React.FC = () => {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    console.log('🔍 Filter debug info:', {
-      now: now.toISOString(),
-      startOfToday: startOfToday.toISOString(),
-      analysisType,
-      totalEvents: events.length
-    });
-
     switch (analysisType) {
       case 'tomorrow':
-        // Завтра: от начала завтрашнего дня до конца завтрашнего дня
         const tomorrow = new Date(startOfToday);
         tomorrow.setDate(tomorrow.getDate() + 1);
         const tomorrowStart = new Date(tomorrow);
@@ -407,15 +433,8 @@ const Recommendations: React.FC = () => {
         const tomorrowEnd = new Date(tomorrow);
         tomorrowEnd.setHours(23, 59, 59, 999);
 
-        console.log('📅 Tomorrow filter range:', {
-          tomorrowStart: tomorrowStart.toISOString(),
-          tomorrowEnd: tomorrowEnd.toISOString()
-        });
-
         const tomorrowEvents = events.filter(event => {
-          if (!isEventActiveOrRecurring(event)) {
-            return false;
-          }
+          if (!isEventActiveOrRecurring(event)) return false;
 
           const eventStartStr = event.start?.dateTime || event.start?.date;
           const eventEndStr = event.end?.dateTime || event.end?.date;
@@ -424,40 +443,14 @@ const Recommendations: React.FC = () => {
           const eventStart = new Date(eventStartStr);
           const eventEnd = new Date(eventEndStr || eventStartStr);
 
-          // Проверяем пересечение события с завтрашним днем
-          // Событие попадает в день, если:
-          // 1. Начинается в этот день
-          // 2. Заканчивается в этот день
-          // 3. Начинается до этого дня и заканчивается после (долгое событие)
           const isInRange = (eventStart >= tomorrowStart && eventStart <= tomorrowEnd) ||
                            (eventEnd >= tomorrowStart && eventEnd <= tomorrowEnd) ||
                            (eventStart <= tomorrowStart && eventEnd >= tomorrowEnd);
-
-          console.log('📅 Event check:', {
-            eventId: event.id,
-            eventSummary: event.summary,
-            eventStartStr,
-            eventEndStr,
-            eventStart: eventStart.toISOString(),
-            eventEnd: eventEnd.toISOString(),
-            tomorrowStart: tomorrowStart.toISOString(),
-            tomorrowEnd: tomorrowEnd.toISOString(),
-            isInRange,
-            isActive: isEventActiveOrRecurring(event)
-          });
-
           return isInRange;
         });
-
-        console.log('✅ Tomorrow filtering completed:', {
-          originalCount: events.length,
-          filteredCount: tomorrowEvents.length
-        });
-
         return tomorrowEvents;
 
       case 'week':
-        // Неделя: от сегодня до +7 дней
         const weekEnd = new Date(startOfToday);
         weekEnd.setDate(weekEnd.getDate() + 7);
         weekEnd.setHours(23, 59, 59, 999);
@@ -472,7 +465,6 @@ const Recommendations: React.FC = () => {
           const eventStart = new Date(eventStartStr);
           const eventEnd = new Date(eventEndStr || eventStartStr);
 
-          // Событие попадает в неделю, если пересекается с периодом от сегодня до +7 дней
           return (eventStart >= startOfToday && eventStart <= weekEnd) ||
                  (eventEnd >= startOfToday && eventEnd <= weekEnd) ||
                  (eventStart <= startOfToday && eventEnd >= weekEnd);
@@ -480,81 +472,56 @@ const Recommendations: React.FC = () => {
 
       case 'general':
       default:
-        // Общий анализ: все активные события
         return events.filter(isEventActiveOrRecurring);
     }
   };
 
   // Модифицированная функция получения анализа календаря
   const getCalendarAnalysis = async (analysisType: AnalysisType, forceRefresh: boolean = false) => {
-    console.log('🚀 Starting getCalendarAnalysis:', { analysisType, forceRefresh });
-
     setLoading(true);
     setError(null);
+    setShowNoGoalsModal(false);
 
     try {
-      console.log('📊 Loading events and goals...');
-      // Загружаем события и цели
       const [eventsList, goalsList] = await Promise.all([
         loadEvents(),
         loadGoals()
       ]);
 
-      console.log('📋 Loaded data:', {
-        eventsCount: eventsList?.length || 0,
-        goalsCount: goalsList?.length || 0
-      });
+      if (analysisType === 'tomorrow' || analysisType === 'week') {
+        const hasGoals = goalsList && Array.isArray(goalsList) && goalsList.length > 0;
+        if (!hasGoals) {
+          setLoading(false);
+          setShowNoGoalsModal(true);
+          return;
+        }
+        await createFullSchedule(analysisType, eventsList || [], goalsList);
+        return;
+      }
 
       if (!eventsList || eventsList.length === 0) {
         setError('Нет событий для анализа');
         return;
       }
 
-      // Фильтруем события по выбранному периоду
       const filteredEvents = filterEventsByPeriod(eventsList, analysisType);
-      console.log('🔍 Filtered events:', {
-        originalCount: eventsList.length,
-        filteredCount: filteredEvents.length,
-        analysisType
-      });
 
-      // Для анализа "завтра" разрешаем продолжить даже без событий
-      // ИИ может предложить создать события или дать рекомендации по планированию
-      if (filteredEvents.length === 0 && analysisType === 'week') {
-        setError(`Нет событий на ближайшую неделю для анализа`);
+      if (filteredEvents.length === 0) {
+        setError('Нет событий для анализа в выбранном периоде');
         return;
       }
 
-      // Для общего анализа требуем наличие событий
-      if (filteredEvents.length === 0 && analysisType === 'general') {
-        setError('Нет событий для анализа');
-        return;
-      }
-
-      // Получаем соответствующий период для API
       const option = analysisOptions.find(opt => opt.type === analysisType);
-      const periodDays = option?.period_days || 7;
+      const periodDays = option?.period_days || 30;
 
-      console.log('🎯 Preparing AI request:', {
-        filteredEventsCount: filteredEvents.length,
-        goalsCount: goalsList.length,
-        periodDays,
-        analysisType
-      });
-
-      // Отправляем события на анализ ИИ
       const analysisResult = await aiService.analyzeCalendar({
         calendar_events: filteredEvents,
         user_goals: goalsList,
         analysis_period_days: periodDays,
-        analysis_type: analysisType // Добавляем поле analysis_type
+        analysis_type: analysisType
       }, forceRefresh);
 
-      console.log('✅ Analysis completed:', analysisResult);
-
-      // Нормализуем предложенные изменения
       const normalizedChanges = (analysisResult.schedule_changes || []).map(ch => normalizeChangeDateTimes(ch));
-
       setAnalysis({ ...analysisResult, schedule_changes: normalizedChanges });
       setShowAnalysisSelection(false);
 
@@ -563,6 +530,62 @@ const Recommendations: React.FC = () => {
       setError(err.message || 'Произошла ошибка при анализе календаря');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Новая функция для создания полного расписания
+  const createFullSchedule = async (scheduleType: 'tomorrow' | 'week', eventsList: CalendarEvent[], goalsList: SmartGoal[]) => {
+    try {
+      const filteredEvents = filterEventsByPeriod(eventsList, scheduleType);
+
+      const scheduleRequest = {
+        schedule_type: scheduleType,
+        user_goals: goalsList,
+        existing_events: filteredEvents,
+        work_hours_start: "09:00",
+        work_hours_end: "18:00",
+        break_duration_minutes: 60,
+        buffer_between_events_minutes: 15
+      };
+
+      const fullScheduleResult = await aiService.createFullSchedule(scheduleRequest);
+
+      const scheduleChanges: ScheduleChange[] = [];
+      const recommendations: string[] = [...fullScheduleResult.recommendations];
+
+      fullScheduleResult.schedules.forEach((daySchedule, dayIndex) => {
+        recommendations.push(`📅 ${daySchedule.day_name} (${daySchedule.date}): ${daySchedule.events.length} событий, ${daySchedule.total_productive_hours || 0}ч продуктивного времени`);
+        daySchedule.events.forEach((event, eventIndex) => {
+          scheduleChanges.push({
+            id: `schedule_${dayIndex}_${eventIndex}`,
+            action: 'create',
+            title: event.title,
+            reason: event.description || `Запланировано в рамках цели. Категория: ${event.category || 'general'}`,
+            new_start: event.start_time,
+            new_end: event.end_time,
+            priority: event.priority || 'medium'
+          });
+        });
+      });
+
+      if (fullScheduleResult.reasoning) {
+        recommendations.push(`🤖 ИИ: ${fullScheduleResult.reasoning}`);
+      }
+
+      const analysisResult: CalendarAnalysis = {
+        summary: `Создано полное расписание на ${scheduleType === 'tomorrow' ? 'завтра' : 'неделю'}. Учтено целей: ${fullScheduleResult.total_goals_addressed}. Оценка продуктивности: ${fullScheduleResult.productivity_score || 0}/10`,
+        schedule_changes: scheduleChanges,
+        recommendations: recommendations,
+        productivity_score: fullScheduleResult.productivity_score,
+        goal_alignment: `Учтено ${fullScheduleResult.total_goals_addressed} из ${goalsList.length} целей`
+      };
+
+      setAnalysis(analysisResult);
+      setShowAnalysisSelection(false);
+
+    } catch (error: any) {
+      console.error('❌ Error creating full schedule:', error);
+      throw error;
     }
   };
 
@@ -684,6 +707,16 @@ const Recommendations: React.FC = () => {
             ))}
           </div>
         </div>
+
+        {/* Модальное окно доступно и в этой ветке */}
+        <NoGoalsModal
+          isOpen={showNoGoalsModal}
+          onClose={() => setShowNoGoalsModal(false)}
+          onGoToGoals={() => {
+            setShowNoGoalsModal(false);
+            window.location.href = '/goals';
+          }}
+        />
       </div>
     );
   }
@@ -795,22 +828,35 @@ const Recommendations: React.FC = () => {
         </div>
       )}
 
-      {/* Если нет видимых изменений */}
-      {(!analysis.recommendations || analysis.recommendations.length === 0) &&
-       visibleChanges.length === 0 && (
-        <div className="no-recommendations">
-          <div className="no-recommendations-content">
-            <span className="no-recommendations-icon">✅</span>
-            <h3>Ваш календарь выглядит отлично!</h3>
-            <p>
-              {selectedAnalysisType === 'tomorrow' && 'На завтра у вас хорошо спланированный день.'}
-              {selectedAnalysisType === 'week' && 'Ваше расписание на неделю хорошо оптимизировано.'}
-              {selectedAnalysisType === 'general' && 'ИИ не нашел критических проблем в вашем календаре.'}
-            </p>
-            <p>Попробуйте обновить анализ позже или выберите другой период.</p>
-          </div>
+      {/* Сводка анализа */}
+      {analysis.summary && (
+        <div className="analysis-summary">
+          <h3>📊 Сводка анализа</h3>
+          <p>{analysis.summary}</p>
+
+          {analysis.productivity_score !== undefined && (
+            <div className="productivity-score">
+              <strong>Оценка продуктивности:</strong> {analysis.productivity_score}/10
+            </div>
+          )}
+
+          {analysis.goal_alignment && (
+            <div className="goal-alignment">
+              <strong>Соответствие целям:</strong> {analysis.goal_alignment}
+            </div>
+          )}
         </div>
       )}
+
+      {/* Модальное окно "Нет целей" */}
+      <NoGoalsModal
+        isOpen={showNoGoalsModal}
+        onClose={() => setShowNoGoalsModal(false)}
+        onGoToGoals={() => {
+          setShowNoGoalsModal(false);
+          window.location.href = '/goals';
+        }}
+      />
     </div>
   );
 };
