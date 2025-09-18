@@ -39,6 +39,11 @@ const Goals: React.FC = () => {
   const [creatingEvents, setCreatingEvents] = useState<{[goalId: string]: boolean}>({});
   const [createdEvents, setCreatedEvents] = useState<{[goalId: string]: string}>({});
 
+  // Новые состояния для редактирования и удаления
+  const [editingGoal, setEditingGoal] = useState<SmartGoal | null>(null);
+  const [deletingGoal, setDeletingGoal] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
+
   // Проверяем, заполнены ли основные поля для получения анализа
   const canAnalyze = form.title.trim().length > 0 && form.description.trim().length > 0;
 
@@ -479,6 +484,53 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
     return labels[key] || key;
   };
 
+  // Обработчик начала редактирования цели
+  const handleEditGoal = (goal: SmartGoal) => {
+    setEditingGoal(goal);
+    setForm({
+      title: goal.title,
+      description: goal.description,
+      deadline: goal.deadline ? new Date(goal.deadline).toISOString().slice(0, 10) : '',
+      priority: goal.priority,
+    });
+    setCurrentStep('input');
+  };
+
+  // Обработчик подтверждения удаления цели
+  const handleDeleteGoal = (goalId: string) => {
+    setDeletingGoal(goalId);
+    setShowDeleteConfirm(goalId);
+  };
+
+  // Обработчик отмены удаления цели
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(null);
+    setDeletingGoal(null);
+  };
+
+  // Обработчик подтверждения удаления цели
+  const handleConfirmDelete = async () => {
+    if (!deletingGoal) return;
+
+    setLoadingGoals(true);
+    setError(null);
+
+    try {
+      // Удаляем цель на сервере
+      await api.delete(`/ai/goals/${deletingGoal}`);
+
+      setSuccess('Цель успешно удалена');
+      // Обновляем список целей
+      await loadGoals();
+    } catch (e: any) {
+      setError(e?.message || 'Не удалось удалить цель');
+    } finally {
+      setLoadingGoals(false);
+      setShowDeleteConfirm(null);
+      setDeletingGoal(null);
+    }
+  };
+
   return (
     <div className="goals-page">
       <div className="goals-header">
@@ -564,12 +616,44 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
                       )}
                     </div>
                   )}
+
+                  <div className="goal-actions">
+                    <button className="btn edit" onClick={() => handleEditGoal(goal)}>
+                      ✏️ Редактировать
+                    </button>
+                    <button
+                      className="btn delete"
+                      onClick={() => goal.id && handleDeleteGoal(goal.id)}
+                      disabled={!goal.id}
+                    >
+                      🗑️ Удалить
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
         </div>
       </div>
+
+      {/* Модальное окно подтверждения удаления цели */}
+      {showDeleteConfirm && (
+        <div className="modal">
+          <div className="modal-content">
+            <h3>Подтверждение удаления</h3>
+            <p>Вы уверены, что хотите удалить эту цель? Это действие нельзя будет отменить.</p>
+            <div className="modal-actions">
+              <button className="btn cancel" onClick={handleCancelDelete}>
+                Отмена
+              </button>
+              <button className="btn confirm" onClick={handleConfirmDelete} disabled={loadingGoals}>
+                {loadingGoals ? 'Удаляем...' : 'Удалить цель'}
+              </button>
+            </div>
+            {error && <div className="alert error">{error}</div>}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
