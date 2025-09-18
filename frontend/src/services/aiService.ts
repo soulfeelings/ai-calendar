@@ -319,6 +319,31 @@ class AIService {
       throw this.handleAPIError(error, 'Ошибка при создании расписания');
     }
   }
+
+  /**
+   * Обновление существующей цели
+   */
+  async updateGoal(goalId: string, goalData: SmartGoal): Promise<SmartGoal> {
+    try {
+      const response = await api.put(`/ai/goals/${goalId}`, goalData);
+      return response.data;
+    } catch (error: any) {
+      console.error('Error updating goal:', error);
+      throw this.handleAPIError(error, 'Ошибка при обновлении цели');
+    }
+  }
+
+  /**
+   * Удаление цели
+   */
+  async deleteGoal(goalId: string): Promise<void> {
+    try {
+      await api.delete(`/ai/goals/${goalId}`);
+    } catch (error: any) {
+      console.error('Error deleting goal:', error);
+      throw this.handleAPIError(error, 'Ошибка при удалении цели');
+    }
+  }
 }
 
 export const aiService = new AIService();

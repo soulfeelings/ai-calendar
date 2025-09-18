@@ -40,7 +40,7 @@ class GoalsRepository:
 
         return goals
 
-    async def get_goal_by_id(self, goal_id: str, user_id: str) -> Optional[dict]:
+    async def get_goal_by_id(self, user_id: str, goal_id: str) -> Optional[dict]:
         """Получение цели по ID"""
         try:
             goal_doc = await mongodb.smart_goals.find_one({
@@ -57,7 +57,7 @@ class GoalsRepository:
         except Exception:
             return None
 
-    async def update_goal(self, goal_id: str, user_id: str, update_data: dict) -> bool:
+    async def update_goal(self, user_id: str, goal_id: str, update_data: dict) -> bool:
         """Обновление цели"""
         try:
             update_data["updated_at"] = datetime.now()
@@ -71,7 +71,7 @@ class GoalsRepository:
         except Exception:
             return False
 
-    async def delete_goal(self, goal_id: str, user_id: str) -> bool:
+    async def delete_goal(self, user_id: str, goal_id: str) -> bool:
         """Удаление цели"""
         try:
             result = await mongodb.smart_goals.delete_one({
