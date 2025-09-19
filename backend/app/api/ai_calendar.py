@@ -281,7 +281,7 @@ async def create_full_schedule(
 ):
     """
     Создание полного расписания на день или неделю на основе целей пользователя
-
+    
     Поддерживает типы:
     - 'tomorrow': полное расписание на завтра
     - 'week': полное расписание на неделю
@@ -292,7 +292,7 @@ async def create_full_schedule(
 
         # Преобразуем цели в словари
         goals_dict = [goal.model_dump() for goal in request.user_goals]
-
+        
         # Преобразуем существующие события если есть
         existing_events_dict = []
         if request.existing_events:

@@ -1,9 +1,11 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { authService, User } from '../services/authService';
 import { calendarService, Calendar, CalendarEvent } from '../services/calendarService';
+import { authService } from '../services/authService';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import RecurrenceBadge from './RecurrenceBadge';
 import Recommendations from './Recommendations';
+import LogoutModal from './LogoutModal';
 import { RRuleParser } from '../utils/rruleParser';
 import './Profile.css';
 
@@ -16,7 +18,7 @@ interface ProfileProps {
 const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [user, setUser] = useState<User | null>(null);
+  const { user, logout } = useAuth();
   const [calendars, setCalendars] = useState<Calendar[]>([]);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,6 +32,10 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
   const [lastFocusTime, setLastFocusTime] = useState<number>(Date.now()); // Время последнего фокуса
   const [initialLoadDone, setInitialLoadDone] = useState(false); // Флаг первоначальной загрузки
   const [requestInProgress, setRequestInProgress] = useState(false); // Глобальный флаг запроса
+
+  // Состояние для модального окна logout
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [logoutLoading, setLogoutLoading] = useState(false);
 
   // Заменяем showOnlyActiveEvents на более гибкую систему фильтрации
   type EventsFilterType = 'week' | 'all' | 'active';
@@ -300,8 +306,6 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
           localStorage.setItem('user_info', JSON.stringify(userInfo));
         }
 
-        setUser(userInfo);
-
         // Загружаем список календарей только для раздела 'calendar'
         // Добавляем дополнительную проверку URL для надежности
         const currentSection = getActiveSectionFromUrl();
@@ -487,9 +491,33 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     }
   };
 
+  // Функции для обработки модального окна logout
+  const handleLogoutClick = () => {
+    setShowLogoutModal(true);
+  };
+
+  const handleLogoutConfirm = async () => {
+    setLogoutLoading(true);
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      setLogoutLoading(false);
+      setShowLogoutModal(false);
+    }
+  };
+
+  const handleLogoutCancel = () => {
+    setShowLogoutModal(false);
+  };
+
   const handleLogout = async () => {
-    await authService.logout();
-    navigate('/login');
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   const renderSectionContent = () => {
@@ -1053,7 +1081,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
         <div className="user-info">
           <img src={user.picture} alt={user.name} className="user-avatar" />
           <span>{user.name}</span>
-          <button onClick={handleLogout} className="logout-button">
+          <button onClick={handleLogoutClick} className="logout-button">
             Выйти
           </button>
         </div>
@@ -1137,6 +1165,15 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
           <span className="bottom-nav-text">Цели</span>
         </button>
       </nav>
+
+      {showLogoutModal && (
+        <LogoutModal
+          isOpen={showLogoutModal}
+          onConfirm={handleLogoutConfirm}
+          onCancel={handleLogoutCancel}
+          isLoading={logoutLoading}
+        />
+      )}
     </div>
   );
 };
