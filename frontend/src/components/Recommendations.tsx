@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { aiService, CalendarAnalysis, SmartGoal, ScheduleChange } from '../services/aiService';
 import { calendarService, CalendarEvent } from '../services/calendarService';
-import { RRuleParser } from '../utils/rruleParser';
 import './Recommendations.css';
 
 // Типы для нового дизайна
@@ -316,7 +315,6 @@ const Recommendations: React.FC = () => {
   const [analysis, setAnalysis] = useState<CalendarAnalysis | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [, setGoals] = useState<SmartGoal[]>([]);
 
   // Новые состояния для улучшенного дизайна
@@ -340,7 +338,7 @@ const Recommendations: React.FC = () => {
       });
 
       const isFree = slotEvents.length === 0;
-      const isOptimal = isFree && (hour >= 9 && hour <= 11) || (hour >= 14 && hour <= 16);
+      const isOptimal = isFree && ((hour >= 9 && hour <= 11) || (hour >= 14 && hour <= 16));
 
       slots.push({
         time: timeStr,
@@ -411,7 +409,6 @@ const Recommendations: React.FC = () => {
         aiService.getGoals(true).catch(() => [])
       ]);
 
-      setEvents(eventsData);
       setGoals(Array.isArray(goalsData) ? goalsData : []);
 
       if (mode === 'week') {
@@ -422,11 +419,12 @@ const Recommendations: React.FC = () => {
         setViewMode('week');
 
         // Получаем анализ от AI
-        const analysisResult = await aiService.analyzeCalendar(
-          eventsData,
-          Array.isArray(goalsData) ? goalsData : [],
-          7
-        );
+        const analysisResult = await aiService.analyzeCalendar({
+          calendar_events: eventsData,
+          user_goals: Array.isArray(goalsData) ? goalsData : [],
+          analysis_period_days: 7,
+          analysis_type: 'week'
+        });
         setAnalysis(analysisResult);
       } else {
         const tomorrow = new Date();
@@ -436,11 +434,12 @@ const Recommendations: React.FC = () => {
         setViewMode('tomorrow');
 
         // Получаем анализ от AI для завтрашнего дня
-        const analysisResult = await aiService.analyzeCalendar(
-          eventsData,
-          Array.isArray(goalsData) ? goalsData : [],
-          1
-        );
+        const analysisResult = await aiService.analyzeCalendar({
+          calendar_events: eventsData,
+          user_goals: Array.isArray(goalsData) ? goalsData : [],
+          analysis_period_days: 1,
+          analysis_type: 'tomorrow'
+        });
         setAnalysis(analysisResult);
       }
     } catch (err) {
