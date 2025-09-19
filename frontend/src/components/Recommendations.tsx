@@ -165,7 +165,7 @@ const Recommendations: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [goals, setGoals] = useState<SmartGoal[]>([]);
+  const [, setGoals] = useState<SmartGoal[]>([]);
   const [appliedChanges, setAppliedChanges] = useState<Set<string>>(new Set());
   const [rejectedChanges, setRejectedChanges] = useState<Set<string>>(new Set());
   const [applyingChange, setApplyingChange] = useState<number | null>(null);
@@ -433,7 +433,7 @@ const Recommendations: React.FC = () => {
         const tomorrowEnd = new Date(tomorrow);
         tomorrowEnd.setHours(23, 59, 59, 999);
 
-        const tomorrowEvents = events.filter(event => {
+        return events.filter(event => {
           if (!isEventActiveOrRecurring(event)) return false;
 
           const eventStartStr = event.start?.dateTime || event.start?.date;
@@ -443,12 +443,10 @@ const Recommendations: React.FC = () => {
           const eventStart = new Date(eventStartStr);
           const eventEnd = new Date(eventEndStr || eventStartStr);
 
-          const isInRange = (eventStart >= tomorrowStart && eventStart <= tomorrowEnd) ||
-                           (eventEnd >= tomorrowStart && eventEnd <= tomorrowEnd) ||
-                           (eventStart <= tomorrowStart && eventEnd >= tomorrowEnd);
-          return isInRange;
+          return (eventStart >= tomorrowStart && eventStart <= tomorrowEnd) ||
+                 (eventEnd >= tomorrowStart && eventEnd <= tomorrowEnd) ||
+                 (eventStart <= tomorrowStart && eventEnd >= tomorrowEnd);
         });
-        return tomorrowEvents;
 
       case 'week':
         const weekEnd = new Date(startOfToday);
@@ -483,8 +481,9 @@ const Recommendations: React.FC = () => {
     setShowNoGoalsModal(false);
 
     try {
-      const [eventsList, goalsList] = await Promise.all([
-        loadEvents(),
+      // Раньше мы загружали и события, и цели. Для полного расписания по целям события не нужны
+      const [_, goalsList] = await Promise.all([
+        loadEvents(), // оставляем загрузку для кэша и других режимов, но не используем
         loadGoals()
       ]);
 
@@ -495,10 +494,12 @@ const Recommendations: React.FC = () => {
           setShowNoGoalsModal(true);
           return;
         }
-        await createFullSchedule(analysisType, eventsList || [], goalsList);
+        await createFullSchedule(analysisType, goalsList);
         return;
       }
 
+      // Для общего анализа по-прежнему используем события
+      const eventsList = await loadEvents();
       if (!eventsList || eventsList.length === 0) {
         setError('Нет событий для анализа');
         return;
@@ -533,19 +534,18 @@ const Recommendations: React.FC = () => {
     }
   };
 
-  // Новая функция для создания полного расписания
-  const createFullSchedule = async (scheduleType: 'tomorrow' | 'week', eventsList: CalendarEvent[], goalsList: SmartGoal[]) => {
+  // Новая функция для создания полного расписания ТОЛЬКО по целям (без учёта текущих событий)
+  const createFullSchedule = async (scheduleType: 'tomorrow' | 'week', goalsList: SmartGoal[]) => {
     try {
-      const filteredEvents = filterEventsByPeriod(eventsList, scheduleType);
-
       const scheduleRequest = {
         schedule_type: scheduleType,
         user_goals: goalsList,
-        existing_events: filteredEvents,
+        existing_events: [], // важно: игнорируем текущие события
         work_hours_start: "09:00",
         work_hours_end: "18:00",
         break_duration_minutes: 60,
-        buffer_between_events_minutes: 15
+        buffer_between_events_minutes: 15,
+        ignore_existing_events: true
       };
 
       const fullScheduleResult = await aiService.createFullSchedule(scheduleRequest);
@@ -573,7 +573,7 @@ const Recommendations: React.FC = () => {
       }
 
       const analysisResult: CalendarAnalysis = {
-        summary: `Создано полное расписание на ${scheduleType === 'tomorrow' ? 'завтра' : 'неделю'}. Учтено целей: ${fullScheduleResult.total_goals_addressed}. Оценка продуктивности: ${fullScheduleResult.productivity_score || 0}/10`,
+        summary: `Создано ПОЛНОЕ расписание на ${scheduleType === 'tomorrow' ? 'завтра' : 'неделю'} ТОЛЬКО исходя из ваших целей (без учёта текущих событий). Учтено целей: ${fullScheduleResult.total_goals_addressed}. Оценка продуктивности: ${fullScheduleResult.productivity_score || 0}/10`,
         schedule_changes: scheduleChanges,
         recommendations: recommendations,
         productivity_score: fullScheduleResult.productivity_score,

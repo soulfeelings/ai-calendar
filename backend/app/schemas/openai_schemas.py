@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional, List
 from datetime import datetime
-from .event_schemas import CalendarEvent, ScheduleChange, CalendarAnalysisResponse, CalendarAnalysisRequest
+from .event_schemas import CalendarEvent
 
 
 class OpenAIMessage(BaseModel):
@@ -82,6 +82,7 @@ class FullScheduleRequest(BaseModel):
     work_hours_end: Optional[str] = "18:00"    # время окончания рабочего дня
     break_duration_minutes: Optional[int] = 60  # обеденный перерыв
     buffer_between_events_minutes: Optional[int] = 15  # буфер между событиями
+    ignore_existing_events: Optional[bool] = False  # игнорировать ли текущие события полностью
 
 
 class FullScheduleResponse(BaseModel):

@@ -78,6 +78,7 @@ export interface FullScheduleRequest {
   work_hours_end?: string;
   break_duration_minutes?: number;
   buffer_between_events_minutes?: number;
+  ignore_existing_events?: boolean; // новый флаг
 }
 
 export interface FullScheduleResponse {
