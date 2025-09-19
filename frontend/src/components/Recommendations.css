@@ -147,6 +147,12 @@
   font-size: 0.9rem;
 }
 
+.mode-features span:last-child {
+  color: rgba(255, 255, 255, 0.5);
+  font-style: italic;
+  font-size: 0.8rem;
+}
+
 .mode-cta {
   color: var(--text-light);
   font-weight: 600;
@@ -667,6 +673,43 @@
 }
 
 .apply-btn-new:hover, .reject-btn-new:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-light);
+}
+
+/* Cache Info Styles */
+.cache-info {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--border-radius);
+  padding: 1rem;
+  margin: 1rem 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.cache-summary {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.9rem;
+  flex: 1;
+}
+
+.clear-cache-btn {
+  background: var(--danger-gradient);
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: var(--border-radius-small);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+}
+
+.clear-cache-btn:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-light);
 }

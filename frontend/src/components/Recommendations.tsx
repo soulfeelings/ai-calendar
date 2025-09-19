@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { aiService, CalendarAnalysis, SmartGoal, ScheduleChange } from '../services/aiService';
 import { calendarService, CalendarEvent } from '../services/calendarService';
+import recommendationsCacheService from '../services/recommendationsCacheService';
 import './Recommendations.css';
 
 // Типы для нового дизайна
@@ -34,11 +35,39 @@ interface WeekData {
 const AnalysisSelector: React.FC<{
   onSelectMode: (mode: 'week' | 'tomorrow') => void;
 }> = ({ onSelectMode }) => {
+  const [cacheInfo, setCacheInfo] = useState<any>(null);
+
+  // Загружаем информацию о кеше при монтировании компонента
+  React.useEffect(() => {
+    const info = recommendationsCacheService.getCacheInfo();
+    setCacheInfo(info);
+  }, []);
+
+  const handleClearCache = () => {
+    recommendationsCacheService.clearAllRecommendations();
+    const info = recommendationsCacheService.getCacheInfo();
+    setCacheInfo(info);
+    console.log('🧹 Cache cleared successfully');
+  };
+
   return (
     <div className="analysis-selector">
       <div className="selector-header">
         <h2>🤖 AI Календарь</h2>
         <p>Выберите тип анализа для получения персональных рекомендаций</p>
+
+        {/* Информация о кеше */}
+        {cacheInfo && cacheInfo.total > 0 && (
+          <div className="cache-info">
+            <div className="cache-summary">
+              📦 Кешировано: {cacheInfo.total} анализов
+              (📅 {cacheInfo.byType.week} недельных, 🌅 {cacheInfo.byType.tomorrow} завтрашних)
+            </div>
+            <button className="clear-cache-btn" onClick={handleClearCache}>
+              🗑️ Очистить кеш
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="mode-cards">
@@ -53,6 +82,7 @@ const AnalysisSelector: React.FC<{
             <span>• Планирование на 7 дней</span>
             <span>• Балансировка нагрузки</span>
             <span>• Учет биоритмов</span>
+            <span>• Кеш: 7 дней</span>
           </div>
           <div className="mode-cta">Создать план недели →</div>
         </div>
@@ -68,6 +98,7 @@ const AnalysisSelector: React.FC<{
             <span>• Фокус на 1 день</span>
             <span>• Приоритетные задачи</span>
             <span>• Энергетические пики</span>
+            <span>• Кеш: 24 часа</span>
           </div>
           <div className="mode-cta">Оптимизировать завтра →</div>
         </div>
@@ -411,6 +442,44 @@ const Recommendations: React.FC = () => {
 
       setGoals(Array.isArray(goalsData) ? goalsData : []);
 
+      // Создаем объект запроса для кеширования
+      const requestData = {
+        calendar_events: eventsData,
+        user_goals: Array.isArray(goalsData) ? goalsData : [],
+        analysis_period_days: mode === 'week' ? 7 : 1,
+        analysis_type: mode
+      };
+
+      // Проверяем кеш сначала
+      console.log(`🔍 Checking cache for ${mode} analysis...`);
+      const cachedAnalysis = recommendationsCacheService.getRecommendations(requestData, mode);
+
+      if (cachedAnalysis) {
+        console.log(`📋 Using cached ${mode} analysis`);
+        setAnalysis(cachedAnalysis);
+
+        // Продолжаем с UI логикой
+        if (mode === 'week') {
+          const startOfWeek = new Date();
+          startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
+          const weekData = createWeekData(startOfWeek, eventsData);
+          setWeekData(weekData);
+          setViewMode('week');
+        } else {
+          const tomorrow = new Date();
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          const tomorrowData = createDayData(tomorrow, eventsData);
+          setTomorrowData(tomorrowData);
+          setViewMode('tomorrow');
+        }
+
+        setLoading(false);
+        return;
+      }
+
+      // Если кеша нет, запрашиваем у AI
+      console.log(`🤖 Requesting fresh ${mode} analysis from AI...`);
+
       if (mode === 'week') {
         const startOfWeek = new Date();
         startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
@@ -419,12 +488,11 @@ const Recommendations: React.FC = () => {
         setViewMode('week');
 
         // Получаем анализ от AI
-        const analysisResult = await aiService.analyzeCalendar({
-          calendar_events: eventsData,
-          user_goals: Array.isArray(goalsData) ? goalsData : [],
-          analysis_period_days: 7,
-          analysis_type: 'week'
-        });
+        const analysisResult = await aiService.analyzeCalendar(requestData);
+
+        // Кешируем результат с TTL для недели (7 дней)
+        recommendationsCacheService.setRecommendations(requestData, analysisResult, 'week');
+
         setAnalysis(analysisResult);
       } else {
         const tomorrow = new Date();
@@ -434,12 +502,11 @@ const Recommendations: React.FC = () => {
         setViewMode('tomorrow');
 
         // Получаем анализ от AI для завтрашнего дня
-        const analysisResult = await aiService.analyzeCalendar({
-          calendar_events: eventsData,
-          user_goals: Array.isArray(goalsData) ? goalsData : [],
-          analysis_period_days: 1,
-          analysis_type: 'tomorrow'
-        });
+        const analysisResult = await aiService.analyzeCalendar(requestData);
+
+        // Кешируем результат с TTL для завтра (24 часа)
+        recommendationsCacheService.setRecommendations(requestData, analysisResult, 'tomorrow');
+
         setAnalysis(analysisResult);
       }
     } catch (err) {
