@@ -275,7 +275,7 @@ async def create_full_schedule(
 ):
     """
     Создание полного расписания на день или неделю на основе целей пользователя
-    
+
     Поддерживает типы:
     - 'tomorrow': полное расписание на завтра
     - 'week': полное расписание на неделю
@@ -287,13 +287,13 @@ async def create_full_schedule(
         logger.info(f"Starting full schedule creation for user {user_id}, type: {request.schedule_type}")
         logger.info(f"Received {len(request.user_goals)} goals for planning")
 
-        # Преобразуем цели в словари
-        goals_dict = [goal.model_dump() for goal in request.user_goals]
-        
-        # Преобразуем существующие события если есть
+        # Преобразуем цели в словари (JSON-совместимые)
+        goals_dict = [goal.model_dump(mode='json') for goal in request.user_goals]
+
+        # Преобразуем существующие события если есть (JSON-совместимые)
         existing_events_dict = []
         if request.existing_events:
-            existing_events_dict = [event.model_dump() for event in request.existing_events]
+            existing_events_dict = [event.model_dump(mode='json') for event in request.existing_events]
 
         # Создаем полное расписание
         result = await openai_service.create_full_schedule(
