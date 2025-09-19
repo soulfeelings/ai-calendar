@@ -1,16 +1,10 @@
 from fastapi import APIRouter, HTTPException, Depends, status
-from typing import List, Annotated
+from typing import Annotated
 import logging
-from datetime import datetime
 
+from schemas.event_schemas import CalendarAnalysisRequest
 from schemas.openai_schemas import (
-    CalendarAnalysisRequest,
-    CalendarAnalysisResponse,
     SchedulePlanningRequest,
-    SchedulePlanningResponse,
-    SMARTGoal,
-    OpenAIRequest,
-    OpenAIResponse,
     GoalAnalysisResponse,
     FullScheduleRequest,
     FullScheduleResponse
@@ -38,7 +32,7 @@ async def analyze_calendar_and_goals(
     - 'general': общий анализ календаря
     """
     try:
-        analysis_type = request.analysis_type or 'general'
+        analysis_type: str = request.analysis_type or 'general'
         logger.info(f"Starting calendar analysis for user {user_id}, type: {analysis_type}")
         logger.info(f"Received {len(request.calendar_events)} events for analysis")
 
@@ -50,7 +44,7 @@ async def analyze_calendar_and_goals(
             calendar_events=calendar_events_dict,
             user_goals=request.user_goals,
             analysis_period_days=request.analysis_period_days or 7,
-            analysis_type=analysis_type
+            analysis_type=str(analysis_type)
         )
 
         logger.info(f"Calendar analysis completed successfully for user {user_id}, type: {analysis_type}")
@@ -285,6 +279,9 @@ async def create_full_schedule(
     Поддерживает типы:
     - 'tomorrow': полное расписание на завтра
     - 'week': полное расписание на неделю
+
+    Дополнительно:
+    - ignore_existing_events: если True — полностью игнорировать существующие события календаря
     """
     try:
         logger.info(f"Starting full schedule creation for user {user_id}, type: {request.schedule_type}")
@@ -307,7 +304,8 @@ async def create_full_schedule(
             work_hours_end=request.work_hours_end,
             break_duration_minutes=request.break_duration_minutes,
             buffer_between_events_minutes=request.buffer_between_events_minutes,
-            preferences=request.preferences
+            preferences=request.preferences,
+            ignore_existing_events=bool(request.ignore_existing_events)
         )
 
         logger.info(f"Full schedule creation completed for user {user_id}, type: {request.schedule_type}")

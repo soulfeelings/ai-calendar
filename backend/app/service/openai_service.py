@@ -656,7 +656,8 @@ class OpenAIService:
         work_hours_end: str = "18:00",
         break_duration_minutes: int = 60,
         buffer_between_events_minutes: int = 15,
-        preferences: Dict = None
+        preferences: Dict = None,
+        ignore_existing_events: bool = False
     ) -> Dict[str, Any]:
         """
         Создание полного расписания на день или неделю на основе целей пользователя
@@ -670,7 +671,8 @@ class OpenAIService:
             break_duration_minutes: Длительность обеденного перерыва
             buffer_between_events_minutes: Буфер между событиями
             preferences: Дополнительные предпочтения пользователя
-            
+            ignore_existing_events: Полностью игнорировать текущее расписание
+
         Returns:
             Полное расписание с событиями по дням
         """
@@ -694,6 +696,13 @@ class OpenAIService:
             else:
                 raise ValueError(f"Неподдерживаемый тип расписания: {schedule_type}")
 
+            # Уточняем условие про существующие события
+            constraints_line = (
+                "- Игнорируй полностью существующие события календаря и не проверяй пересечения с ними"
+                if ignore_existing_events else
+                "- Не планируй на время существующих событий и избегай пересечений"
+            )
+
             # Создаем системный промпт
             system_prompt = f"""
             Ты — экспертный AI-планировщик, специализирующийся на создании оптимальных расписаний на основе целей пользователя и лучших практик тайм-менеджмента.
@@ -703,7 +712,7 @@ class OpenAIService:
             2. Следует лучшим практикам продуктивности (матрица Эйзенхауэра, принцип Парето, etc.)
             3. Включает время на отдых, еду и перерывы
             4. Оптимально распределяет нагрузку по времени дня и дням недели
-            5. Не конфликтует с существующими событиями
+            5. {'ИГНОРИРУЕТ существующие события' if ignore_existing_events else 'Не конфликтует с существующими событиями'}
 
             ПРИНЦИПЫ ПЛАНИРОВАНИЯ:
             - Сложные и важные задачи планируй на утро (9:00-12:00) когда энергия максимальна
@@ -757,7 +766,7 @@ class OpenAIService:
             - Создавай КОНКРЕТНЫЕ события с точным временем
             - Учитывай рабочие часы: {work_hours_start}-{work_hours_end}
             - Все времена в формате ISO 8601 с timezone
-            - Не планируй на время существующих событий
+            {constraints_line}
             - Каждая цель должна иметь конкретные временные блоки
             - Балансируй работу и отдых
             """
@@ -779,7 +788,7 @@ class OpenAIService:
             БУФЕРЫ МЕЖДУ СОБЫТИЯМИ: {buffer_between_events_minutes} минут
             """
 
-            if existing_events:
+            if existing_events and not ignore_existing_events:
                 user_message += f"""
                 
                 СУЩЕСТВУЮЩИЕ СОБЫТИЯ (не планируй на это время):
@@ -791,6 +800,12 @@ class OpenAIService:
                 
                 ДОПОЛНИТЕЛЬНЫЕ ПРЕДПОЧТЕНИЯ:
                 {json.dumps(preferences, ensure_ascii=False, indent=2)}
+                """
+
+            if ignore_existing_events:
+                user_message += """
+                
+                ВАЖНО: Игнорируй текущие события календаря. Разрешены пересечения с ними, цель — построить идеальный план исходя ТОЛЬКО из целей.
                 """
 
             user_message += """
