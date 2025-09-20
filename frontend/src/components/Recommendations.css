@@ -167,6 +167,10 @@
   background: linear-gradient(135deg, rgba(240, 147, 251, 0.2), rgba(245, 87, 108, 0.2));
 }
 
+.general-card:hover {
+  background: linear-gradient(135deg, rgba(75, 192, 192, 0.2), rgba(153, 102, 255, 0.2));
+}
+
 /* Loading Screen */
 .loading-screen {
   display: flex;
@@ -259,7 +263,7 @@
 }
 
 /* Week View Styles */
-.week-container, .tomorrow-container {
+.week-container, .tomorrow-container, .general-analysis-container {
   max-width: 1400px;
   margin: 0 auto;
 }
@@ -272,6 +276,60 @@
   padding: 2rem;
   margin-bottom: 2rem;
   text-align: center;
+}
+
+.general-analysis-header {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--border-radius-large);
+  padding: 2rem;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+.general-analysis-header h2 {
+  color: var(--text-light);
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+.analysis-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.analysis-summary {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--border-radius-large);
+  padding: 2rem;
+}
+
+.analysis-summary h3 {
+  color: var(--text-light);
+  font-size: 1.8rem;
+  margin-bottom: 1rem;
+}
+
+.analysis-summary p {
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+
+.productivity-score, .goal-alignment {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1rem;
+  border-radius: var(--border-radius);
+  margin-bottom: 1rem;
+}
+
+.productivity-score span, .goal-alignment span {
+  color: var(--text-light);
+  font-weight: 500;
 }
 
 .week-header h2 {
