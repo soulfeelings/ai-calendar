@@ -19,6 +19,11 @@ export interface ScheduleChange {
   new_end?: string;
   priority?: string;
   recurrence?: RecurrenceSuggestion; // НЕОБЯЗАТЕЛЬНО: предложение по повторяемости
+  // Новые поля для создания событий
+  description?: string;
+  location?: string;
+  calendar_id?: string;
+  is_new_event?: boolean; // Флаг для определения новых событий
 }
 
 export interface CalendarAnalysis {
@@ -343,6 +348,52 @@ class AIService {
     } catch (error: any) {
       console.error('Error deleting goal:', error);
       throw this.handleAPIError(error, 'Ошибка при удалении цели');
+    }
+  }
+
+  /**
+   * Создание нового события в календаре
+   */
+  async createCalendarEvent(eventData: {
+    summary: string;
+    description?: string;
+    start: {
+      dateTime: string;
+      timeZone?: string;
+    };
+    end: {
+      dateTime: string;
+      timeZone?: string;
+    };
+    location?: string;
+    recurrence?: string[];
+  }): Promise<any> {
+    try {
+      console.log('📅 Creating calendar event:', eventData);
+      const response = await api.post('/calendar/events', eventData);
+      console.log('✅ Calendar event created:', response.data);
+      return response.data;
+    } catch (error: any) {
+      console.error('❌ Error creating calendar event:', error);
+      throw this.handleAPIError(error, 'Ошибка при создании события');
+    }
+  }
+
+  /**
+   * Отклонение рекомендации ИИ (удаление из кеша)
+   */
+  async rejectScheduleChange(changeId: string, analysisType: 'week' | 'tomorrow' | 'general'): Promise<void> {
+    try {
+      // Здесь можно добавить логику для удаления конкретной рекомендации из кеша
+      // Пока просто логируем отклонение
+      console.log(`❌ Rejected schedule change: ${changeId} for analysis type: ${analysisType}`);
+
+      // Можно очистить весь кеш для данного типа анализа
+      // или реализовать более точечное удаление
+      this.clearAICache();
+    } catch (error: any) {
+      console.error('Error rejecting schedule change:', error);
+      throw new Error('Ошибка при отклонении рекомендации');
     }
   }
 }
