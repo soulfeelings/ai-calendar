@@ -1,8 +1,14 @@
 import React, { useState } from 'react';
-import { aiService, CalendarAnalysis, SmartGoal, ScheduleChange, CalendarAnalysisRequest } from '../services/aiService';
+import { aiService, CalendarAnalysis as AICalendarAnalysis, SmartGoal as AISmartGoal, ScheduleChange as AIScheduleChange } from '../services/aiService';
 import { calendarService, CalendarEvent } from '../services/calendarService';
 import recommendationsCacheService from '../services/recommendationsCacheService';
+import GoalsWarningModal from './GoalsWarningModal';
 import './Recommendations.css';
+
+// Используем типы из aiService вместо локальных
+type CalendarAnalysis = AICalendarAnalysis;
+type SmartGoal = AISmartGoal;
+type ScheduleChange = AIScheduleChange;
 
 // Типы для нового дизайна
 type ViewMode = 'selection' | 'week' | 'tomorrow' | 'analysis' | 'general';
@@ -31,15 +37,14 @@ interface WeekData {
   busyDays: number;
 }
 
-// Компонент выбора режима анализа
+// Ко��п��нент выбора режима анализа
 const AnalysisSelector: React.FC<{
   onSelectMode: (mode: 'week' | 'tomorrow' | 'general') => void;
 }> = ({ onSelectMode }) => {
   const [cacheInfo, setCacheInfo] = useState<any>(null);
-  const [generalAnalysisLoading, setGeneralAnalysisLoading] = useState(false);
   const [generalAnalysisResult, setGeneralAnalysisResult] = useState<CalendarAnalysis | null>(null);
 
-  // Загружаем информацию о кеше при монтировании компонента
+  // Загружаем ин����ормацию о кеше при монтировании компонента
   React.useEffect(() => {
     const info = recommendationsCacheService.getCacheInfo();
     setCacheInfo(info);
@@ -52,74 +57,6 @@ const AnalysisSelector: React.FC<{
     console.log('🧹 Cache cleared successfully');
   };
 
-  // Функция для фильтрации актуальных событий
-  const filterRelevantEvents = (events: any[]) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0); // Сбрасываем время к началу дня
-
-    return events.filter(event => {
-      // Проверяем дату окончания события
-      let endDate: Date;
-
-      if (event.end?.dateTime) {
-        endDate = new Date(event.end.dateTime);
-      } else if (event.end?.date) {
-        endDate = new Date(event.end.date);
-      } else if (event.start?.dateTime) {
-        // Если нет end, используем start как приблизительную дату
-        endDate = new Date(event.start.dateTime);
-      } else if (event.start?.date) {
-        endDate = new Date(event.start.date);
-      } else {
-        return false; // Событие без даты - пропускаем
-      }
-
-      // Событие актуально, если дата окончания >= сегодня
-      return endDate >= today;
-    });
-  };
-
-  // Обработчик общего анализа календаря
-  const handleGeneralAnalysis = async () => {
-    setGeneralAnalysisLoading(true);
-    setGeneralAnalysisResult(null);
-
-    try {
-      console.log('🔍 Starting general calendar analysis...');
-
-      // Загружаем со��ытия и цели
-      const [eventsData, goalsData] = await Promise.all([
-        calendarService.getEvents(true),
-        aiService.getGoals(true).catch(() => [])
-      ]);
-
-      // Фильтруем только актуальные события
-      const relevantEvents = filterRelevantEvents(eventsData);
-
-      console.log(`📅 Filtered ${relevantEvents.length} relevant events from ${eventsData.length} total events`);
-
-      // Создаем объект запроса для общего анализа
-      const requestData = {
-        calendar_events: relevantEvents,
-        user_goals: Array.isArray(goalsData) ? goalsData : [],
-        analysis_period_days: 30, // Анализируем на месяц вперед
-        analysis_type: 'general' as const
-      };
-
-      // Выполняем общий анализ календаря
-      const analysisResult = await aiService.analyzeCalendar(requestData);
-
-      console.log('✅ General analysis completed:', analysisResult);
-      setGeneralAnalysisResult(analysisResult);
-
-    } catch (error: any) {
-      console.error('❌ Error in general analysis:', error);
-      alert(`❌ Ошибка п��и общем анализе календаря: ${error.message}`);
-    } finally {
-      setGeneralAnalysisLoading(false);
-    }
-  };
-
   return (
     <div className="analysis-selector">
       <div className="selector-header">
@@ -130,7 +67,7 @@ const AnalysisSelector: React.FC<{
         {cacheInfo && cacheInfo.total > 0 && (
           <div className="cache-info">
             <div className="cache-summary">
-              📦 Кешировано: {cacheInfo.total} анал��зов
+              📦 Кешировано: {cacheInfo.total} анализов
               (📅 {cacheInfo.byType.week} недельных, 🌅 {cacheInfo.byType.tomorrow} завтрашних)
             </div>
             <button className="clear-cache-btn" onClick={handleClearCache}>
@@ -165,8 +102,8 @@ const AnalysisSelector: React.FC<{
           <h3>Новое расписание на неделю</h3>
           <p>ИИ создаст полное расписание на неделю исходя из ваших целей</p>
           <div className="mode-features">
-            <span>• Соз��ание с нуля на основе целей</span>
-            <span>• Опт��мальное распределение времени</span>
+            <span>• Создание с нуля на основе целей</span>
+            <span>• Оптимальное распределение времени</span>
             <span>• Учет приоритетов и дедлайнов</span>
             <span>• Без привязки к текущему календарю</span>
           </div>
@@ -181,32 +118,12 @@ const AnalysisSelector: React.FC<{
           <h3>Новое расписание на завтра</h3>
           <p>ИИ составит идеальный план на завтра для достижения ваших целей</p>
           <div className="mode-features">
-            <span>• Фокус н�� достижении целей</span>
+            <span>• Фок��с на достижении целей</span>
             <span>• Оптимальная последовательность задач</span>
             <span>• Учет продуктивных часов</span>
-            <span>• Соз��ание с чистого листа</span>
+            <span>• Создание с чистого листа</span>
           </div>
           <div className="mode-cta">Создать план на завтра →</div>
-        </div>
-
-        {/* Новая карточка для общего анализа календаря */}
-        <div className="mode-card general-card">
-          <div className="mode-icon">📊</div>
-          <h3>Общий анализ календаря</h3>
-          <p>Анализ всех актуальных событий календаря и общие рекомендации по улучшению</p>
-          <div className="mode-features">
-            <span>• Анализ актуальных событий</span>
-            <span>• Общие паттер��ы использования времени</span>
-            <span>• Рек��мендаци�� по оптимизации</span>
-            <span>• Соответствие целям</span>
-          </div>
-          <button
-            className={`mode-cta ${generalAnalysisLoading ? 'loading' : ''}`}
-            onClick={handleGeneralAnalysis}
-            disabled={generalAnalysisLoading}
-          >
-            {generalAnalysisLoading ? '��� Анализирую...' : 'Провести анализ →'}
-          </button>
         </div>
       </div>
 
@@ -214,7 +131,7 @@ const AnalysisSelector: React.FC<{
       {generalAnalysisResult && (
         <div className="general-analysis-result">
           <div className="analysis-header">
-            <h3>📊 Результат общего анализа</h3>
+            <h3>📈 Результат общего анализа</h3>
             <button
               className="close-analysis-btn"
               onClick={() => setGeneralAnalysisResult(null)}
@@ -294,7 +211,7 @@ const AnalysisSelector: React.FC<{
   );
 };
 
-// Компонент временной шкалы
+// Компон��нт временной шкалы
 const TimelineView: React.FC<{
   dayData: DayData;
   showSuggestions: boolean;
@@ -306,7 +223,7 @@ const TimelineView: React.FC<{
         <h3>{dayData.dayName}</h3>
         <span className="date-label">{dayData.dateStr}</span>
         <div className="day-stats">
-          <span className="stat">📅 {dayData.totalEvents} соб��тий</span>
+          <span className="stat">📅 {dayData.totalEvents} событий</span>
           <span className="stat">⏰ {dayData.freeHours}ч свободно</span>
           <span className="stat">✨ {dayData.optimalSlots} оптимальных слотов</span>
         </div>
@@ -411,7 +328,7 @@ const WeekView: React.FC<{
 
       {recommendations.length > 0 && (
         <div className="recommendations-section">
-          <h3>🤖 AI Рекомендации</h3>
+          <h3>🤖 AI Рекоме��дации</h3>
           <div className="recommendations-grid">
             {recommendations.map((rec, index) => (
               <div key={index} className="recommendation-card-new">
@@ -520,7 +437,7 @@ const ScheduleChangeCardNew: React.FC<{
             <h5>📅 Детали события:</h5>
             {change.new_start && (
               <div className="event-detail">
-                <span className="detail-label">���� Начало:</span>
+                <span className="detail-label">📅 Начало:</span>
                 <span className="detail-value">{formatDateTime(change.new_start)}</span>
               </div>
             )}
@@ -538,7 +455,7 @@ const ScheduleChangeCardNew: React.FC<{
             )}
             {change.location && (
               <div className="event-detail">
-                <span className="detail-label">📍 Место:</span>
+                <span className="detail-label">📍 М��сто:</span>
                 <span className="detail-value">{change.location}</span>
               </div>
             )}
@@ -550,7 +467,7 @@ const ScheduleChangeCardNew: React.FC<{
           <div className="change-time-new">
             {change.new_start && (
               <div className="time-change">
-                <span className="time-label">Н��вое время начала:</span>
+                <span className="time-label">Новое время начала:</span>
                 <span className="time-value">
                   {formatDateTime(change.new_start)}
                 </span>
@@ -558,7 +475,7 @@ const ScheduleChangeCardNew: React.FC<{
             )}
             {change.new_end && (
               <div className="time-change">
-                <span className="time-label">Новое время окончания:</span>
+                <span className="time-label">Н��в��е время окончания:</span>
                 <span className="time-value">
                   {formatDateTime(change.new_end)}
                 </span>
@@ -613,6 +530,10 @@ const Recommendations: React.FC = () => {
   const [weekData, setWeekData] = useState<WeekData | null>(null);
   const [tomorrowData, setTomorrowData] = useState<DayData | null>(null);
 
+  // Состояние для модального окна предупреждения о целях
+  const [showGoalsWarning, setShowGoalsWarning] = useState(false);
+  const [pendingMode, setPendingMode] = useState<'week' | 'tomorrow' | null>(null);
+
   // Функция создания временных слотов
   const createTimeSlots = (date: Date, events: CalendarEvent[]): TimeSlot[] => {
     const slots: TimeSlot[] = [];
@@ -636,7 +557,7 @@ const Recommendations: React.FC = () => {
         events: slotEvents,
         isFree,
         isOptimal,
-        suggestion: isOptimal ? 'Оптимальное ��ремя для важных задач' : undefined
+        suggestion: isOptimal ? 'Оптимальное время для важных задач' : undefined
       });
     }
 
@@ -690,13 +611,81 @@ const Recommendations: React.FC = () => {
 
   // Обработчик выбора режима
   const handleModeSelect = async (mode: 'week' | 'tomorrow' | 'general') => {
+    // Для режимов week и tomorrow сначала проверяем наличие целей
+    if (mode === 'week' || mode === 'tomorrow') {
+      try {
+        console.log(`🔍 Checking goals for ${mode} mode...`);
+        const goalsData = await aiService.getGoals(true).catch(() => []);
+
+        if (!Array.isArray(goalsData) || goalsData.length === 0) {
+          console.log('❌ No goals found, showing warning modal');
+          setPendingMode(mode);
+          setShowGoalsWarning(true);
+          return;
+        }
+      } catch (error) {
+        console.error('❌ Error checking goals:', error);
+        setPendingMode(mode);
+        setShowGoalsWarning(true);
+        return;
+      }
+    }
+
     setLoading(true);
     setError(null);
 
     try {
+      if (mode === 'general') {
+        // Для общего анализа используем существующую логику
+        console.log('🔍 Starting general calendar analysis...');
+
+        // Загружаем со��ытия и цели
+        const [eventsData, goalsData] = await Promise.all([
+          calendarService.getEvents(true),
+          aiService.getGoals(true).catch(() => [])
+        ]);
+
+        // Фильтруем только актуальные события
+        const relevantEvents = eventsData.filter(event => {
+          let endDate: Date;
+
+          if (event.end?.dateTime) {
+            endDate = new Date(event.end.dateTime);
+          } else if (event.end?.date) {
+            endDate = new Date(event.end.date);
+          } else if (event.start?.dateTime) {
+            endDate = new Date(event.start.dateTime);
+          } else if (event.start?.date) {
+            endDate = new Date(event.start.date);
+          } else {
+            return false;
+          }
+
+          return endDate >= new Date();
+        });
+        console.log(`📅 Filtered ${relevantEvents.length} relevant events from ${eventsData.length} total events`);
+
+        // Создаем объект запроса для общего анализа
+        const requestData = {
+          calendar_events: relevantEvents,
+          user_goals: Array.isArray(goalsData) ? goalsData : [],
+          analysis_period_days: 30,
+          analysis_type: 'general' as const
+        };
+
+        // Выполняем общий анализ календаря
+        const analysisResult = await aiService.analyzeCalendar(requestData);
+        console.log('✅ General analysis completed:', analysisResult);
+
+        setAnalysis(analysisResult);
+        setViewMode('general');
+        return;
+      }
+
+      // Для week и tomorrow создаем полное расписание
       console.log(`🎯 Creating full schedule for ${mode} based on user goals only...`);
 
-      // З��гружаем только цели пользователя (НЕ загружаем события календаря)
+      // Загружаем только цели пользователя (НЕ загружаем события календаря)
       const goalsData = await aiService.getGoals(true).catch(() => []);
 
       if (!Array.isArray(goalsData) || goalsData.length === 0) {
@@ -707,11 +696,11 @@ const Recommendations: React.FC = () => {
 
       setGoals(goalsData);
 
-      // Создаем объект запроса для создания полного расписания
+      // Создаем объект запроса для создания полного расписания (только для week и tomorrow)
       const scheduleRequest = {
-        schedule_type: mode,
+        schedule_type: mode as 'week' | 'tomorrow', // Приводим к правильному типу
         user_goals: goalsData,
-        ignore_existing_events: true, // Игнорируем существующие события
+        ignore_existing_events: true,
         work_hours_start: '09:00',
         work_hours_end: '18:00',
         break_duration_minutes: 15,
@@ -733,17 +722,17 @@ const Recommendations: React.FC = () => {
         setWeekData(weekData);
         setViewMode('week');
 
-        // Преобраз��ем результат в формат CalendarAnalysis для совместимости
+        // Преобразуем результат в формат CalendarAnalysis для совместимости
         const analysisResult = {
           summary: scheduleResult.reasoning || 'Создано новое расписание на основе ваших целей',
           recommendations: scheduleResult.recommendations || [],
           schedule_changes: convertSchedulesToChanges(scheduleResult.schedules),
           productivity_score: scheduleResult.productivity_score,
-          goal_alignment: `Адресов��но целей: ${scheduleResult.total_goals_addressed || 0}`
+          goal_alignment: `Адресовано целей: ${scheduleResult.total_goals_addressed || 0}`
         };
         setAnalysis(analysisResult);
       } else {
-        // Для завтрашнего дня
+        // Для завтрашн��го дня
         const tomorrowSchedule = scheduleResult.schedules[0];
         if (tomorrowSchedule) {
           const tomorrowData = createDayDataFromSchedule(tomorrowSchedule);
@@ -762,7 +751,7 @@ const Recommendations: React.FC = () => {
         }
       }
     } catch (err: any) {
-      console.error('❌ Error creating full schedule:', err);
+      console.error('❌ Error creating schedule:', err);
       setError(`Ошибка создания расписания: ${err.message}`);
     } finally {
       setLoading(false);
@@ -823,7 +812,7 @@ const Recommendations: React.FC = () => {
         events: slotEvents,
         isFree,
         isOptimal,
-        suggestion: isOptimal ? 'Оптимальное ��ремя для новых задач' : undefined
+        suggestion: isOptimal ? 'Оптимальное ����ремя для новых задач' : undefined
       });
     }
 
@@ -849,7 +838,7 @@ const Recommendations: React.FC = () => {
             id: `schedule-${schedule.date}-${index}`,
             action: 'create',
             title: event.title,
-            reason: event.description || `Запланировано для достижения цели: ${event.goal_id || 'общая прод��ктивность'}`,
+            reason: event.description || `Запланировано для достижения цели: ${event.goal_id || 'общая продуктивность'}`,
             new_start: event.start_time,
             new_end: event.end_time,
             priority: event.priority || 'medium',
@@ -861,103 +850,6 @@ const Recommendations: React.FC = () => {
     });
 
     return changes;
-  };
-
-  // Обработчик выбора режима
-  const handleModeSelectOld = async (mode: 'week' | 'tomorrow') => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Загружаем события и цели
-      const [eventsData, goalsData] = await Promise.all([
-        calendarService.getEvents(true),
-        aiService.getGoals(true).catch(() => [])
-      ]);
-
-      setGoals(Array.isArray(goalsData) ? goalsData : []);
-
-      if (mode === 'general') {
-        // Для общего анализа отправляем события календаря и цели
-        const requestData: CalendarAnalysisRequest = {
-          calendar_events: eventsData,
-          user_goals: Array.isArray(goalsData) ? goalsData : [],
-          analysis_period_days: 7,
-          analysis_type: 'general' as const
-        };
-
-        console.log(`🔍 Checking cache for ${mode} analysis...`);
-        const cachedAnalysis = recommendationsCacheService.getRecommendations(requestData, mode);
-
-        if (cachedAnalysis) {
-          console.log(`📋 Using cached ${mode} analysis`);
-          setAnalysis(cachedAnalysis);
-          setViewMode('general');
-        } else {
-          console.log(`🤖 Requesting fresh ${mode} analysis from AI...`);
-          const analysisResult = await aiService.analyzeCalendar(requestData);
-          recommendationsCacheService.setRecommendations(requestData, analysisResult, 'general');
-          setAnalysis(analysisResult);
-          setViewMode('general');
-        }
-      } else {
-        // Для недели и завтра отправляем ТОЛЬКО цели + ignore_existing_events=True
-        const fullScheduleRequestData = {
-          schedule_type: mode,
-          user_goals: Array.isArray(goalsData) ? goalsData : [],
-          ignore_existing_events: true
-        };
-
-        console.log(`🔍 Creating full schedule for ${mode}...`);
-        
-        if (mode === 'week') {
-          const startOfWeek = new Date();
-          startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
-          const weekData = createWeekData(startOfWeek, eventsData);
-          setWeekData(weekData);
-          setViewMode('week');
-
-          // Получаем полное расписание от AI
-          const scheduleResult = await aiService.createFullSchedule(fullScheduleRequestData);
-          
-          // Преобразуем результат в формат CalendarAnalysis для совместимости
-          const analysisResult: CalendarAnalysis = {
-            summary: scheduleResult.reasoning || 'Расписание создано на основе ваших целей',
-            schedule_changes: [], // Полное расписание не содержит изменений существующих событий
-            recommendations: scheduleResult.recommendations || [],
-            productivity_score: scheduleResult.productivity_score,
-            goal_alignment: `Охвачено целей: ${scheduleResult.total_goals_addressed}`
-          };
-
-          setAnalysis(analysisResult);
-        } else {
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          const tomorrowData = createDayData(tomorrow, eventsData);
-          setTomorrowData(tomorrowData);
-          setViewMode('tomorrow');
-
-          // Получаем полное расписание на завтра от AI
-          const scheduleResult = await aiService.createFullSchedule(fullScheduleRequestData);
-          
-          // Преобразуем результат в формат CalendarAnalysis для совместимости
-          const analysisResult: CalendarAnalysis = {
-            summary: scheduleResult.reasoning || 'Расписание на завтра создано на основе ваших целей',
-            schedule_changes: [], // Полное расписание не содержит изменений существующих событий
-            recommendations: scheduleResult.recommendations || [],
-            productivity_score: scheduleResult.productivity_score,
-            goal_alignment: `Охвачено целей: ${scheduleResult.total_goals_addressed}`
-          };
-
-          setAnalysis(analysisResult);
-        }
-      }
-    } catch (err) {
-      setError('Ошибка загрузки данных. Попробуйте позже.');
-      console.error('Error loading data:', err);
-    } finally {
-      setLoading(false);
-    }
   };
 
   // Обработчики действий
@@ -981,7 +873,7 @@ const Recommendations: React.FC = () => {
     try {
       setLoading(true);
 
-      // Подготавливаем данные для создания события
+      // ��одг��тавливаем данные для создания события
       const eventData = {
         summary: change.title,
         description: change.description || change.reason,
@@ -999,9 +891,9 @@ const Recommendations: React.FC = () => {
         })
       };
 
-      console.log('📅 Creating new event from AI recommendation:', eventData);
+      console.log('🆕 Creating new event from AI recommendation:', eventData);
 
-      // С��зд��ем событие через API
+      // Создаем событие через API
       const result = await aiService.createCalendarEvent(eventData);
 
       if (result.status === 'success') {
@@ -1015,9 +907,9 @@ const Recommendations: React.FC = () => {
         });
 
         // Показываем успешное сообщение
-        alert('✅ Событие успешно добавлено в календарь!');
+        alert('✅ Событие усп��шно добавлено в календарь!');
 
-        // Перезагр��жаем данные календаря для обновления timeline
+        // Перезагружаем данные календаря для обновления timeline
         const eventsData = await calendarService.getEvents(true);
         if (viewMode === 'tomorrow') {
           const tomorrow = new Date();
@@ -1043,7 +935,7 @@ const Recommendations: React.FC = () => {
     try {
       console.log('❌ Rejecting AI event recommendation:', change.id);
 
-      // Отклоняем ре��омендацию через AI сервис
+      // Отклоняем рекомендацию через AI сервис
       await aiService.rejectScheduleChange(change.id, viewMode as 'week' | 'tomorrow' | 'general');
 
       // Удаляем это изменение из отображения
@@ -1062,6 +954,19 @@ const Recommendations: React.FC = () => {
     }
   };
 
+  // Обработчики для модального окна предупреждения о целях
+  const handleGoalsWarningClose = () => {
+    setShowGoalsWarning(false);
+    setPendingMode(null);
+  };
+
+  const handleGoToGoals = () => {
+    setShowGoalsWarning(false);
+    setPendingMode(null);
+    // Переходим к разделу целей
+    window.location.href = '/goals';
+  };
+
   const handleBackToSelection = () => {
     setViewMode('selection');
     setAnalysis(null);
@@ -1077,8 +982,8 @@ const Recommendations: React.FC = () => {
           <div className="ai-brain">🤖</div>
           <h2>AI анализирует ваш календарь...</h2>
           <div className="loading-steps">
-            <div className="step active">📅 Загрузка событий</div>
-            <div className="step active">��� Анализ целей</div>
+            <div className="step active">��� Загрузка событий</div>
+            <div className="step active"> Анализ целей</div>
             <div className="step active">⚡ Создание рекомендаций</div>
           </div>
         </div>
@@ -1092,7 +997,7 @@ const Recommendations: React.FC = () => {
       <div className="recommendations-container">
         <div className="error-screen">
           <div className="error-icon">❌</div>
-          <h2>Произошла ошибка</h2>
+          <h2>Произошла о��ибка</h2>
           <p>{error}</p>
           <button className="retry-btn" onClick={() => setViewMode('selection')}>
             Попробовать снова
@@ -1115,9 +1020,9 @@ const Recommendations: React.FC = () => {
             ← Назад к выбору
           </button>
           <div className="general-analysis-header">
-            <h2>📊 Общий анализ календаря</h2>
+            <h2>Общий анализ календаря</h2>
           </div>
-          
+
           <div className="analysis-content">
             <div className="analysis-summary">
               <h3>📋 Общий вывод</h3>
@@ -1190,7 +1095,7 @@ const Recommendations: React.FC = () => {
             ← Назад к выбору
           </button>
           <div className="tomorrow-header">
-            <h2>🌅 Новое расписание на завтра</h2>
+            <h2>📅 Новое ра��писание на завтра</h2>
             <p className="tomorrow-subtitle">
               {tomorrowData.dateStr} - {tomorrowData.dayName}
             </p>
@@ -1208,7 +1113,7 @@ const Recommendations: React.FC = () => {
             </div>
             <div className="stat-card">
               <span className="stat-number">{tomorrowData.optimalSlots}</span>
-              <span className="stat-label">опт��мальных слотов</span>
+              <span className="stat-label">оптимальных слотов</span>
             </div>
           </div>
 
@@ -1259,10 +1164,20 @@ const Recommendations: React.FC = () => {
             <div className="no-recommendations">
               <div className="no-rec-icon">🎯</div>
               <h3>Отличное планирование!</h3>
-              <p>Ваш завтраш��ий день хорошо организован. AI не нашел кри��ических изменений для улучшения.</p>
+              <p>Ваш зав��рашний день хорошо организован. AI не нашел критических изменений для улучшения.</p>
             </div>
           )}
         </div>
+      )}
+
+      {/* Модальное окно предупреждения о целях */}
+      {showGoalsWarning && pendingMode && (
+        <GoalsWarningModal
+          isOpen={showGoalsWarning}
+          mode={pendingMode}
+          onClose={handleGoalsWarningClose}
+          onGoToGoals={handleGoToGoals}
+        />
       )}
     </div>
   );

@@ -7,7 +7,6 @@ import Profile from './components/Profile';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './App.css';
-import Goals from './components/Goals';
 
 function AppContent() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -58,7 +57,7 @@ function AppContent() {
         path="/goals"
         element={
           <ProtectedRoute>
-            <Goals />
+            <Profile activeSection="goals" />
           </ProtectedRoute>
         }
       />
