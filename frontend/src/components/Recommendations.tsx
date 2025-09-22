@@ -812,7 +812,7 @@ const Recommendations: React.FC = () => {
         events: slotEvents,
         isFree,
         isOptimal,
-        suggestion: isOptimal ? 'Оптимальное ����ремя для новых задач' : undefined
+        suggestion: isOptimal ? 'Оптимальное время для новых задач' : undefined
       });
     }
 
@@ -982,7 +982,7 @@ const Recommendations: React.FC = () => {
           <div className="ai-brain">🤖</div>
           <h2>AI анализирует ваш календарь...</h2>
           <div className="loading-steps">
-            <div className="step active">��� Загрузка событий</div>
+            <div className="step active"> Загрузка событий</div>
             <div className="step active"> Анализ целей</div>
             <div className="step active">⚡ Создание рекомендаций</div>
           </div>
@@ -1095,7 +1095,7 @@ const Recommendations: React.FC = () => {
             ← Назад к выбору
           </button>
           <div className="tomorrow-header">
-            <h2>📅 Новое ра��писание на завтра</h2>
+            <h2>📅 Новое расписание на завтра</h2>
             <p className="tomorrow-subtitle">
               {tomorrowData.dateStr} - {tomorrowData.dayName}
             </p>
