@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { aiService, CalendarAnalysis, SmartGoal, ScheduleChange } from '../services/aiService';
+import { aiService, CalendarAnalysis, SmartGoal, ScheduleChange, CalendarAnalysisRequest } from '../services/aiService';
 import { calendarService, CalendarEvent } from '../services/calendarService';
 import recommendationsCacheService from '../services/recommendationsCacheService';
 import './Recommendations.css';
 
 // Типы для нового дизайна
-type ViewMode = 'selection' | 'week' | 'tomorrow' | 'analysis';
+type ViewMode = 'selection' | 'week' | 'tomorrow' | 'analysis' | 'general';
 type TimeSlot = {
   time: string;
   events: CalendarEvent[];
@@ -33,7 +33,7 @@ interface WeekData {
 
 // Компонент выбора режима анализа
 const AnalysisSelector: React.FC<{
-  onSelectMode: (mode: 'week' | 'tomorrow') => void;
+  onSelectMode: (mode: 'week' | 'tomorrow' | 'general') => void;
 }> = ({ onSelectMode }) => {
   const [cacheInfo, setCacheInfo] = useState<any>(null);
   const [generalAnalysisLoading, setGeneralAnalysisLoading] = useState(false);
@@ -141,6 +141,22 @@ const AnalysisSelector: React.FC<{
       </div>
 
       <div className="mode-cards">
+        <div
+          className="mode-card general-card"
+          onClick={() => onSelectMode('general')}
+        >
+          <div className="mode-icon">📊</div>
+          <h3>Общий анализ календаря</h3>
+          <p>Всесторонний анализ вашего календаря и привычек планирования</p>
+          <div className="mode-features">
+            <span>• Анализ паттернов</span>
+            <span>• Хронические проблемы</span>
+            <span>• Соответствие целям</span>
+            <span>• Системные улучшения</span>
+          </div>
+          <div className="mode-cta">Провести анализ →</div>
+        </div>
+
         <div
           className="mode-card week-card"
           onClick={() => onSelectMode('week')}
@@ -673,7 +689,7 @@ const Recommendations: React.FC = () => {
   };
 
   // Обработчик выбора режима
-  const handleModeSelect = async (mode: 'week' | 'tomorrow') => {
+  const handleModeSelect = async (mode: 'week' | 'tomorrow' | 'general') => {
     setLoading(true);
     setError(null);
 
@@ -861,72 +877,80 @@ const Recommendations: React.FC = () => {
 
       setGoals(Array.isArray(goalsData) ? goalsData : []);
 
-      // Создаем объект запроса для кеширования
-      const requestData = {
-        calendar_events: eventsData,
-        user_goals: Array.isArray(goalsData) ? goalsData : [],
-        analysis_period_days: mode === 'week' ? 7 : 1,
-        analysis_type: mode
-      };
+      if (mode === 'general') {
+        // Для общего анализа отправляем события календаря и цели
+        const requestData: CalendarAnalysisRequest = {
+          calendar_events: eventsData,
+          user_goals: Array.isArray(goalsData) ? goalsData : [],
+          analysis_period_days: 7,
+          analysis_type: 'general' as const
+        };
 
-      // Проверяем кеш сначала
-      console.log(`🔍 Checking cache for ${mode} analysis...`);
-      const cachedAnalysis = recommendationsCacheService.getRecommendations(requestData, mode);
+        console.log(`🔍 Checking cache for ${mode} analysis...`);
+        const cachedAnalysis = recommendationsCacheService.getRecommendations(requestData, mode);
 
-      if (cachedAnalysis) {
-        console.log(`📋 Using cached ${mode} analysis`);
-        setAnalysis(cachedAnalysis);
+        if (cachedAnalysis) {
+          console.log(`📋 Using cached ${mode} analysis`);
+          setAnalysis(cachedAnalysis);
+          setViewMode('general');
+        } else {
+          console.log(`🤖 Requesting fresh ${mode} analysis from AI...`);
+          const analysisResult = await aiService.analyzeCalendar(requestData);
+          recommendationsCacheService.setRecommendations(requestData, analysisResult, 'general');
+          setAnalysis(analysisResult);
+          setViewMode('general');
+        }
+      } else {
+        // Для недели и завтра отправляем ТОЛЬКО цели + ignore_existing_events=True
+        const fullScheduleRequestData = {
+          schedule_type: mode,
+          user_goals: Array.isArray(goalsData) ? goalsData : [],
+          ignore_existing_events: true
+        };
 
-        // Продолжаем с UI логикой
+        console.log(`🔍 Creating full schedule for ${mode}...`);
+        
         if (mode === 'week') {
           const startOfWeek = new Date();
           startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
           const weekData = createWeekData(startOfWeek, eventsData);
           setWeekData(weekData);
           setViewMode('week');
+
+          // Получаем полное расписание от AI
+          const scheduleResult = await aiService.createFullSchedule(fullScheduleRequestData);
+          
+          // Преобразуем результат в формат CalendarAnalysis для совместимости
+          const analysisResult: CalendarAnalysis = {
+            summary: scheduleResult.reasoning || 'Расписание создано на основе ваших целей',
+            schedule_changes: [], // Полное расписание не содержит изменений существующих событий
+            recommendations: scheduleResult.recommendations || [],
+            productivity_score: scheduleResult.productivity_score,
+            goal_alignment: `Охвачено целей: ${scheduleResult.total_goals_addressed}`
+          };
+
+          setAnalysis(analysisResult);
         } else {
           const tomorrow = new Date();
           tomorrow.setDate(tomorrow.getDate() + 1);
           const tomorrowData = createDayData(tomorrow, eventsData);
           setTomorrowData(tomorrowData);
           setViewMode('tomorrow');
+
+          // Получаем полное расписание на завтра от AI
+          const scheduleResult = await aiService.createFullSchedule(fullScheduleRequestData);
+          
+          // Преобразуем результат в формат CalendarAnalysis для совместимости
+          const analysisResult: CalendarAnalysis = {
+            summary: scheduleResult.reasoning || 'Расписание на завтра создано на основе ваших целей',
+            schedule_changes: [], // Полное расписание не содержит изменений существующих событий
+            recommendations: scheduleResult.recommendations || [],
+            productivity_score: scheduleResult.productivity_score,
+            goal_alignment: `Охвачено целей: ${scheduleResult.total_goals_addressed}`
+          };
+
+          setAnalysis(analysisResult);
         }
-
-        setLoading(false);
-        return;
-      }
-
-      // Если кеша нет, запрашиваем у AI
-      console.log(`🤖 Requesting fresh ${mode} analysis from AI...`);
-
-      if (mode === 'week') {
-        const startOfWeek = new Date();
-        startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
-        const weekData = createWeekData(startOfWeek, eventsData);
-        setWeekData(weekData);
-        setViewMode('week');
-
-        // Получаем анализ от AI
-        const analysisResult = await aiService.analyzeCalendar(requestData);
-
-        // Кешируем результат с TTL для недели (7 дней)
-        recommendationsCacheService.setRecommendations(requestData, analysisResult, 'week');
-
-        setAnalysis(analysisResult);
-      } else {
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowData = createDayData(tomorrow, eventsData);
-        setTomorrowData(tomorrowData);
-        setViewMode('tomorrow');
-
-        // Получаем анализ от AI для завтрашнего дня
-        const analysisResult = await aiService.analyzeCalendar(requestData);
-
-        // Кешируем результат с TTL для завтра (24 часа)
-        recommendationsCacheService.setRecommendations(requestData, analysisResult, 'tomorrow');
-
-        setAnalysis(analysisResult);
       }
     } catch (err) {
       setError('Ошибка загрузки данных. Попробуйте позже.');
@@ -1083,6 +1107,64 @@ const Recommendations: React.FC = () => {
     <div className="recommendations-container">
       {viewMode === 'selection' && (
         <AnalysisSelector onSelectMode={handleModeSelect} />
+      )}
+
+      {viewMode === 'general' && analysis && (
+        <div className="general-analysis-container">
+          <button className="back-btn" onClick={handleBackToSelection}>
+            ← Назад к выбору
+          </button>
+          <div className="general-analysis-header">
+            <h2>📊 Общий анализ календаря</h2>
+          </div>
+          
+          <div className="analysis-content">
+            <div className="analysis-summary">
+              <h3>📋 Общий вывод</h3>
+              <p>{analysis.summary}</p>
+              {analysis.productivity_score && (
+                <div className="productivity-score">
+                  <span>Оценка продуктивности: <strong>{analysis.productivity_score}/100</strong></span>
+                </div>
+              )}
+              {analysis.goal_alignment && (
+                <div className="goal-alignment">
+                  <span>{analysis.goal_alignment}</span>
+                </div>
+              )}
+            </div>
+
+            {analysis.recommendations && analysis.recommendations.length > 0 && (
+              <div className="recommendations-section">
+                <h3>💡 Рекомендации</h3>
+                <div className="recommendations-grid">
+                  {analysis.recommendations.map((rec, index) => (
+                    <div key={index} className="recommendation-card-new">
+                      <div className="rec-icon">💡</div>
+                      <p>{rec}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {analysis.schedule_changes && analysis.schedule_changes.length > 0 && (
+              <div className="changes-section">
+                <h3>⚡ Предлагаемые изменения</h3>
+                <div className="changes-grid">
+                  {analysis.schedule_changes.map((change, index) => (
+                    <ScheduleChangeCardNew
+                      key={index}
+                      change={change}
+                      onApply={() => handleApplyChange(change)}
+                      onReject={() => handleRejectChange(change)}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {viewMode === 'week' && weekData && (
