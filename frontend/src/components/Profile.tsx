@@ -39,7 +39,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
   const [logoutLoading, setLogoutLoading] = useState(false);
 
   // Заменяем showOnlyActiveEvents на более гибкую систему фильтрации
-  type EventsFilterType = 'week' | 'all' | 'active';
+  type EventsFilterType = 'week' | 'active';
   const [eventsFilter, setEventsFilter] = useState<EventsFilterType>('week'); // По умолчанию показываем события за неделю
 
   // Функция для группировки событий по дням недели
@@ -50,7 +50,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     yesterday.setHours(0, 0, 0, 0);
 
     const daysOfWeek = [
-      'Воскресе��ье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'
+      'Воскресенье', 'Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота'
     ];
 
     const groupedEvents: { [key: string]: { dayName: string; date: string; events: CalendarEvent[]; isToday: boolean } } = {};
@@ -608,21 +608,11 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
                   <h3>
                     {eventsFilter === 'week'
                       ? `События за 7 дней (${getFilteredEvents().length})`
-                      : eventsFilter === 'active'
-                      ? `Актуальные события (${getFilteredEvents().length})`
-                      : `Все события (${events.length})`
+                      : `Актуальные события (${getFilteredEvents().length})`
                     }
                   </h3>
                   <div className="events-filter">
                     {eventsFilter === 'week' && (
-                      <button
-                        className="filter-button"
-                        onClick={() => setEventsFilter('all')}
-                      >
-                        Показать все события
-                      </button>
-                    )}
-                    {eventsFilter === 'all' && (
                       <button
                         className="filter-button"
                         onClick={() => setEventsFilter('active')}
@@ -960,9 +950,6 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
 
   // Фильтрация событий
   const getFilteredEvents = (): CalendarEvent[] => {
-    if (eventsFilter === 'all') {
-      return events;
-    }
 
     if (eventsFilter === 'active') {
       return events.filter(isEventActive);
