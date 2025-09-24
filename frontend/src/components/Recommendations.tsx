@@ -11,7 +11,7 @@ type SmartGoal = AISmartGoal;
 type ScheduleChange = AIScheduleChange;
 
 // Типы для нового дизайна
-type ViewMode = 'selection' | 'week' | 'tomorrow' | 'analysis' | 'general';
+type ViewMode = 'selection' | 'week' | 'tomorrow' | 'analysis';
 type TimeSlot = {
   time: string;
   events: CalendarEvent[];
@@ -37,14 +37,13 @@ interface WeekData {
   busyDays: number;
 }
 
-// Ко��п��нент выбора режима анализа
+// Компонент выбора режима анализа
 const AnalysisSelector: React.FC<{
-  onSelectMode: (mode: 'week' | 'tomorrow' | 'general') => void;
+  onSelectMode: (mode: 'week' | 'tomorrow') => void;
 }> = ({ onSelectMode }) => {
   const [cacheInfo, setCacheInfo] = useState<any>(null);
-  const [generalAnalysisResult, setGeneralAnalysisResult] = useState<CalendarAnalysis | null>(null);
 
-  // Загружаем ин����ормацию о кеше при монтировании компонента
+  // Загружаем информацию о кеше при монтировании компонента
   React.useEffect(() => {
     const info = recommendationsCacheService.getCacheInfo();
     setCacheInfo(info);
@@ -79,22 +78,6 @@ const AnalysisSelector: React.FC<{
 
       <div className="mode-cards">
         <div
-          className="mode-card general-card"
-          onClick={() => onSelectMode('general')}
-        >
-          <div className="mode-icon">📊</div>
-          <h3>Общий анализ календаря</h3>
-          <p>Всесторонний анализ вашего календаря и привычек планирования</p>
-          <div className="mode-features">
-            <span>• Анализ паттернов</span>
-            <span>• Хронические проблемы</span>
-            <span>• Соответствие целям</span>
-            <span>• Системные улучшения</span>
-          </div>
-          <div className="mode-cta">Провести анализ →</div>
-        </div>
-
-        <div
           className="mode-card week-card"
           onClick={() => onSelectMode('week')}
         >
@@ -118,7 +101,7 @@ const AnalysisSelector: React.FC<{
           <h3>Новое расписание на завтра</h3>
           <p>ИИ составит идеальный план на завтра для достижения ваших целей</p>
           <div className="mode-features">
-            <span>• Фок��с на достижении целей</span>
+            <span>• Фокус на достижении целей</span>
             <span>• Оптимальная последовательность задач</span>
             <span>• Учет продуктивных часов</span>
             <span>• Создание с чистого листа</span>
@@ -126,92 +109,11 @@ const AnalysisSelector: React.FC<{
           <div className="mode-cta">Создать план на завтра →</div>
         </div>
       </div>
-
-      {/* Результат общего анализа */}
-      {generalAnalysisResult && (
-        <div className="general-analysis-result">
-          <div className="analysis-header">
-            <h3>📈 Результат общего анализа</h3>
-            <button
-              className="close-analysis-btn"
-              onClick={() => setGeneralAnalysisResult(null)}
-            >
-              ✕
-            </button>
-          </div>
-
-          <div className="analysis-content">
-            {generalAnalysisResult.summary && (
-              <div className="analysis-summary">
-                <h4>📝 Сводка</h4>
-                <p>{generalAnalysisResult.summary}</p>
-              </div>
-            )}
-
-            {generalAnalysisResult.recommendations && generalAnalysisResult.recommendations.length > 0 && (
-              <div className="analysis-recommendations">
-                <h4>💡 Рекомендации</h4>
-                <div className="recommendations-list">
-                  {generalAnalysisResult.recommendations.map((rec, index) => (
-                    <div key={index} className="recommendation-item">
-                      <span className="rec-bullet">•</span>
-                      <span>{rec}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {generalAnalysisResult.productivity_score !== undefined && (
-              <div className="productivity-score">
-                <h4>⚡ Оценка продуктивности</h4>
-                <div className="score-display">
-                  <span className="score-number">{generalAnalysisResult.productivity_score}%</span>
-                  <div className="score-bar">
-                    <div
-                      className="score-fill"
-                      style={{
-                        width: `${generalAnalysisResult.productivity_score}%`,
-                        backgroundColor: generalAnalysisResult.productivity_score >= 70 ? '#6bcf7f' :
-                                       generalAnalysisResult.productivity_score >= 50 ? '#ffd93d' : '#ff6b6b'
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {generalAnalysisResult.goal_alignment && (
-              <div className="goal-alignment">
-                <h4>🎯 Соответствие целям</h4>
-                <p>{generalAnalysisResult.goal_alignment}</p>
-              </div>
-            )}
-
-            {generalAnalysisResult.schedule_changes && generalAnalysisResult.schedule_changes.length > 0 && (
-              <div className="general-changes">
-                <h4>⚡ Предлагаемые улучшения</h4>
-                <div className="changes-list">
-                  {generalAnalysisResult.schedule_changes.map((change, index) => (
-                    <div key={index} className="change-item">
-                      <div className="change-title">
-                        <span className="change-icon">{change.action === 'create' ? '➕' : '🔄'}</span>
-                        <strong>{change.title}</strong>
-                      </div>
-                      <p className="change-reason">{change.reason}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
 
-// Компон��нт временной шкалы
+// Компонент временной шкалы
 const TimelineView: React.FC<{
   dayData: DayData;
   showSuggestions: boolean;
@@ -328,7 +230,7 @@ const WeekView: React.FC<{
 
       {recommendations.length > 0 && (
         <div className="recommendations-section">
-          <h3>🤖 AI Рекоме��дации</h3>
+          <h3>🤖 AI Рекомендации</h3>
           <div className="recommendations-grid">
             {recommendations.map((rec, index) => (
               <div key={index} className="recommendation-card-new">
@@ -455,7 +357,7 @@ const ScheduleChangeCardNew: React.FC<{
             )}
             {change.location && (
               <div className="event-detail">
-                <span className="detail-label">📍 М��сто:</span>
+                <span className="detail-label">📍 Место:</span>
                 <span className="detail-value">{change.location}</span>
               </div>
             )}
@@ -475,7 +377,7 @@ const ScheduleChangeCardNew: React.FC<{
             )}
             {change.new_end && (
               <div className="time-change">
-                <span className="time-label">Н��в��е время окончания:</span>
+                <span className="time-label">Новое время окончания:</span>
                 <span className="time-value">
                   {formatDateTime(change.new_end)}
                 </span>
@@ -610,78 +512,29 @@ const Recommendations: React.FC = () => {
   };
 
   // Обработчик выбора режима
-  const handleModeSelect = async (mode: 'week' | 'tomorrow' | 'general') => {
+  const handleModeSelect = async (mode: 'week' | 'tomorrow') => {
     // Для режимов week и tomorrow сначала проверяем наличие целей
-    if (mode === 'week' || mode === 'tomorrow') {
-      try {
-        console.log(`🔍 Checking goals for ${mode} mode...`);
-        const goalsData = await aiService.getGoals(true).catch(() => []);
+    try {
+      console.log(`🔍 Checking goals for ${mode} mode...`);
+      const goalsData = await aiService.getGoals(true).catch(() => []);
 
-        if (!Array.isArray(goalsData) || goalsData.length === 0) {
-          console.log('❌ No goals found, showing warning modal');
-          setPendingMode(mode);
-          setShowGoalsWarning(true);
-          return;
-        }
-      } catch (error) {
-        console.error('❌ Error checking goals:', error);
+      if (!Array.isArray(goalsData) || goalsData.length === 0) {
+        console.log('❌ No goals found, showing warning modal');
         setPendingMode(mode);
         setShowGoalsWarning(true);
         return;
       }
+    } catch (error) {
+      console.error('❌ Error checking goals:', error);
+      setPendingMode(mode);
+      setShowGoalsWarning(true);
+      return;
     }
 
     setLoading(true);
     setError(null);
 
     try {
-      if (mode === 'general') {
-        // Для общего анализа используем существующую логику
-        console.log('🔍 Starting general calendar analysis...');
-
-        // Загружаем со��ытия и цели
-        const [eventsData, goalsData] = await Promise.all([
-          calendarService.getEvents(true),
-          aiService.getGoals(true).catch(() => [])
-        ]);
-
-        // Фильтруем только актуальные события
-        const relevantEvents = eventsData.filter(event => {
-          let endDate: Date;
-
-          if (event.end?.dateTime) {
-            endDate = new Date(event.end.dateTime);
-          } else if (event.end?.date) {
-            endDate = new Date(event.end.date);
-          } else if (event.start?.dateTime) {
-            endDate = new Date(event.start.dateTime);
-          } else if (event.start?.date) {
-            endDate = new Date(event.start.date);
-          } else {
-            return false;
-          }
-
-          return endDate >= new Date();
-        });
-        console.log(`📅 Filtered ${relevantEvents.length} relevant events from ${eventsData.length} total events`);
-
-        // Создаем объект запроса для общего анализа
-        const requestData = {
-          calendar_events: relevantEvents,
-          user_goals: Array.isArray(goalsData) ? goalsData : [],
-          analysis_period_days: 30,
-          analysis_type: 'general' as const
-        };
-
-        // Выполняем общий анализ календаря
-        const analysisResult = await aiService.analyzeCalendar(requestData);
-        console.log('✅ General analysis completed:', analysisResult);
-
-        setAnalysis(analysisResult);
-        setViewMode('general');
-        return;
-      }
-
       // Для week и tomorrow создаем полное расписание
       console.log(`🎯 Creating full schedule for ${mode} based on user goals only...`);
 
@@ -732,14 +585,14 @@ const Recommendations: React.FC = () => {
         };
         setAnalysis(analysisResult);
       } else {
-        // Для завтрашн��го дня
+        // Для завтрашнего дня
         const tomorrowSchedule = scheduleResult.schedules[0];
         if (tomorrowSchedule) {
           const tomorrowData = createDayDataFromSchedule(tomorrowSchedule);
           setTomorrowData(tomorrowData);
           setViewMode('tomorrow');
 
-          // Преобразуем ��езультат в формат CalendarAnalysis
+          // Преобразуем результат в формат CalendarAnalysis
           const analysisResult = {
             summary: scheduleResult.reasoning || 'Создано новое расписание на завтра на основе ваших целей',
             recommendations: scheduleResult.recommendations || [],
@@ -873,7 +726,7 @@ const Recommendations: React.FC = () => {
     try {
       setLoading(true);
 
-      // ��одг��тавливаем данные для создания события
+      // Подготавливаем данные для создания события
       const eventData = {
         summary: change.title,
         description: change.description || change.reason,
@@ -907,7 +760,7 @@ const Recommendations: React.FC = () => {
         });
 
         // Показываем успешное сообщение
-        alert('✅ Событие усп��шно добавлено в календарь!');
+        alert('✅ Событие успешно добавлено в календарь!');
 
         // Перезагружаем данные календаря для обновления timeline
         const eventsData = await calendarService.getEvents(true);
@@ -997,7 +850,7 @@ const Recommendations: React.FC = () => {
       <div className="recommendations-container">
         <div className="error-screen">
           <div className="error-icon">❌</div>
-          <h2>Произошла о��ибка</h2>
+          <h2>Произошла ошибка</h2>
           <p>{error}</p>
           <button className="retry-btn" onClick={() => setViewMode('selection')}>
             Попробовать снова
@@ -1012,64 +865,6 @@ const Recommendations: React.FC = () => {
     <div className="recommendations-container">
       {viewMode === 'selection' && (
         <AnalysisSelector onSelectMode={handleModeSelect} />
-      )}
-
-      {viewMode === 'general' && analysis && (
-        <div className="general-analysis-container">
-          <button className="back-btn" onClick={handleBackToSelection}>
-            ← Назад к выбору
-          </button>
-          <div className="general-analysis-header">
-            <h2>Общий анализ календаря</h2>
-          </div>
-
-          <div className="analysis-content">
-            <div className="analysis-summary">
-              <h3>📋 Общий вывод</h3>
-              <p>{analysis.summary}</p>
-              {analysis.productivity_score && (
-                <div className="productivity-score">
-                  <span>Оценка продуктивности: <strong>{analysis.productivity_score}/100</strong></span>
-                </div>
-              )}
-              {analysis.goal_alignment && (
-                <div className="goal-alignment">
-                  <span>{analysis.goal_alignment}</span>
-                </div>
-              )}
-            </div>
-
-            {analysis.recommendations && analysis.recommendations.length > 0 && (
-              <div className="recommendations-section">
-                <h3>💡 Рекомендации</h3>
-                <div className="recommendations-grid">
-                  {analysis.recommendations.map((rec, index) => (
-                    <div key={index} className="recommendation-card-new">
-                      <div className="rec-icon">💡</div>
-                      <p>{rec}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {analysis.schedule_changes && analysis.schedule_changes.length > 0 && (
-              <div className="changes-section">
-                <h3>⚡ Предлагаемые изменения</h3>
-                <div className="changes-grid">
-                  {analysis.schedule_changes.map((change, index) => (
-                    <ScheduleChangeCardNew
-                      key={index}
-                      change={change}
-                      onApply={() => handleApplyChange(change)}
-                      onReject={() => handleRejectChange(change)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
       )}
 
       {viewMode === 'week' && weekData && (
@@ -1164,7 +959,7 @@ const Recommendations: React.FC = () => {
             <div className="no-recommendations">
               <div className="no-rec-icon">🎯</div>
               <h3>Отличное планирование!</h3>
-              <p>Ваш зав��рашний день хорошо организован. AI не нашел критических изменений для улучшения.</p>
+              <p>Ваш завтрашний день хорошо организован. AI не нашел критических изменений для улучшения.</p>
             </div>
           )}
         </div>

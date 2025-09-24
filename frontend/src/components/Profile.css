@@ -873,16 +873,16 @@
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: #2c3e50;
+  color: #2c3e50 !important; /* Добавляем !important для принудительного применения */
 }
 
 .events-day-section.today .day-name {
-  color: #007bff;
+  color: #007bff !important; /* Добавляем !important для принудительного применения */
 }
 
 .day-date {
   font-size: 14px;
-  color: #6c757d;
+  color: #6c757d !important; /* Также для даты добавим !important */
   font-weight: 500;
 }
 
