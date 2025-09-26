@@ -10,7 +10,7 @@ type CalendarAnalysis = AICalendarAnalysis;
 type SmartGoal = AISmartGoal;
 type ScheduleChange = AIScheduleChange;
 
-// Типы для нового дизайна
+// ��ипы для нового дизайна
 type ViewMode = 'selection' | 'week' | 'tomorrow' | 'analysis';
 type TimeSlot = {
   time: string;
@@ -82,15 +82,15 @@ const AnalysisSelector: React.FC<{
           onClick={() => onSelectMode('week')}
         >
           <div className="mode-icon">📅</div>
-          <h3>Новое расписание на неделю</h3>
-          <p>ИИ создаст полное расписание на неделю исходя из ваших целей</p>
+          <h3>Анализ календаря на неделю</h3>
+          <p>ИИ проанализирует ваш календарь на неделю, найдет свободные слоты и предложит оптимальное расписание для достижения целей</p>
           <div className="mode-features">
-            <span>• Создание с нуля на основе целей</span>
-            <span>• Оптимальное распределение времени</span>
-            <span>• Учет приоритетов и дедлайнов</span>
-            <span>• Без привязки к текущему календарю</span>
+            <span>• Анализ существующих событий календаря</span>
+            <span>• Поиск с��ободных временных сло��ов</span>
+            <span>• Опт��мальное использование свободного времени</span>
+            <span>• Предложения для работы над целями</span>
           </div>
-          <div className="mode-cta">Создать новое расписание →</div>
+          <div className="mode-cta">Анализировать календарь недели →</div>
         </div>
 
         <div
@@ -98,22 +98,22 @@ const AnalysisSelector: React.FC<{
           onClick={() => onSelectMode('tomorrow')}
         >
           <div className="mode-icon">🌅</div>
-          <h3>Новое расписание на завтра</h3>
-          <p>ИИ составит идеальный план на завтра для достижения ваших целей</p>
+          <h3>Анализ календаря на завтра</h3>
+          <p>ИИ изучит ваше расписание на завтра, найдет свободные промежутки и предложит как лучше использовать время для целей</p>
           <div className="mode-features">
-            <span>• Фокус на достижении целей</span>
-            <span>• Оптимальная последовательность задач</span>
-            <span>• Учет продуктивных часов</span>
-            <span>• Создание с чистого листа</span>
+            <span>• Анализ событий завтрашнего дня</span>
+            <span>• Поиск свободных окон между встречами</span>
+            <span>• Учет времени на дорогу и перерывы</span>
+            <span>• Конкретные предложения для свободного времени</span>
           </div>
-          <div className="mode-cta">Создать план на завтра →</div>
+          <div className="mode-cta">Анализировать календарь завтра →</div>
         </div>
       </div>
     </div>
   );
 };
 
-// Компонент временной шкалы
+// Компон��нт временной шкалы
 const TimelineView: React.FC<{
   dayData: DayData;
   showSuggestions: boolean;
@@ -127,7 +127,7 @@ const TimelineView: React.FC<{
         <div className="day-stats">
           <span className="stat">📅 {dayData.totalEvents} событий</span>
           <span className="stat">⏰ {dayData.freeHours}ч свободно</span>
-          <span className="stat">✨ {dayData.optimalSlots} оптимальных слотов</span>
+          <span className="stat">✨ {dayData.optimalSlots} опти��альных слотов</span>
         </div>
       </div>
 
@@ -184,12 +184,12 @@ const WeekView: React.FC<{
   return (
     <div className="week-view">
       <div className="week-header">
-        <h2>📅 Новое расписание на неделю</h2>
+        <h2>📅 Анализ календаря на неделю</h2>
         <div className="week-range">{weekData.weekRange}</div>
         <div className="week-summary">
           <div className="summary-card">
             <span className="summary-number">{scheduleChanges.length}</span>
-            <span className="summary-label">запланированных задач</span>
+            <span className="summary-label">предложений для свободного времени</span>
           </div>
           <div className="summary-card">
             <span className="summary-number">{7 - weekData.busyDays}</span>
@@ -244,7 +244,7 @@ const WeekView: React.FC<{
 
       {scheduleChanges.length > 0 && (
         <div className="changes-section">
-          <h3>⚡ Предлагаемые изменения</h3>
+          <h3>⚡ Предлага��мые изменения</h3>
           <div className="changes-grid">
             {scheduleChanges.map((change, index) => (
               <ScheduleChangeCardNew
@@ -351,13 +351,13 @@ const ScheduleChangeCardNew: React.FC<{
             )}
             {change.description && (
               <div className="event-detail">
-                <span className="detail-label">📝 Описание:</span>
+                <span className="detail-label">📝 О��исание:</span>
                 <span className="detail-value">{change.description}</span>
               </div>
             )}
             {change.location && (
               <div className="event-detail">
-                <span className="detail-label">📍 Место:</span>
+                <span className="detail-label">📍 М��сто:</span>
                 <span className="detail-value">{change.location}</span>
               </div>
             )}
@@ -405,7 +405,7 @@ const ScheduleChangeCardNew: React.FC<{
             </button>
           </>
         ) : (
-          // Кнопки для изменений существующих событий
+          // Кнопк�� для изменений существующих событий
           <>
             <button className="apply-btn-new" onClick={onApply}>
               ✅ Применить
@@ -459,7 +459,7 @@ const Recommendations: React.FC = () => {
         events: slotEvents,
         isFree,
         isOptimal,
-        suggestion: isOptimal ? 'Оптимальное время для важных задач' : undefined
+        suggestion: isOptimal ? 'Оптималь��ое время для важных задач' : undefined
       });
     }
 
@@ -535,77 +535,106 @@ const Recommendations: React.FC = () => {
     setError(null);
 
     try {
-      // Для week и tomorrow создаем полное расписание
-      console.log(`🎯 Creating full schedule for ${mode} based on user goals only...`);
+      // НОВЫЙ ПОДХОД: Загружаем существующие события календаря и анализируем их
+      console.log(`🎯 Analyzing existing calendar events for ${mode} to find free slots...`);
 
-      // Загружаем только цели пользователя (НЕ загружаем события календаря)
+      // 1. Загружаем цели пользователя
       const goalsData = await aiService.getGoals(true).catch(() => []);
 
       if (!Array.isArray(goalsData) || goalsData.length === 0) {
-        setError('Для создания расписания необходимо добавить цели. Перейдите в раздел "Цели" и создайте хотя бы одну цель.');
+        setError('Для анализа календаря необходимо добавить цели. Перейдите в раздел "Цели" и создайте хотя бы одну цель.');
         setLoading(false);
         return;
       }
 
       setGoals(goalsData);
 
-      // Создаем объект запроса для создания полного расписания (только для week и tomorrow)
-      const scheduleRequest = {
-        schedule_type: mode as 'week' | 'tomorrow', // Приводим к правильному типу
+      // 2. Загружаем существующие события календаря
+      console.log('📅 Loading existing calendar events...');
+      let calendarEvents: CalendarEvent[] = [];
+
+      try {
+        calendarEvents = await calendarService.getEvents(true);
+        console.log(`�� Loaded ${calendarEvents.length} calendar events for analysis`);
+      } catch (calendarError) {
+        console.error('❌ Error loading calendar events:', calendarError);
+        // Продолжаем без календарных событий
+        calendarEvents = [];
+      }
+
+      // 3. Фильтруем события по периоду анализа
+      const now = new Date();
+      let filteredEvents: CalendarEvent[] = [];
+
+      if (mode === 'tomorrow') {
+        const tomorrow = new Date(now);
+        tomorrow.setDate(now.getDate() + 1);
+        const tomorrowStart = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 0, 0, 0);
+        const tomorrowEnd = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59);
+
+        filteredEvents = calendarEvents.filter(event => {
+          const eventDate = new Date(event.start?.dateTime || event.start?.date || '');
+          return eventDate >= tomorrowStart && eventDate <= tomorrowEnd;
+        });
+
+        console.log(`📅 Filtered to ${filteredEvents.length} events for tomorrow`);
+      } else if (mode === 'week') {
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() + 1); // начинаем с завтра
+        const weekEnd = new Date(weekStart);
+        weekEnd.setDate(weekStart.getDate() + 6); // 7 дней включая завтра
+
+        filteredEvents = calendarEvents.filter(event => {
+          const eventDate = new Date(event.start?.dateTime || event.start?.date || '');
+          return eventDate >= weekStart && eventDate <= weekEnd;
+        });
+
+        console.log(`📅 Filtered to ${filteredEvents.length} events for the week`);
+      }
+
+      // 4. Создаем объект запроса для анализа календаря с существующими событиями
+      const analysisRequest = {
+        calendar_events: filteredEvents, // Отправляем реальные события календаря
         user_goals: goalsData,
-        ignore_existing_events: true,
-        work_hours_start: '09:00',
-        work_hours_end: '18:00',
-        break_duration_minutes: 15,
-        buffer_between_events_minutes: 10
+        analysis_period_days: mode === 'tomorrow' ? 1 : 7,
+        analysis_type: mode
       };
 
-      console.log(`🤖 Requesting AI to create full ${mode} schedule...`);
-      console.log('📋 Request data:', scheduleRequest);
+      console.log(`🤖 Requesting AI to analyze existing calendar and find free slots...`);
+      console.log('📋 Analysis request:', {
+        calendar_events_count: filteredEvents.length,
+        user_goals_count: goalsData.length,
+        analysis_type: mode
+      });
 
-      // Создаем полное расписание с помощью ИИ
-      const scheduleResult = await aiService.createFullSchedule(scheduleRequest);
+      // 5. Отправляем запрос на анализ календаря (НЕ создание полного расписания)
+      const analysisResult = await aiService.analyzeCalendar(analysisRequest);
 
-      console.log('✅ Full schedule created:', scheduleResult);
+      console.log('✅ Calendar analysis completed:', analysisResult);
 
-      // Преобразуем результат в формат для отображения
+      // 6. Создаем данные для отображения на основе существующих событий и рекомендаций
       if (mode === 'week') {
-        // Создаем данные недели на основе созданного расписания
-        const weekData = createWeekDataFromSchedule(scheduleResult.schedules);
+        // Создаем данные недели на основе существующих событий
+        const startOfWeek = new Date();
+        startOfWeek.setDate(startOfWeek.getDate() + 1);
+        const weekData = createWeekData(startOfWeek, filteredEvents);
         setWeekData(weekData);
         setViewMode('week');
-
-        // Преобразуем результат в формат CalendarAnalysis для совместимости
-        const analysisResult = {
-          summary: scheduleResult.reasoning || 'Создано новое расписание на основе ваших целей',
-          recommendations: scheduleResult.recommendations || [],
-          schedule_changes: convertSchedulesToChanges(scheduleResult.schedules),
-          productivity_score: scheduleResult.productivity_score,
-          goal_alignment: `Адресовано целей: ${scheduleResult.total_goals_addressed || 0}`
-        };
-        setAnalysis(analysisResult);
       } else {
         // Для завтрашнего дня
-        const tomorrowSchedule = scheduleResult.schedules[0];
-        if (tomorrowSchedule) {
-          const tomorrowData = createDayDataFromSchedule(tomorrowSchedule);
-          setTomorrowData(tomorrowData);
-          setViewMode('tomorrow');
-
-          // Преобразуем результат в формат CalendarAnalysis
-          const analysisResult = {
-            summary: scheduleResult.reasoning || 'Создано новое расписание на завтра на основе ваших целей',
-            recommendations: scheduleResult.recommendations || [],
-            schedule_changes: convertSchedulesToChanges([tomorrowSchedule]),
-            productivity_score: scheduleResult.productivity_score,
-            goal_alignment: `Адресовано целей: ${scheduleResult.total_goals_addressed || 0}`
-          };
-          setAnalysis(analysisResult);
-        }
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowData = createDayData(tomorrow, filteredEvents);
+        setTomorrowData(tomorrowData);
+        setViewMode('tomorrow');
       }
+
+      // 7. Сохраняем результаты анализа
+      setAnalysis(analysisResult);
+
     } catch (err: any) {
-      console.error('❌ Error creating schedule:', err);
-      setError(`Ошибка создания расписания: ${err.message}`);
+      console.error('❌ Error analyzing calendar:', err);
+      setError(`Ошибка анализа календаря: ${err.message}`);
     } finally {
       setLoading(false);
     }
@@ -665,7 +694,7 @@ const Recommendations: React.FC = () => {
         events: slotEvents,
         isFree,
         isOptimal,
-        suggestion: isOptimal ? 'Оптимальное время для новых задач' : undefined
+        suggestion: isOptimal ? 'Оптимальное ��ремя для новых задач' : undefined
       });
     }
 
@@ -760,9 +789,9 @@ const Recommendations: React.FC = () => {
         });
 
         // Показываем успешное сообщение
-        alert('✅ Событие успешно добавлено в календарь!');
+        alert('✅ Событие усп��шно добавлено в календарь!');
 
-        // Перезагружаем данные календаря для обновления timeline
+        // Пере��агружаем данные календаря для обновления timeline
         const eventsData = await calendarService.getEvents(true);
         if (viewMode === 'tomorrow') {
           const tomorrow = new Date();
@@ -800,7 +829,7 @@ const Recommendations: React.FC = () => {
         };
       });
 
-      console.log('✅ AI recommendation rejected and removed from display');
+      console.log('��� AI recommendation rejected and removed from display');
     } catch (error: any) {
       console.error('❌ Error rejecting event:', error);
       alert(`❌ Ошибка при отклонении: ${error.message}`);
@@ -890,7 +919,7 @@ const Recommendations: React.FC = () => {
             ← Назад к выбору
           </button>
           <div className="tomorrow-header">
-            <h2>📅 Новое расписание на завтра</h2>
+            <h2>📅 Анализ календаря на завтра</h2>
             <p className="tomorrow-subtitle">
               {tomorrowData.dateStr} - {tomorrowData.dayName}
             </p>
@@ -904,7 +933,7 @@ const Recommendations: React.FC = () => {
             </div>
             <div className="stat-card">
               <span className="stat-number">{tomorrowData.freeHours}</span>
-              <span className="stat-label">часов свободно</span>
+              <span className="stat-label">ч���сов свободно</span>
             </div>
             <div className="stat-card">
               <span className="stat-number">{tomorrowData.optimalSlots}</span>
