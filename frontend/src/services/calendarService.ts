@@ -99,34 +99,59 @@ class CalendarService {
   /**
    * Получение событий календаря с поддержкой forcefullsync
    */
-  async getEvents(forcefullsync: boolean = false): Promise<CalendarEvent[]> {
+  async getEvents(forcefullsync: boolean = false, fullresponse: boolean = true): Promise<CalendarEvent[]> {
     try {
-      const params = forcefullsync ? { forcefullsync: 'true' } : {};
+      const params: any = {};
+
+      if (forcefullsync) {
+        params.forcefullsync = 'true';
+      }
+
+      // НОВОЕ: Добавляем параметр fullresponse для получения полных данных событий
+      if (fullresponse) {
+        params.fullresponse = 'true';
+        console.log('📋 Requesting full calendar events data with fullresponse=true');
+      }
+
+      console.log('📤 Calendar API request params:', params);
 
       const response = await api.get('/calendar/events', { params });
 
       // Google Calendar API возвращает объект с полем items, извлекаем массив событий
       const data = response.data;
 
+      console.log('📥 Calendar API response structure:', {
+        is_array: Array.isArray(data),
+        has_items: data && typeof data === 'object' && 'items' in data,
+        has_events: data && typeof data === 'object' && 'events' in data,
+        data_keys: data && typeof data === 'object' ? Object.keys(data) : 'not_object',
+        total_items: Array.isArray(data) ? data.length :
+                     (data?.items ? data.items.length :
+                      (data?.events ? data.events.length : 'unknown'))
+      });
+
       // Если это объект Google Calendar с полем items
       if (data && typeof data === 'object' && data.items) {
+        console.log(`📊 Retrieved ${data.items.length} events from calendar API`);
         return data.items;
       }
 
       // Если это массив событий напрямую
       if (Array.isArray(data)) {
+        console.log(`📊 Retrieved ${data.length} events (direct array)`);
         return data;
       }
 
       // Если это объект с полем events (fallback)
       if (data && typeof data === 'object' && data.events) {
+        console.log(`📊 Retrieved ${data.events.length} events from events field`);
         return data.events;
       }
 
-      console.warn('Unexpected response format:', data);
+      console.warn('📋 Unexpected calendar response format:', data);
       return [];
     } catch (error: any) {
-      console.error('Error getting calendar events:', error);
+      console.error('❌ Error getting calendar events:', error);
 
       if (error.response?.data?.detail) {
         throw new Error(error.response.data.detail);
@@ -263,7 +288,7 @@ class CalendarService {
         };
       }
 
-      // Сохраняем в кеш
+      // Сохран��ем в кеш
       localStorage.setItem('calendar_events', JSON.stringify(events));
       localStorage.setItem('calendar_events_timestamp', Date.now().toString());
 
@@ -357,7 +382,7 @@ class CalendarService {
       // Проверяем, что serverEvents теперь массив
       if (!Array.isArray(serverEvents)) {
         console.error('Failed to extract events array from response:', responseData);
-        // Пытаемся вернуть кешированные данные
+        // Пытаем��я вернуть кешированные данные
         const cachedEvents = localStorage.getItem('calendar_events');
         if (cachedEvents) {
           try {
