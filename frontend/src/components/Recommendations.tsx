@@ -554,7 +554,7 @@ const Recommendations: React.FC = () => {
       let calendarEvents: CalendarEvent[] = [];
 
       try {
-        calendarEvents = await calendarService.getEvents(true);
+        calendarEvents = await calendarService.getEvents(false, true);
         console.log(`�� Loaded ${calendarEvents.length} calendar events for analysis`);
       } catch (calendarError) {
         console.error('❌ Error loading calendar events:', calendarError);
@@ -826,7 +826,7 @@ const Recommendations: React.FC = () => {
         alert('✅ Событие успешно добавлено в календарь!');
 
         // Перезагружаем данные календаря для обновления timeline
-        const eventsData = await calendarService.getEvents(true);
+        const eventsData = await calendarService.getEvents(false,true);
         if (viewMode === 'tomorrow') {
           const tomorrow = new Date();
           tomorrow.setDate(tomorrow.getDate() + 1);
@@ -967,7 +967,7 @@ const Recommendations: React.FC = () => {
             </div>
             <div className="stat-card">
               <span className="stat-number">{tomorrowData.freeHours}</span>
-              <span className="stat-label">ч��сов свободно</span>
+              <span className="stat-label">часов свободно</span>
             </div>
             <div className="stat-card">
               <span className="stat-number">{tomorrowData.optimalSlots}</span>
@@ -1000,7 +1000,7 @@ const Recommendations: React.FC = () => {
           {/* Предлагаемые изменения */}
           {analysis?.schedule_changes && analysis.schedule_changes.length > 0 && (
             <div className="changes-section">
-              <h3>⚡ Предлага��мые изменения</h3>
+              <h3>⚡ Предлагаемые изменения</h3>
               <div className="changes-grid">
                 {analysis.schedule_changes.map((change, index) => (
                   <ScheduleChangeCardNew
