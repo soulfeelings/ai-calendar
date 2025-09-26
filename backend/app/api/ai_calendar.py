@@ -32,9 +32,25 @@ async def analyze_calendar_and_goals(
     - 'general': общий анализ календаря
     """
     try:
-        analysis_type: str = request.analysis_type or 'general'
+        analysis_type: str = request.analysis_type if request.analysis_type else 'general'
         logger.info(f"Starting calendar analysis for user {user_id}, type: {analysis_type}")
         logger.info(f"Received {len(request.calendar_events)} events for analysis")
+
+        # НОВОЕ: Детальное логирование входящих данных для отладки
+        logger.info(f"📋 Analysis request details:")
+        logger.info(f"  - analysis_type: {analysis_type}")
+        logger.info(f"  - analysis_period_days: {request.analysis_period_days}")
+        logger.info(f"  - user_goals count: {len(request.user_goals) if request.user_goals else 0}")
+        logger.info(f"  - calendar_events count: {len(request.calendar_events)}")
+
+        # Логируем первые несколько событий для проверки структуры
+        if request.calendar_events and len(request.calendar_events) > 0:
+            logger.info(f"📅 Sample calendar events received:")
+            for i, event in enumerate(request.calendar_events[:3]):  # первые 3 события
+                logger.info(f"  Event {i+1}: {event.id} - {event.summary} ({event.start} to {event.end})")
+        else:
+            logger.warning(f"⚠️ No calendar events received in request!")
+            logger.info(f"📤 Raw request data: calendar_events field = {request.calendar_events}")
 
         # Преобразуем события календаря в словари
         calendar_events_dict = [event.model_dump() for event in request.calendar_events]

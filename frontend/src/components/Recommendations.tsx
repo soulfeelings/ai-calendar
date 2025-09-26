@@ -171,7 +171,7 @@ const TimelineView: React.FC<{
   );
 };
 
-// Компон��нт недельного обзора
+// Компон����нт недельного обзора
 const WeekView: React.FC<{
   weekData: WeekData;
   recommendations: string[];
@@ -263,7 +263,7 @@ const WeekView: React.FC<{
   );
 };
 
-// Обновл��нная карточка изменения расписания
+// Обновл����ная карточка изменения расписания
 const ScheduleChangeCardNew: React.FC<{
   change: ScheduleChange;
   onApply: () => void;
@@ -592,7 +592,7 @@ const Recommendations: React.FC = () => {
         console.log(`📅 Filtered to ${filteredEvents.length} events for the week`);
       }
 
-      // 4. Создаем объе��т запроса для анализа календаря с существующими событиями
+      // 4. Создаем объект запроса для анализа календаря с существующими событиями
       const analysisRequest = {
         calendar_events: filteredEvents, // Отправляем реальные события календаря
         user_goals: goalsData,
@@ -600,12 +600,32 @@ const Recommendations: React.FC = () => {
         analysis_type: mode
       };
 
-      console.log(`��� Requesting AI to analyze existing calendar and find free slots...`);
-      console.log('📋 Analysis request:', {
+      // НОВОЕ: Детальное логирование запроса для отладки
+      console.log(`🤖 Requesting AI to analyze existing calendar and find free slots...`);
+      console.log('📋 Detailed analysis request:', {
         calendar_events_count: filteredEvents.length,
         user_goals_count: goalsData.length,
-        analysis_type: mode
+        analysis_type: mode,
+        analysis_period_days: analysisRequest.analysis_period_days
       });
+
+      // Логируем первые несколько событий для проверки структуры
+      if (filteredEvents.length > 0) {
+        console.log('📅 Sample calendar events being sent to AI:', {
+          first_event: filteredEvents[0],
+          events_preview: filteredEvents.slice(0, 3).map(event => ({
+            id: event.id,
+            summary: event.summary,
+            start: event.start,
+            end: event.end,
+            duration: event.start?.dateTime && event.end?.dateTime ?
+              `${new Date(event.end.dateTime).getTime() - new Date(event.start.dateTime).getTime()} ms` :
+              'all-day'
+          }))
+        });
+      } else {
+        console.log('⚠️ No calendar events found for the selected period!');
+      }
 
       // 5. НОВОЕ: Проверяем кеш перед запросом к ИИ
       let analysisResult = recommendationsCacheService.getRecommendations(analysisRequest, mode);
@@ -730,7 +750,7 @@ const Recommendations: React.FC = () => {
             id: `schedule-${schedule.date}-${index}`,
             action: 'create',
             title: event.title,
-            reason: event.description || `Запланировано для достижения цели: ${event.goal_id || 'общая продуктивность'}`,
+            reason: event.description || `Запланировано для достижения цели: ${event.goal_id || 'общая прод��ктивность'}`,
             new_start: event.start_time,
             new_end: event.end_time,
             priority: event.priority || 'medium',
@@ -800,7 +820,7 @@ const Recommendations: React.FC = () => {
 
         // НОВОЕ: Инвалидируем кеш после создания события
         recommendationsCacheService.clearAllRecommendations();
-        console.log('💾 Cache invalidated after creating new event');
+        console.log('��� Cache invalidated after creating new event');
 
         // Показываем успешное сообщение
         alert('✅ Событие успешно добавлено в календарь!');
@@ -947,7 +967,7 @@ const Recommendations: React.FC = () => {
             </div>
             <div className="stat-card">
               <span className="stat-number">{tomorrowData.freeHours}</span>
-              <span className="stat-label">ч���сов свободно</span>
+              <span className="stat-label">ч��сов свободно</span>
             </div>
             <div className="stat-card">
               <span className="stat-number">{tomorrowData.optimalSlots}</span>
@@ -980,7 +1000,7 @@ const Recommendations: React.FC = () => {
           {/* Предлагаемые изменения */}
           {analysis?.schedule_changes && analysis.schedule_changes.length > 0 && (
             <div className="changes-section">
-              <h3>⚡ Предлагаемые изменения</h3>
+              <h3>⚡ Предлага��мые изменения</h3>
               <div className="changes-grid">
                 {analysis.schedule_changes.map((change, index) => (
                   <ScheduleChangeCardNew
