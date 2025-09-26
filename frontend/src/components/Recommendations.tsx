@@ -86,8 +86,8 @@ const AnalysisSelector: React.FC<{
           <p>ИИ проанализирует ваш календарь на неделю, найдет свободные слоты и предложит оптимальное расписание для достижения целей</p>
           <div className="mode-features">
             <span>• Анализ существующих событий календаря</span>
-            <span>• Поиск с��ободных временных сло��ов</span>
-            <span>• Опт��мальное использование свободного времени</span>
+            <span>• Поиск свободных временных слотоов</span>
+            <span>• Оптимальное использование свободного времени</span>
             <span>• Предложения для работы над целями</span>
           </div>
           <div className="mode-cta">Анализировать календарь недели →</div>
@@ -113,7 +113,7 @@ const AnalysisSelector: React.FC<{
   );
 };
 
-// Компон��нт временной шкалы
+// Компонент временной шкалы
 const TimelineView: React.FC<{
   dayData: DayData;
   showSuggestions: boolean;
@@ -127,7 +127,7 @@ const TimelineView: React.FC<{
         <div className="day-stats">
           <span className="stat">📅 {dayData.totalEvents} событий</span>
           <span className="stat">⏰ {dayData.freeHours}ч свободно</span>
-          <span className="stat">✨ {dayData.optimalSlots} опти��альных слотов</span>
+          <span className="stat">✨ {dayData.optimalSlots} оптимальных слотов</span>
         </div>
       </div>
 
@@ -171,7 +171,7 @@ const TimelineView: React.FC<{
   );
 };
 
-// Компонент недельного обзора
+// Компон��нт недельного обзора
 const WeekView: React.FC<{
   weekData: WeekData;
   recommendations: string[];
@@ -244,7 +244,7 @@ const WeekView: React.FC<{
 
       {scheduleChanges.length > 0 && (
         <div className="changes-section">
-          <h3>⚡ Предлага��мые изменения</h3>
+          <h3>⚡ Предлагаемые изменения</h3>
           <div className="changes-grid">
             {scheduleChanges.map((change, index) => (
               <ScheduleChangeCardNew
@@ -263,7 +263,7 @@ const WeekView: React.FC<{
   );
 };
 
-// Обновленная карточка изменения расписания
+// Обновл��нная карточка изменения расписания
 const ScheduleChangeCardNew: React.FC<{
   change: ScheduleChange;
   onApply: () => void;
@@ -351,13 +351,13 @@ const ScheduleChangeCardNew: React.FC<{
             )}
             {change.description && (
               <div className="event-detail">
-                <span className="detail-label">📝 О��исание:</span>
+                <span className="detail-label">📝 Описание:</span>
                 <span className="detail-value">{change.description}</span>
               </div>
             )}
             {change.location && (
               <div className="event-detail">
-                <span className="detail-label">📍 М��сто:</span>
+                <span className="detail-label">📍 Место:</span>
                 <span className="detail-value">{change.location}</span>
               </div>
             )}
@@ -459,7 +459,7 @@ const Recommendations: React.FC = () => {
         events: slotEvents,
         isFree,
         isOptimal,
-        suggestion: isOptimal ? 'Оптималь��ое время для важных задач' : undefined
+        suggestion: isOptimal ? 'Оптимальное время для важных задач' : undefined
       });
     }
 
@@ -592,7 +592,7 @@ const Recommendations: React.FC = () => {
         console.log(`📅 Filtered to ${filteredEvents.length} events for the week`);
       }
 
-      // 4. Создаем объект запроса для анализа календаря с существующими событиями
+      // 4. Создаем объе��т запроса для анализа календаря с существующими событиями
       const analysisRequest = {
         calendar_events: filteredEvents, // Отправляем реальные события календаря
         user_goals: goalsData,
@@ -600,17 +600,27 @@ const Recommendations: React.FC = () => {
         analysis_type: mode
       };
 
-      console.log(`🤖 Requesting AI to analyze existing calendar and find free slots...`);
+      console.log(`��� Requesting AI to analyze existing calendar and find free slots...`);
       console.log('📋 Analysis request:', {
         calendar_events_count: filteredEvents.length,
         user_goals_count: goalsData.length,
         analysis_type: mode
       });
 
-      // 5. Отправляем запрос на анализ календаря (НЕ создание полного расписания)
-      const analysisResult = await aiService.analyzeCalendar(analysisRequest);
+      // 5. НОВОЕ: Проверяем кеш перед запросом к ИИ
+      let analysisResult = recommendationsCacheService.getRecommendations(analysisRequest, mode);
 
-      console.log('✅ Calendar analysis completed:', analysisResult);
+      if (analysisResult) {
+        console.log(`💾 Using cached AI analysis for ${mode} mode`);
+      } else {
+        // Отправляем запрос на анализ календаря (НЕ создание полного расписания)
+        analysisResult = await aiService.analyzeCalendar(analysisRequest);
+
+        // Сох��аняем результат в кеш
+        recommendationsCacheService.setRecommendations(analysisRequest, mode, analysisResult);
+
+        console.log(`✅ Calendar analysis completed and cached for ${mode} mode:`, analysisResult);
+      }
 
       // 6. Создаем данные для отображения на основе существующих событий и рекомендаций
       if (mode === 'week') {
@@ -621,7 +631,7 @@ const Recommendations: React.FC = () => {
         setWeekData(weekData);
         setViewMode('week');
       } else {
-        // Для завтрашнего дня
+        // Для завтрашн��го дня
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const tomorrowData = createDayData(tomorrow, filteredEvents);
@@ -742,7 +752,7 @@ const Recommendations: React.FC = () => {
 
   const handleRejectChange = (change: ScheduleChange) => {
     console.log('Rejecting change:', change);
-    // Здесь будет логика отклонения изменений
+    // Зде��ь будет логика отклонения изменений
   };
 
   const handleApplySuggestion = (time: string, suggestion: string) => {
@@ -788,10 +798,14 @@ const Recommendations: React.FC = () => {
           };
         });
 
-        // Показываем успешное сообщение
-        alert('✅ Событие усп��шно добавлено в календарь!');
+        // НОВОЕ: Инвалидируем кеш после создания события
+        recommendationsCacheService.clearAllRecommendations();
+        console.log('💾 Cache invalidated after creating new event');
 
-        // Пере��агружаем данные календаря для обновления timeline
+        // Показываем успешное сообщение
+        alert('✅ Событие успешно добавлено в календарь!');
+
+        // Перезагружаем данные календаря для обновления timeline
         const eventsData = await calendarService.getEvents(true);
         if (viewMode === 'tomorrow') {
           const tomorrow = new Date();
@@ -829,7 +843,7 @@ const Recommendations: React.FC = () => {
         };
       });
 
-      console.log('��� AI recommendation rejected and removed from display');
+      console.log('✅ AI recommendation rejected and removed from display');
     } catch (error: any) {
       console.error('❌ Error rejecting event:', error);
       alert(`❌ Ошибка при отклонении: ${error.message}`);
@@ -988,13 +1002,13 @@ const Recommendations: React.FC = () => {
             <div className="no-recommendations">
               <div className="no-rec-icon">🎯</div>
               <h3>Отличное планирование!</h3>
-              <p>Ваш завтрашний день хорошо организован. AI не нашел критических изменений для улучшения.</p>
+              <p>Ваш завтраш��ий день хорошо организован. AI не нашел критических изменений для улучшения.</p>
             </div>
           )}
         </div>
       )}
 
-      {/* Модальное окно предупреждения о целях */}
+      {/* Модал��ное окно предупреждения о целях */}
       {showGoalsWarning && pendingMode && (
         <GoalsWarningModal
           isOpen={showGoalsWarning}
