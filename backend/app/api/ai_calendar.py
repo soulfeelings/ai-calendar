@@ -43,7 +43,7 @@ async def analyze_calendar_and_goals(
         logger.info(f"  - user_goals count: {len(request.user_goals) if request.user_goals else 0}")
         logger.info(f"  - calendar_events count: {len(request.calendar_events)}")
 
-        # Логируем первые несколько событий для проверки структуры
+        # Логир��ем первые несколько событий для проверки структуры
         if request.calendar_events and len(request.calendar_events) > 0:
             logger.info(f"📅 Sample calendar events received:")
             for i, event in enumerate(request.calendar_events[:3]):  # первые 3 события
@@ -150,13 +150,16 @@ async def create_goal(
 async def get_goals(
     goals_repo: Annotated[GoalsRepository, Depends(get_goals_repo)],
     include_completed: bool = False,
+    only_actual: bool = True,
     user_id: str = Depends(get_user_request_id),
 ):
     """
-    Получение целей пользователя
+    Получение целей пользователя.
+    only_actual=True по умолчанию возвращает только цели, у которых дедлайн не истёк.
+    Передайте only_actual=false чтобы получить все (в рамках include_completed флага).
     """
     try:
-        goals = await goals_repo.get_user_goals(user_id, include_completed)
+        goals = await goals_repo.get_user_goals(user_id, include_completed, only_actual)
         return goals
     except Exception as e:
         logger.error(f"Error getting goals: {str(e)}")

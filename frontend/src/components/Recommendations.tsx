@@ -43,7 +43,7 @@ const AnalysisSelector: React.FC<{
 }> = ({ onSelectMode }) => {
   const [cacheInfo, setCacheInfo] = useState<any>(null);
 
-  // Загружаем информацию о кеше при монтировании компонента
+  // Загружаем ин��ормацию о кеше при монтировании компонента
   React.useEffect(() => {
     const info = recommendationsCacheService.getCacheInfo();
     setCacheInfo(info);
@@ -171,7 +171,7 @@ const TimelineView: React.FC<{
   );
 };
 
-// Компон����нт недельного обзора
+// Компонент недельного обзора
 const WeekView: React.FC<{
   weekData: WeekData;
   recommendations: string[];
@@ -263,7 +263,7 @@ const WeekView: React.FC<{
   );
 };
 
-// Обновл����ная карточка изменения расписания
+// Обновленная карточка изменения расписания
 const ScheduleChangeCardNew: React.FC<{
   change: ScheduleChange;
   onApply: () => void;
@@ -405,7 +405,7 @@ const ScheduleChangeCardNew: React.FC<{
             </button>
           </>
         ) : (
-          // Кнопк�� для изменений существующих событий
+          // Кнопки для изменений существующих событий
           <>
             <button className="apply-btn-new" onClick={onApply}>
               ✅ Применить
@@ -516,7 +516,7 @@ const Recommendations: React.FC = () => {
     // Для режимов week и tomorrow сначала проверяем наличие целей
     try {
       console.log(`🔍 Checking goals for ${mode} mode...`);
-      const goalsData = await aiService.getGoals(true).catch(() => []);
+      const goalsData = await aiService.getGoals(true, true).catch(() => []);
 
       if (!Array.isArray(goalsData) || goalsData.length === 0) {
         console.log('❌ No goals found, showing warning modal');
@@ -539,7 +539,7 @@ const Recommendations: React.FC = () => {
       console.log(`🎯 Analyzing existing calendar events for ${mode} to find free slots...`);
 
       // 1. Загружаем цели пользователя
-      const goalsData = await aiService.getGoals(true).catch(() => []);
+      const goalsData = await aiService.getGoals(true, true).catch(() => []);
 
       if (!Array.isArray(goalsData) || goalsData.length === 0) {
         setError('Для анализа календаря необходимо добавить цели. Перейдите в раздел "Цели" и создайте хотя бы одну цель.');
@@ -600,7 +600,7 @@ const Recommendations: React.FC = () => {
         analysis_type: mode
       };
 
-      // НОВОЕ: Детальное логирование запроса для отладки
+      // НОВОЕ: Детальное л��гирование запроса для отладки
       console.log(`🤖 Requesting AI to analyze existing calendar and find free slots...`);
       console.log('📋 Detailed analysis request:', {
         calendar_events_count: filteredEvents.length,
@@ -636,7 +636,7 @@ const Recommendations: React.FC = () => {
         // Отправляем запрос на анализ календаря (НЕ создание полного расписания)
         analysisResult = await aiService.analyzeCalendar(analysisRequest);
 
-        // Сох��аняем результат в кеш
+        // Сохраняем результат в кеш
         recommendationsCacheService.setRecommendations(analysisRequest, mode, analysisResult);
 
         console.log(`✅ Calendar analysis completed and cached for ${mode} mode:`, analysisResult);
@@ -651,7 +651,7 @@ const Recommendations: React.FC = () => {
         setWeekData(weekData);
         setViewMode('week');
       } else {
-        // Для завтрашн��го дня
+        // Для завтрашнего дня
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const tomorrowData = createDayData(tomorrow, filteredEvents);
@@ -724,7 +724,7 @@ const Recommendations: React.FC = () => {
         events: slotEvents,
         isFree,
         isOptimal,
-        suggestion: isOptimal ? 'Оптимальное ��ремя для новых задач' : undefined
+        suggestion: isOptimal ? 'Оптимальное ����ремя для новых задач' : undefined
       });
     }
 
@@ -841,7 +841,7 @@ const Recommendations: React.FC = () => {
       }
     } catch (error: any) {
       console.error('❌ Error creating event:', error);
-      alert(`❌ Ошибка при создании события: ${error.message}`);
+      alert(`❌ Ошибк�� при создании события: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -1028,7 +1028,7 @@ const Recommendations: React.FC = () => {
         </div>
       )}
 
-      {/* Модал��ное окно предупреждения о целях */}
+      {/* Модальное окно предупреждения о целях */}
       {showGoalsWarning && pendingMode && (
         <GoalsWarningModal
           isOpen={showGoalsWarning}

@@ -219,9 +219,9 @@ class AIService {
   /**
    * Получение целей пользователя
    */
-  async getGoals(includeCompleted: boolean = false): Promise<SmartGoal[]> {
+  async getGoals(includeCompleted: boolean = false, onlyActual: boolean = true): Promise<SmartGoal[]> {
     try {
-      const response = await api.get(`/ai/goals?include_completed=${includeCompleted}`);
+      const response = await api.get(`/ai/goals?include_completed=${includeCompleted}&only_actual=${onlyActual}`);
       return response.data;
     } catch (error) {
       console.error('Error getting user goals:', error);
@@ -234,7 +234,7 @@ class AIService {
    */
   async updateCalendarEvent(eventId: string, updateData: any): Promise<any> {
     try {
-      // Backend использует PATCH /calendar/event/{event_id}
+      // Backend и��пользует PATCH /calendar/event/{event_id}
       const response = await api.patch(`/calendar/event/${eventId}`, updateData);
       return response.data;
     } catch (error) {
