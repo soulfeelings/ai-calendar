@@ -44,7 +44,7 @@ const Goals: React.FC = () => {
   const [deletingGoal, setDeletingGoal] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
 
-  // Проверяем, заполнены ли основные поля для получения анализа
+  // Проверяем, з��полнены ли основные поля для получения анализа
   const canAnalyze = form.title.trim().length > 0 && form.description.trim().length > 0;
 
   // Загружаем информацию о созданных событиях из localStorage
@@ -126,7 +126,7 @@ const Goals: React.FC = () => {
 
 ${goal.smart_analysis ? `
 📊 SMART Анализ (ИИ):
-• Общий балл: ${goal.smart_analysis.overall_score || 'N/A'}/100
+• Общий ба��л: ${goal.smart_analysis.overall_score || 'N/A'}/100
 • Соответствует SMART: ${goal.smart_analysis.is_smart ? 'Да' : 'Нет'}
 
 💡 Рекомендации ИИ:
@@ -592,19 +592,11 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
             <h3>Существующие цели</h3>
             <div className="goals-list-header-actions">
               <button
-                className="toggle-btn"
+                className={`toggle-btn ${showAllGoals ? 'active' : ''}`}
                 onClick={() => setShowAllGoals(prev => !prev)}
-                title={showAllGoals ? 'Показать только актуальные цели' : 'Показать все (включая просро��енные) цели'}
+                title={showAllGoals ? 'Пока��ать только актуальные цели' : 'Показать все (включая просроч��нные) цели'}
               >
                 {showAllGoals ? 'Показать актуальные цели' : 'Показать все события'}
-              </button>
-              <button
-                className="refresh-btn"
-                onClick={() => loadGoals(showAllGoals)}
-                disabled={loadingGoals}
-                title="Обновить список целей"
-              >
-                {loadingGoals ? '🔄' : '↻'}
               </button>
             </div>
           </div>
