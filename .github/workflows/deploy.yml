@@ -35,3 +35,7 @@ jobs:
         sleep 30
         docker-compose ps
         curl -f http://localhost:3000 || exit 1
+
+    - name: Cleanup unused images
+      run: |
+        docker image prune -f || true
