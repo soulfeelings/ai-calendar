@@ -168,16 +168,19 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
     }
   };
 
-  useEffect(() => {
-    loadGoals();
-  }, []);
+  const [showAllGoals, setShowAllGoals] = useState(false);
 
-  const loadGoals = async () => {
+  useEffect(() => {
+    loadGoals(showAllGoals);
+  }, [showAllGoals]);
+
+  const loadGoals = async (all: boolean = false) => {
     setLoadingGoals(true);
     setError(null);
 
     try {
-      const goalsData = await aiService.getGoals(true); // Передаем true для получения всех целей включая завершенные
+      // all === true -> показываем все (only_actual = false)
+      const goalsData = await aiService.getGoals(true, !all);
       setGoals(goalsData);
     } catch (e: any) {
       setError(e?.message || 'Не удалось загрузить цели');
@@ -197,7 +200,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
     setAnalyzing(true);
 
     try {
-      // Собираем deadline в ISO формат, если дата указана
+      // Собираем deadline в ISO ��ормат, если дата указана
       let deadlineISO = '';
       if (deadlineDate) {
         deadlineISO = new Date(`${deadlineDate}T${deadlineTime || '23:59'}:00`).toISOString();
@@ -233,7 +236,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
   };
 
   const editGoal = () => {
-    // Возвращаемся к форме редактирования с текущими данными
+    // Возвраща��мся к форме редактирования с текущими данными
     setCurrentStep('input');
     setGoalAnalysis(null);
   };
@@ -281,7 +284,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
       setCurrentStep('saved');
       // Обновляем список
       await loadGoals();
-      // Сбрасываем состояние редактирования
+      // Сбрасывае�� состояние редактирования
       setEditingGoal(null);
     } catch (e: any) {
       console.error('Error saving goal:', e);
@@ -449,7 +452,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
 
         {goalAnalysis.improved_goal && (
           <div className="improved-goal">
-            <h4>Предлагаемая улучшенная версия:</h4>
+            <h4>Предлагаем��я улучшенная версия:</h4>
             <div className="improved-preview">
               <p><strong>Название:</strong> {goalAnalysis.improved_goal.title}</p>
               <p><strong>Описание:</strong> {goalAnalysis.improved_goal.description}</p>
@@ -483,7 +486,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
       <div className="success-message">
         <div className="success-icon">✅</div>
         <h3>Цель успешно сохранена!</h3>
-        <p>Ваша SMART-цель добавлена и будет учитываться при анализе календаря.</p>
+        <p>Ваш�� SMART-цель добавлена и будет учитываться при анализе календаря.</p>
 
         <div className="wizard-actions">
           <button className="btn secondary" onClick={resetForm}>
@@ -503,7 +506,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
       measurable: 'M — Измеримость',
       achievable: 'A — Достижимость',
       relevant: 'R — Актуальность',
-      time_bound: 'T — Временные рамки'
+      time_bound: 'T — Временные р��мки'
     };
     return labels[key] || key;
   };
@@ -587,14 +590,23 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
         <div className="goals-list">
           <div className="goals-list-header">
             <h3>Существующие цели</h3>
-            <button
-              className="refresh-btn"
-              onClick={loadGoals}
-              disabled={loadingGoals}
-              title="Обновить список целей"
-            >
-              {loadingGoals ? '🔄' : '↻'}
-            </button>
+            <div className="goals-list-header-actions">
+              <button
+                className="toggle-btn"
+                onClick={() => setShowAllGoals(prev => !prev)}
+                title={showAllGoals ? 'Показать только актуальные цели' : 'Показать все (включая просро��енные) цели'}
+              >
+                {showAllGoals ? 'Показать актуальные цели' : 'Показать все события'}
+              </button>
+              <button
+                className="refresh-btn"
+                onClick={() => loadGoals(showAllGoals)}
+                disabled={loadingGoals}
+                title="Обновить список целей"
+              >
+                {loadingGoals ? '🔄' : '↻'}
+              </button>
+            </div>
           </div>
           {loadingGoals ? (
             <p>Загружаем цели...</p>
@@ -664,7 +676,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
       {showDeleteConfirm && (
         <div className="modal">
           <div className="modal-content">
-            <h3>Подтверждение удаления</h3>
+            <h3>Подтвержде��ие удаления</h3>
             <p>Вы уверены, что хотите удалить эту цель? Это действие нельзя будет отменить.</p>
             <div className="modal-actions">
               <button className="btn cancel" onClick={handleCancelDelete}>
