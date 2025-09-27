@@ -82,7 +82,7 @@ const AnalysisSelector: React.FC<{
           onClick={() => onSelectMode('week')}
         >
           <div className="mode-icon">📅</div>
-          <h3>Анализ календаря на неделю</h3>
+          <h3>Календарь на неделю</h3>
           <p>ИИ проанализирует ваш календарь на неделю, найдет свободные слоты и предложит оптимальное расписание для достижения целей</p>
           <div className="mode-features">
             <span>• Анализ существующих событий календаря</span>
@@ -90,7 +90,7 @@ const AnalysisSelector: React.FC<{
             <span>• Оптимальное использование свободного времени</span>
             <span>• Предложения для работы над целями</span>
           </div>
-          <div className="mode-cta">Анализировать календарь недели →</div>
+          <div className="mode-cta">Анализир��вать календарь недели →</div>
         </div>
 
         <div
@@ -184,7 +184,7 @@ const WeekView: React.FC<{
   return (
     <div className="week-view">
       <div className="week-header">
-        <h2>📅 Анализ календаря на неделю</h2>
+        <h2>📅 Календарь на неделю</h2>
         <div className="week-range">{weekData.weekRange}</div>
         <div className="week-summary">
           <div className="summary-card">
@@ -244,7 +244,7 @@ const WeekView: React.FC<{
 
       {scheduleChanges.length > 0 && (
         <div className="changes-section">
-          <h3>⚡ Предлагаемые изменения</h3>
+          <h3>⚡ Предлага��мые изменения</h3>
           <div className="changes-grid">
             {scheduleChanges.map((change, index) => (
               <ScheduleChangeCardNew
@@ -263,7 +263,7 @@ const WeekView: React.FC<{
   );
 };
 
-// Обновленная карточка изменения расписания
+// Обновл��нная карточка изменения расписания
 const ScheduleChangeCardNew: React.FC<{
   change: ScheduleChange;
   onApply: () => void;
@@ -579,17 +579,29 @@ const Recommendations: React.FC = () => {
 
         console.log(`📅 Filtered to ${filteredEvents.length} events for tomorrow`);
       } else if (mode === 'week') {
+        // FIX: ранее weekStart имел текущее время (час/минута now), из-за чего события
+        // раннего времени "завтра" (до текущего часа) отфильтровывались как eventDate < weekStart.
+        // Приводим границы к началу/концу суток, чтобы включить все события недели.
         const weekStart = new Date(now);
-        weekStart.setDate(now.getDate() + 1); // начинаем с завтра
+        weekStart.setDate(weekStart.getDate() + 1); // начинаем с завтра
+        weekStart.setHours(0, 0, 0, 0); // начало дня
+
         const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekStart.getDate() + 6); // 7 дней включая завтра
+        weekEnd.setDate(weekEnd.getDate() + 6); // 7 дней включая завтра
+        weekEnd.setHours(23, 59, 59, 999); // конец последнего дня
 
         filteredEvents = calendarEvents.filter(event => {
-          const eventDate = new Date(event.start?.dateTime || event.start?.date || '');
+          const rawStart = event.start?.dateTime || event.start?.date || '';
+          if (!rawStart) return false;
+          const eventDate = new Date(rawStart);
           return eventDate >= weekStart && eventDate <= weekEnd;
         });
 
-        console.log(`📅 Filtered to ${filteredEvents.length} events for the week`);
+        console.log(`📅 Filtered to ${filteredEvents.length} events for the week`, {
+          weekStart: weekStart.toISOString(),
+            weekEnd: weekEnd.toISOString(),
+            sample: filteredEvents.slice(0,3).map(e=>({id:e.id, summary:e.summary, start:e.start}))
+        });
       }
 
       // 4. Создаем объект запроса для анализа календаря с существующими событиями
@@ -820,7 +832,7 @@ const Recommendations: React.FC = () => {
 
         // НОВОЕ: Инвалидируем кеш после создания события
         recommendationsCacheService.clearAllRecommendations();
-        console.log('��� Cache invalidated after creating new event');
+        console.log('���� Cache invalidated after creating new event');
 
         // Показываем успешное сообщение
         alert('✅ Событие успешно добавлено в календарь!');
@@ -953,7 +965,7 @@ const Recommendations: React.FC = () => {
             ← Назад к выбору
           </button>
           <div className="tomorrow-header">
-            <h2>📅 Анализ календаря на завтра</h2>
+            <h2>📅 Календарь на завтра</h2>
             <p className="tomorrow-subtitle">
               {tomorrowData.dateStr} - {tomorrowData.dayName}
             </p>
