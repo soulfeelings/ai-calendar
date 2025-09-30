@@ -18,6 +18,9 @@ class OpenAIService:
         self.model = settings.OPENAI_MODEL
         self.max_tokens = settings.OPENAI_MAX_TOKENS
         self.temperature = settings.OPENAI_TEMPERATURE
+        # Новые настройки для недельного анализа
+        self.week_model = getattr(settings, 'OPENAI_WEEK_MODEL', self.model)
+        self.week_max_tokens = getattr(settings, 'OPENAI_WEEK_MAX_TOKENS', self.max_tokens)
 
     def _get_headers(self) -> Dict[str, str]:
         """Получение заголовков для запроса к OpenAI API"""
@@ -243,7 +246,9 @@ class OpenAIService:
                 messages=messages,
                 system_prompt=system_prompt,
                 temperature=0.6,
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
+                model=self.week_model if analysis_type == 'week' else None,
+                max_tokens=self.week_max_tokens if analysis_type == 'week' else None
             )
 
             # Извлекаем содержимое ответа
@@ -412,7 +417,7 @@ class OpenAIService:
             - НЕ предлагай события, которые конфликтуют с существующими встречами
             """,
             'week': """
-            ФО��УС НА НЕДЕЛЮ:
+            ФОКУС НА НЕДЕЛЮ:
             - Проанализируй СУЩЕСТВУЮЩИЕ события всех 7 дней недели
             - Найди паттерны загруженности: какие дни свободнее, какие перегружены
             - Найди регулярные свободные слоты для системной работы над целями
@@ -761,7 +766,7 @@ class OpenAIService:
             КАТЕГОРИИ СОБЫТИЙ:
             - work: рабочие задачи, проекты
             - learning: обучение, развитие навыков
-            - health: спорт, мед��тация, самочувствие
+            - health: спорт, мед��итация, самочувствие
             - personal: личные дела, хобби
             - social: встречи, общение
             - routine: повседневные задачи
@@ -855,7 +860,8 @@ class OpenAIService:
                 messages=messages,
                 system_prompt=system_prompt,
                 temperature=0.7,
-                max_tokens=4000,  # увеличиваем лимит для полного расписания
+                model=self.week_model if schedule_type == 'week' else None,
+                max_tokens=self.week_max_tokens if schedule_type == 'week' else 4000,
                 response_format={"type": "json_object"}
             )
 

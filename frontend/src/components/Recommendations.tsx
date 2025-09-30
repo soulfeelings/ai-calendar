@@ -153,17 +153,7 @@ const TimelineView: React.FC<{
                 </div>
               )}
 
-              {showSuggestions && slot.suggestion && (
-                <div className="slot-suggestion">
-                  <div className="suggestion-text">{slot.suggestion}</div>
-                  <button
-                    className="apply-suggestion-btn"
-                    onClick={() => onApplySuggestion(slot.time, slot.suggestion!)}
-                  >
-                    ➕ Добавить
-                  </button>
-                </div>
-              )}
+              {showSuggestions && slot.suggestion}
             </div>
           </div>
         ))}
@@ -245,7 +235,7 @@ const WeekView: React.FC<{
 
       {scheduleChanges.length > 0 && (
         <div className="changes-section">
-          <h3>⚡ Предлага��мые изменения</h3>
+          <h3>⚡ Предлагаемые изменения</h3>
           <div className="changes-grid">
             {scheduleChanges.map((change, index) => (
               <ScheduleChangeCardNew
@@ -744,7 +734,7 @@ const Recommendations: React.FC = () => {
         events: slotEvents,
         isFree,
         isOptimal,
-        suggestion: isOptimal ? 'Оптимальное ����ремя для новых задач' : undefined
+        suggestion: isOptimal ? 'Оптимальное время для новых задач' : undefined
       });
     }
 
