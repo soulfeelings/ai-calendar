@@ -90,7 +90,7 @@ const AnalysisSelector: React.FC<{
             <span>• Оптимальное использование свободного времени</span>
             <span>• Предложения для работы над целями</span>
           </div>
-          <div className="mode-cta">Анализир��вать календарь недели →</div>
+          <div className="mode-cta">Анализиривать календарь недели →</div>
         </div>
 
         <div
