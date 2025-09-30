@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = 'gpt-4o-mini'  # Более экономичная модель с отличным качеством
     OPENAI_MAX_TOKENS: int = 16000     # Увеличиваем лимит токенов для лучшего анализа
     OPENAI_TEMPERATURE: float = 0.6    # Немного понижаем для более точных ответов
+    # Новые настройки для недельного анализа (большая модель и больше токенов)
+    OPENAI_WEEK_MODEL: str = 'gpt-4o'  # Более мощная модель для сложного недельного анализа
+    OPENAI_WEEK_MAX_TOKENS: int = 32000  # Увеличенный лимит для агрегированного контекста недели
 
     # Webhook settings
     WEBHOOK_BASE_URL: str = 'https://your-domain.com'
