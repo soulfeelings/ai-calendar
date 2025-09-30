@@ -4,6 +4,7 @@ import { calendarService, CalendarEvent } from '../services/calendarService';
 import recommendationsCacheService from '../services/recommendationsCacheService';
 import GoalsWarningModal from './GoalsWarningModal';
 import './Recommendations.css';
+import { RRuleParser } from '../utils/rruleParser';
 
 // Используем типы из aiService вместо локальных
 type CalendarAnalysis = AICalendarAnalysis;
@@ -569,38 +570,43 @@ const Recommendations: React.FC = () => {
       if (mode === 'tomorrow') {
         const tomorrow = new Date(now);
         tomorrow.setDate(now.getDate() + 1);
-        const tomorrowStart = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 0, 0, 0);
-        const tomorrowEnd = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59);
+        const tomorrowStart = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 0, 0, 0, 0);
+        const tomorrowEnd = new Date(tomorrow.getFullYear(), tomorrow.getMonth(), tomorrow.getDate(), 23, 59, 59, 999);
 
-        filteredEvents = calendarEvents.filter(event => {
-          const eventDate = new Date(event.start?.dateTime || event.start?.date || '');
-          return eventDate >= tomorrowStart && eventDate <= tomorrowEnd;
+        // Расширяем повторяющиеся события и включаем все, что реально есть завтра
+        const expanded = expandEventsForRange(calendarEvents, tomorrowStart, tomorrowEnd);
+        filteredEvents = expanded.filter(ev => {
+          const evStartStr = ev.start?.dateTime || ev.start?.date;
+          if (!evStartStr) return false;
+          const evStart = new Date(evStartStr);
+          return evStart >= tomorrowStart && evStart <= tomorrowEnd;
         });
 
-        console.log(`📅 Filtered to ${filteredEvents.length} events for tomorrow`);
+        console.log(`📅 Filtered to ${filteredEvents.length} events for tomorrow (expanded with recurrence)`, {
+          tomorrowStart: tomorrowStart.toISOString(),
+          tomorrowEnd: tomorrowEnd.toISOString(),
+          sample: filteredEvents.slice(0,3).map(e=>({id:e.id, summary:e.summary, start:e.start}))
+        });
       } else if (mode === 'week') {
-        // FIX: ранее weekStart имел текущее время (час/минута now), из-за чего события
-        // раннего времени "завтра" (до текущего часа) отфильтровывались как eventDate < weekStart.
-        // Приводим границы к началу/концу суток, чтобы включить все события недели.
         const weekStart = new Date(now);
-        weekStart.setDate(weekStart.getDate() + 1); // начинаем с завтра
-        weekStart.setHours(0, 0, 0, 0); // начало дня
-
+        weekStart.setDate(weekStart.getDate() + 1); // начиная с завтра
+        weekStart.setHours(0, 0, 0, 0);
         const weekEnd = new Date(weekStart);
-        weekEnd.setDate(weekEnd.getDate() + 6); // 7 дней включая завтра
-        weekEnd.setHours(23, 59, 59, 999); // конец последнего дня
+        weekEnd.setDate(weekEnd.getDate() + 6);
+        weekEnd.setHours(23, 59, 59, 999);
 
-        filteredEvents = calendarEvents.filter(event => {
-          const rawStart = event.start?.dateTime || event.start?.date || '';
-          if (!rawStart) return false;
-          const eventDate = new Date(rawStart);
-          return eventDate >= weekStart && eventDate <= weekEnd;
+        const expanded = expandEventsForRange(calendarEvents, weekStart, weekEnd);
+        filteredEvents = expanded.filter(ev => {
+          const rawStart = ev.start?.dateTime || ev.start?.date;
+            if (!rawStart) return false;
+            const eventDate = new Date(rawStart);
+            return eventDate >= weekStart && eventDate <= weekEnd;
         });
 
-        console.log(`📅 Filtered to ${filteredEvents.length} events for the week`, {
+        console.log(`📅 Filtered to ${filteredEvents.length} events for the week (expanded with recurrence)`, {
           weekStart: weekStart.toISOString(),
-            weekEnd: weekEnd.toISOString(),
-            sample: filteredEvents.slice(0,3).map(e=>({id:e.id, summary:e.summary, start:e.start}))
+          weekEnd: weekEnd.toISOString(),
+          sample: filteredEvents.slice(0,3).map(e=>({id:e.id, summary:e.summary, start:e.start}))
         });
       }
 
@@ -658,7 +664,8 @@ const Recommendations: React.FC = () => {
       if (mode === 'week') {
         // Создаем данные недели на основе существующих событий
         const startOfWeek = new Date();
-        startOfWeek.setDate(startOfWeek.getDate() + 1);
+        startOfWeek.setDate(startOfWeek.getDate() + 1); // корректируем чтобы совпадало с выбором периода
+        startOfWeek.setHours(0,0,0,0);
         const weekData = createWeekData(startOfWeek, filteredEvents);
         setWeekData(weekData);
         setViewMode('week');
@@ -666,6 +673,7 @@ const Recommendations: React.FC = () => {
         // Для завтрашнего дня
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(0,0,0,0);
         const tomorrowData = createDayData(tomorrow, filteredEvents);
         setTomorrowData(tomorrowData);
         setViewMode('tomorrow');
@@ -842,11 +850,13 @@ const Recommendations: React.FC = () => {
         if (viewMode === 'tomorrow') {
           const tomorrow = new Date();
           tomorrow.setDate(tomorrow.getDate() + 1);
+          tomorrow.setHours(0,0,0,0);
           const updatedTomorrowData = createDayData(tomorrow, eventsData);
           setTomorrowData(updatedTomorrowData);
         } else if (viewMode === 'week') {
           const startOfWeek = new Date();
           startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
+          startOfWeek.setHours(0,0,0,0);
           const updatedWeekData = createWeekData(startOfWeek, eventsData);
           setWeekData(updatedWeekData);
         }
@@ -1054,3 +1064,101 @@ const Recommendations: React.FC = () => {
 };
 
 export default Recommendations;
+
+// Вспомогательные функции для корректной фильтрации (учёт повторяющихся событий)
+function occursOnDate(event: CalendarEvent, targetDate: Date): boolean {
+  const startBaseStr = event.start?.dateTime || event.start?.date;
+  const endBaseStr = event.end?.dateTime || event.end?.date || startBaseStr;
+  if (!startBaseStr || !endBaseStr) return false;
+  const tgtY = targetDate.getFullYear();
+  const tgtM = targetDate.getMonth();
+  const tgtD = targetDate.getDate();
+  const normalizeDate = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+  const startBase = new Date(startBaseStr);
+  const endBase = new Date(endBaseStr);
+  const isAllDay = !!event.start?.date && !event.start?.dateTime;
+  if (!event.recurrence || event.recurrence.length === 0) {
+    if (isAllDay) {
+      const startDay = normalizeDate(startBase);
+      const endDayExclusive = normalizeDate(endBase);
+      const curDay = normalizeDate(targetDate);
+      return curDay >= startDay && curDay < endDayExclusive;
+    }
+    return startBase.getFullYear() === tgtY && startBase.getMonth() === tgtM && startBase.getDate() === tgtD;
+  }
+  try {
+    const rule = RRuleParser.parseRRule(event.recurrence[0]);
+    const originalStartDay = normalizeDate(startBase);
+    const curDay = normalizeDate(targetDate);
+    if (curDay < originalStartDay) return false;
+    if (rule.until && curDay > normalizeDate(rule.until)) return false;
+    switch (rule.type) {
+      case 'daily': {
+        const diffDays = Math.floor((curDay.getTime() - originalStartDay.getTime()) / 86400000);
+        if (diffDays < 0) return false;
+        const interval = rule.interval || 1;
+        return diffDays % interval === 0;
+      }
+      case 'weekly': {
+        if (!rule.days || rule.days.length === 0) return false;
+        const dayMap: { [k: string]: number } = { 'Вс': 0, 'Пн': 1, 'Вт': 2, 'Ср': 3, 'Чт': 4, 'Пт': 5, 'Сб': 6 };
+        const targetDow = curDay.getDay();
+        const diffWeeks = Math.floor((curDay.getTime() - originalStartDay.getTime()) / (7 * 86400000));
+        const interval = rule.interval || 1;
+        if (diffWeeks % interval !== 0) return false;
+        return rule.days.some(d => dayMap[d] === targetDow);
+      }
+      default:
+        return false;
+    }
+  } catch (e) {
+    console.warn('RRULE parse error (recommendations occursOnDate):', e);
+    return false;
+  }
+}
+
+function cloneEventForDate(event: CalendarEvent, date: Date): CalendarEvent {
+  const baseStartStr = event.start?.dateTime || event.start?.date!;
+  const baseEndStr = event.end?.dateTime || event.end?.date || baseStartStr;
+  const baseStart = new Date(baseStartStr);
+  const baseEnd = new Date(baseEndStr);
+  const durationMs = baseEnd.getTime() - baseStart.getTime();
+  const isAllDay = !!event.start?.date && !event.start?.dateTime;
+  if (isAllDay) {
+    const startClone = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const endClone = new Date(startClone.getTime() + durationMs);
+    return { ...event, id: `${event.id}_${date.toISOString().slice(0,10)}`, start: { date: startClone.toISOString().slice(0,10) }, end: { date: endClone.toISOString().slice(0,10) } };
+  }
+  const startClone = new Date(date.getFullYear(), date.getMonth(), date.getDate(), baseStart.getHours(), baseStart.getMinutes(), baseStart.getSeconds());
+  const endClone = new Date(startClone.getTime() + durationMs);
+  return { ...event, id: `${event.id}_${date.toISOString().slice(0,10)}`, start: { ...event.start, dateTime: startClone.toISOString() }, end: { ...event.end, dateTime: endClone.toISOString() } };
+}
+
+function expandEventsForRange(events: CalendarEvent[], rangeStart: Date, rangeEnd: Date): CalendarEvent[] {
+  const expanded: CalendarEvent[] = [];
+  const startDay = new Date(rangeStart.getFullYear(), rangeStart.getMonth(), rangeStart.getDate(), 0,0,0,0);
+  const endDay = new Date(rangeEnd.getFullYear(), rangeEnd.getMonth(), rangeEnd.getDate(), 23,59,59,999);
+  for (const ev of events) {
+    const baseStartStr = ev.start?.dateTime || ev.start?.date;
+    if (!baseStartStr) continue;
+    const baseStart = new Date(baseStartStr);
+    if (!ev.recurrence || ev.recurrence.length === 0) {
+      const baseEndStr = ev.end?.dateTime || ev.end?.date || baseStartStr;
+      const baseEnd = new Date(baseEndStr);
+      if (baseEnd >= startDay && baseStart <= endDay) {
+        expanded.push(ev);
+      }
+      continue;
+    }
+    const cursor = new Date(startDay);
+    while (cursor <= endDay) {
+      if (occursOnDate(ev, cursor)) {
+        if (cursor >= new Date(baseStart.getFullYear(), baseStart.getMonth(), baseStart.getDate(), 0,0,0,0)) {
+          expanded.push(cloneEventForDate(ev, cursor));
+        }
+      }
+      cursor.setDate(cursor.getDate() + 1);
+    }
+  }
+  return expanded;
+}
