@@ -1256,3 +1256,52 @@
     margin-bottom: 0;
   }
 }
+
+/* --- Экран прогресса загрузки профиля (Apple-like) --- */
+.profile-progress-root {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 28% 18%, #f5f7fa 0%, #e8edf5 45%, #dde3ec 70%, #d5dbe5 100%);
+  font-family: -apple-system,BlinkMacSystemFont,'SF Pro Text','Inter','Roboto','Segoe UI',Arial,sans-serif;
+  color: #11161c;
+  overflow: hidden;
+  z-index: 9999;
+}
+.profile-progress-card {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  border-radius: 34px;
+  background: rgba(255,255,255,0.55);
+  border: 1px solid rgba(255,255,255,0.85);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  padding: 54px 56px 60px;
+  box-shadow: 0 4px 14px -2px rgba(40,55,90,.07), 0 18px 48px -8px rgba(25,40,70,.15);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 40px;
+  animation: fadeInCard .9s cubic-bezier(.19,1,.22,1);
+}
+.progress-title { font-size: clamp(2.1rem,5.2vw,3rem); margin:0; font-weight:600; letter-spacing:-1px; background: linear-gradient(98deg,#1b1f25 0%,#4a5668 55%,#748094 100%); -webkit-background-clip:text; color:transparent; }
+.progress-cluster { width:100%; display:flex; flex-direction:column; align-items:center; gap:22px; }
+.spinner-ring { width:70px; height:70px; border-radius:50%; position:relative; background: conic-gradient(from 180deg at 50% 50%, #dce3ec, #9bb6ff 40%, #657fae 75%, #dce3ec); -webkit-mask: radial-gradient(circle at center, #0000 58%, #000 60%); animation: spin 1.2s linear infinite; filter: drop-shadow(0 4px 8px rgba(20,40,60,.18)); }
+.progress-step-text { font-size:1.05rem; font-weight:500; letter-spacing:-.2px; text-align:center; color:#2a313a; min-height:1.4em; }
+.progress-bar { width:100%; height:8px; background: rgba(255,255,255,0.6); border:1px solid rgba(255,255,255,0.9); border-radius:10px; overflow:hidden; position:relative; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.4), 0 2px 6px rgba(25,40,65,0.12); }
+.progress-fill { height:100%; background: linear-gradient(90deg,#84a8ff,#5d7fbf 55%,#7fa9ff); width:0; border-radius:inherit; box-shadow:0 0 0 1px rgba(255,255,255,0.4), 0 4px 10px -2px rgba(60,90,140,0.4); transition: width .9s cubic-bezier(.19,1,.22,1); }
+.progress-hint { font-size:12px; line-height:1.4; color:#5d6671; text-align:center; }
+.bg-orb.orb-p1, .bg-orb.orb-p2 { position:absolute; width:520px; height:520px; border-radius:50%; filter: blur(110px) saturate(140%); opacity:.5; animation: float 22s linear infinite; pointer-events:none; }
+.bg-orb.orb-p1 { top:-160px; left:-140px; background: linear-gradient(120deg,#9bb6ff,#c7d9ff 55%,#ffffff); }
+.bg-orb.orb-p2 { bottom:-190px; right:-160px; background: linear-gradient(210deg,#ffffff,#ffe5f4 40%,#ffd5ea); animation-direction: reverse; }
+.bg-noise-layer { position:absolute; inset:0; background-image:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mPc8f7/HwAF/gL+GkGLGwAAAABJRU5ErkJggg=="); mix-blend-mode:overlay; opacity:.25; pointer-events:none; }
+.fade-in { animation: fadeInCard .8s cubic-bezier(.19,1,.22,1); }
+@keyframes fadeInCard { 0% { opacity:0; transform: translate3d(0,28px,0);} 100% { opacity:1; transform: translate3d(0,0,0);} }
+@keyframes spin { to { transform: rotate(360deg);} }
+@keyframes float { 0% { transform: translate3d(0,0,0);} 50% { transform: translate3d(55px,35px,0);} 100% { transform: translate3d(0,0,0);} }
+@media (max-width:640px){ .profile-progress-card{ padding:44px 36px 52px; border-radius:30px;} .spinner-ring{ width:60px; height:60px;} .progress-step-text{ font-size:.95rem;} }
+@media (prefers-reduced-motion: reduce){ .spinner-ring{ animation:none;} .fade-in{ animation:none;} .bg-orb.orb-p1, .bg-orb.orb-p2{ animation:none;} }
+/* --- Конец стилей экрана прогресса --- */

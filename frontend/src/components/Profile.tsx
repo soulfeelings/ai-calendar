@@ -42,6 +42,23 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
   type EventsFilterType = 'week' | 'active';
   const [eventsFilter, setEventsFilter] = useState<EventsFilterType>('week'); // По умолчанию показываем события за неделю
 
+  // Шаги загрузки профиля (добавлено)
+  const loadingSteps = [
+    'Проверяем авторизацию…',
+    'Загружаем данные профиля…',
+    'Синхронизируем календари…',
+    'Обновляем события…',
+    'Готовим рабочее пространство…'
+  ];
+  const [stepIndex, setStepIndex] = useState(0); // индекс шага
+  useEffect(() => {
+    if (!loading) return;
+    const id = setInterval(() => {
+      setStepIndex(prev => (prev + 1) % loadingSteps.length);
+    }, 1600);
+    return () => clearInterval(id);
+  }, [loading]);
+
   // Функция для группировки событий по дням недели
   const groupEventsByDays = (events: CalendarEvent[]) => {
     const now = new Date();
@@ -161,7 +178,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
 
   const [activeSection, setActiveSection] = useState<ActiveSection>(getActiveSectionFromUrl());
 
-  // Обновля��м активную секцию при изменении URL
+  // Обновляем активную секцию при изменении URL
   useEffect(() => {
     const newSection = getActiveSectionFromUrl();
     if (newSection !== activeSection) {
@@ -212,7 +229,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
       setInitialLoadDone(true);
 
       // Шаг 2: Проверяем обновления с защитой от дублирования
-      // Делаем это аси��хронно, чтобы не блокировать UI
+      // Делаем это аси����хронно, чтобы не блокировать UI
       setTimeout(async () => {
         if (isUpdating || eventsLoading) {
           console.log('Another update already in progress, skipping scheduled update');
@@ -299,7 +316,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
   useEffect(() => {
     const loadUserAndCalendars = async () => {
       try {
-        // Загружаем ин��ормацию о пользователе
+        // Загруж��ем ��н��ормацию о пользователе
         let userInfo = authService.getSavedUserInfo();
 
         if (!userInfo) {
@@ -308,7 +325,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
           localStorage.setItem('user_info', JSON.stringify(userInfo));
         }
 
-        // Загружаем сп��сок календарей только для раздела 'calendar'
+        // Загру��аем сп��сок календарей только для раздела 'calendar'
         // Добавляем дополнительную проверку URL для надежности
         const currentSection = getActiveSectionFromUrl();
         console.log('Current section:', currentSection, 'Path:', location.pathname);
@@ -650,7 +667,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
                                 </div>
                                 <div className="event-content-compact">
                                   <div className="event-title-compact">
-                                    {event.summary || 'Без н��звания'}
+                                    {event.summary || 'Без названия'}
                                     <div className="event-badges-compact">
                                       <RecurrenceBadge event={event} />
                                     </div>
@@ -928,7 +945,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
 
   // Функция для проверки актуальности события
   const isEventActive = (event: CalendarEvent): boolean => {
-    // Повторяющиеся события всегда считаем актуальными,
+    // Повт��ряющи��ся события всегда считаем актуальными,
     // так как они продолжаются в будущем
     if (isEventRecurring(event)) {
       return true;
@@ -967,7 +984,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     // Находим субботу текущей недели
     const saturday = new Date(sunday);
     saturday.setDate(sunday.getDate() + 6);
-    saturday.setHours(23, 59, 59, 999); // Конец суббот��
+    saturday.setHours(23, 59, 59, 999); // Конец суббот����
 
     return events.filter(event => {
       const eventStartDate = event.start.dateTime || event.start.date;
@@ -1018,7 +1035,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
         }
       }
 
-      // Обычная логика для неповторяющихся событий
+      // Обычна�� логика для неповторяющихся событий
       const eventStart = new Date(eventStartDate);
       const eventEnd = new Date(eventEndDate);
 
@@ -1036,10 +1053,23 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
 
 
   if (loading) {
+    const progress = ((stepIndex + 1) / loadingSteps.length) * 100;
     return (
-      <div className="profile-loading">
-        <div className="spinner"></div>
-        <p>Загружаем ваш профиль...</p>
+      <div className="profile-progress-root" role="status" aria-live="polite">
+        <div className="bg-orb orb-p1" />
+        <div className="bg-orb orb-p2" />
+        <div className="bg-noise-layer" />
+        <div className="profile-progress-card fade-in">
+          <h1 className="progress-title">AI&nbsp;Calendar</h1>
+          <div className="progress-cluster">
+            <div className="spinner-ring" aria-hidden />
+            <div className="progress-step-text">{loadingSteps[stepIndex]}</div>
+            <div className="progress-bar" aria-label="Прогресс загрузки профиля">
+              <div className="progress-fill" style={{ width: progress + '%' }} />
+            </div>
+            <div className="progress-hint">Оптимизируем интерфейс под ваши цели…</div>
+          </div>
+        </div>
       </div>
     );
   }

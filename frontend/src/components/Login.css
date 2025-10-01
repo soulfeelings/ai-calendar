@@ -31,40 +31,158 @@
   line-height: 1.5;
 }
 
-.google-login-button {
+/* Новый минималистичный Apple-like стиль */
+
+/* Базовый сброс для контейнера */
+.login-root {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Inter', 'Roboto', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  color: #0e1116;
+  background: radial-gradient(circle at 30% 20%, #f5f7fa 0%, #e8edf5 45%, #dde3ec 70%, #d5dbe5 100%);
+}
+
+/* Орбы фона */
+.bg-orb {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  border-radius: 50%;
+  filter: blur(120px) saturate(140%);
+  opacity: 0.45;
+  animation: float 18s linear infinite;
+  will-change: transform;
+  pointer-events: none;
+}
+.orb1 { background: linear-gradient(120deg, #9bb6ff, #c9d8ff 50%, #ffffff); top: -200px; left: -150px; }
+.orb2 { background: linear-gradient(210deg, #ffffff, #ffe7f3 40%, #ffd5e8); bottom: -250px; right: -180px; animation-direction: reverse; }
+
+.bg-noise {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mPc8f7/HwAF/gL+GkGLGwAAAABJRU5ErkJggg==");
+  mix-blend-mode: overlay;
+  opacity: 0.25;
+  pointer-events: none;
+}
+
+.login-shell {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  max-width: 560px;
+  padding: 0 32px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 28px;
+}
+
+.brand-block { /* це��трируем логотип + текст */
+  display: flex;
+  flex-direction: column; /* логотип над текстом для визуальной цен��ровки */
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+  text-align: center;
+  margin-top: 4px;
+}
+.logo-mark { font-size: 44px; line-height: 1; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.08)); }
+.brand-title { /* центруем заголовок явно */
+  text-align: center;
+  font-size: clamp(2.3rem, 6vw, 3.3rem); margin: 0; font-weight: 600; letter-spacing: -1px; }
+.gradient-text { background: linear-gradient(98deg,#1b1f25 0%,#4a5668 60%,#748094 100%); -webkit-background-clip: text; color: transparent; }
+
+.greeting { font-size: clamp(1.6rem, 4.5vw, 2.4rem); font-weight: 500; letter-spacing: -0.5px; }
+.tagline { margin: -12px 0 4px; font-size: 1rem; color: #5a636f; font-weight: 400; }
+
+.card {
+  position: relative;
+  background: rgba(255,255,255,0.55);
+  border: 1px solid rgba(255,255,255,0.8);
+  border-radius: 28px;
+  padding: 40px 42px 46px;
+  box-shadow: 0 4px 14px -2px rgba(40,55,90,0.08), 0 18px 48px -8px rgba(25,40,70,0.15);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.lead-text { font-size: 1.05rem; line-height: 1.5; color: #2d3640; margin: 0; }
+.micro-copy { font-size: 11px; text-align: center; color: #6a737d; margin-top: -12px; }
+
+/* Кнопка входа */
+.google-login-button.neo-btn {
+  position: relative;
+  overflow: hidden;
+  border: 0;
+  border-radius: 16px;
+  background: linear-gradient(160deg,#ffffff,#f2f5f9 55%,#e7eef7);
+  color: #1b1f25;
+  font-size: 16px;
+  padding: 16px 22px;
+  font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  padding: 12px 20px;
-  border: 2px solid #ddd;
-  border-radius: 8px;
-  background: white;
-  font-size: 16px;
-  font-weight: 500;
-  color: #333;
-  cursor: pointer;
-  transition: all 0.3s ease;
   gap: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(15,35,55,0.05), 0 8px 22px -6px rgba(15,30,45,0.18);
+  transition: box-shadow .4s cubic-bezier(.19,1,.22,1), transform .4s cubic-bezier(.19,1,.22,1), background .4s;
+}
+.google-login-button.neo-btn:before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 20%, rgba(255,255,255,.9), rgba(255,255,255,0) 70%);
+  opacity: 0;
+  transition: opacity .5s ease;
+}
+.google-login-button.neo-btn:hover { transform: translateY(-3px); box-shadow: 0 4px 10px rgba(20,40,60,0.08), 0 18px 40px -6px rgba(25,40,65,0.22); }
+.google-login-button.neo-btn:hover:before { opacity: 1; }
+.google-login-button.neo-btn:active { transform: translateY(0); box-shadow: 0 2px 6px rgba(20,40,60,0.18), 0 10px 28px -6px rgba(25,40,65,0.28); }
+
+.google-icon { width: 22px; height: 22px; }
+
+/* Анимации */
+@keyframes float { 0% { transform: translate3d(0,0,0); } 50% { transform: translate3d(60px,40px,0); } 100% { transform: translate3d(0,0,0); } }
+@keyframes fadeUp { 0% { opacity:0; transform: translate3d(0,24px,0); } 100% { opacity:1; transform: translate3d(0,0,0); } }
+@keyframes scaleIn { 0% { opacity:0; transform: scale(.96); } 100% { opacity:1; transform: scale(1); } }
+@keyframes type { 0% { clip-path: inset(0 100% 0 0); } 100% { clip-path: inset(0 0 0 0); } }
+.fade-in-up { animation: fadeUp 1s cubic-bezier(.19,1,.22,1) both; }
+.scale-in { animation: scaleIn 1s .25s cubic-bezier(.19,1,.22,1) both; }
+.type-appear { animation: type 1.4s steps(30) .15s both; }
+.subtle-fade { animation: fadeUp 1.2s .3s ease both; }
+
+/* Доступность */
+.sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0 0 0 0); border:0; }
+
+.login-footer { position: absolute; bottom: 18px; font-size: 12px; color: #69717b; letter-spacing: .5px; }
+
+/* Адаптив */
+@media (max-width: 640px) {
+  .login-shell { padding: 0 22px; }
+  .card { padding: 32px 30px 38px; border-radius: 24px; }
+  .lead-text { font-size: .97rem; }
+  .logo-mark { font-size: 40px; }
 }
 
-.google-login-button:hover {
-  border-color: #4285F4;
-  box-shadow: 0 2px 8px rgba(66, 133, 244, 0.3);
-  transform: translateY(-1px);
+/* Мелкая адаптация: на очень широких экранах можно вернуть в ряд при желании */
+@media (min-width: 900px) {
+  .brand-block.row-layout { flex-direction: row; }
 }
 
-.google-icon {
-  width: 20px;
-  height: 20px;
-}
-
-@media (max-width: 480px) {
-  .login-card {
-    padding: 30px 20px;
-  }
-
-  .login-card h1 {
-    font-size: 2rem;
-  }
+/* Prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .fade-in-up, .scale-in, .type-appear, .subtle-fade { animation: none !important; }
+  .bg-orb { animation: none; }
 }
