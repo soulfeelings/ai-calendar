@@ -225,6 +225,15 @@ body {
   margin: 0;
 }
 
+/* Плавные переходы между маршрутами */
+.route-transition-wrapper { position: relative; min-height: 100vh; }
+.route-fade-in { animation: routeFade .45s cubic-bezier(.19,1,.22,1); }
+@keyframes routeFade { 0% { opacity:0; transform: translate3d(0,12px,0);} 100% { opacity:1; transform: translate3d(0,0,0);} }
+@media (prefers-reduced-motion: reduce){ .route-fade-in { animation: none !important; } }
+
+/* Легкая оптимизация ререндеров */
+.route-fade-in { will-change: opacity, transform; }
+
 @media (max-width: 768px) {
   .dashboard-header {
     padding: 15px 20px;

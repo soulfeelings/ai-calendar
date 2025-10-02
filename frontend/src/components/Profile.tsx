@@ -33,6 +33,8 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
   const [lastFocusTime, setLastFocusTime] = useState<number>(Date.now()); // Время последнего фокуса
   const [initialLoadDone, setInitialLoadDone] = useState(false); // Флаг первоначальной загрузки
   const [requestInProgress, setRequestInProgress] = useState(false); // Глобальный флаг запроса
+  // Новый state для десктопного режима (фиксированная боковая панель)
+  const [isDesktop, setIsDesktop] = useState<boolean>(typeof window !== 'undefined' ? window.innerWidth >= 1024 : true);
 
   // Состояние для модального окна logout
   const [showLogoutModal, setShowLogoutModal] = useState(false);
@@ -41,6 +43,23 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
   // Заменяем showOnlyActiveEvents на более гибкую систему фильтрации
   type EventsFilterType = 'week' | 'active';
   const [eventsFilter, setEventsFilter] = useState<EventsFilterType>('week'); // По умолчанию показываем события за неделю
+
+  // Шаги загрузки ��рофиля (добавлено)
+  const loadingSteps = [
+    'Проверяем авторизацию…',
+    'Загружаем данные профиля…',
+    'Синхронизируем календари…',
+    'Обновляем события…',
+    'Готовим рабоч��е пространство…'
+  ];
+  const [stepIndex, setStepIndex] = useState(0); // индекс шага
+  useEffect(() => {
+    if (!loading) return;
+    const id = setInterval(() => {
+      setStepIndex(prev => (prev + 1) % loadingSteps.length);
+    }, 1600);
+    return () => clearInterval(id);
+  }, [loading]);
 
   // Функция для группировки событий по дням недели
   const groupEventsByDays = (events: CalendarEvent[]) => {
@@ -142,7 +161,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     return groupedEvents;
   };
 
-  // Очистка таймера при размонтировании
+  // Очистка таймера при ��азмонтировании
   useEffect(() => {
     return () => {
       // Cleanup function for component unmount
@@ -161,7 +180,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
 
   const [activeSection, setActiveSection] = useState<ActiveSection>(getActiveSectionFromUrl());
 
-  // Обновля��м активную секцию при изменении URL
+  // Обновляем активную секцию при изменен��и URL
   useEffect(() => {
     const newSection = getActiveSectionFromUrl();
     if (newSection !== activeSection) {
@@ -187,7 +206,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
 
       console.log('=== STARTING EVENTS CACHE LOGIC ===');
 
-      // Шаг 1: Проверяем кеш и загру��аем события
+      // Шаг 1: Проверяем кеш и загружае�� события
       const cacheResult = await calendarService.getEventsWithCache();
 
       // Проверяем, требуется ли авторизация календаря
@@ -205,14 +224,14 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
       } else {
         console.log('Events loaded with full sync');
         setEvents(cacheResult.events);
-        setCacheInfo(`Полная синхронизация: ${cacheResult.events.length} ��обытий`);
+        setCacheInfo(`Полная синхро��изация: ${cacheResult.events.length} ��обытий`);
       }
 
       // П��мечаем, что первоначальная загрузка выполнена
       setInitialLoadDone(true);
 
       // Шаг 2: Проверяем обновления с защитой от дублирования
-      // Делаем это аси��хронно, чтобы не блокировать UI
+      // Д��лаем это аси����хронно, чтобы не блокировать UI
       setTimeout(async () => {
         if (isUpdating || eventsLoading) {
           console.log('Another update already in progress, skipping scheduled update');
@@ -299,7 +318,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
   useEffect(() => {
     const loadUserAndCalendars = async () => {
       try {
-        // Загружаем ин��ормацию о пользователе
+        // Загруж��ем ����н��ормацию о пользователе
         let userInfo = authService.getSavedUserInfo();
 
         if (!userInfo) {
@@ -308,7 +327,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
           localStorage.setItem('user_info', JSON.stringify(userInfo));
         }
 
-        // Загружаем сп��сок календарей только для раздела 'calendar'
+        // Загру��аем сп��со�� календарей только для раздела 'calendar'
         // Добавляем дополнительную проверку URL для надежности
         const currentSection = getActiveSectionFromUrl();
         console.log('Current section:', currentSection, 'Path:', location.pathname);
@@ -404,7 +423,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     const startDate = event.start.dateTime || event.start.date;
     const endDate = event.end.dateTime || event.end.date;
 
-    if (!startDate) return { date: 'Дата не указана', time: '', duration: '', endInfo: '' };
+    if (!startDate) return { date: 'Дата не указа��а', time: '', duration: '', endInfo: '' };
 
     const start = new Date(startDate);
     const end = new Date(endDate || startDate);
@@ -526,12 +545,12 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     switch (activeSection) {
       case 'calendar':
         return (
-          <div className="calendar-section">
+          <div className="calendar-section cupertino-card">
             <div className="section-header">
               <h2>Google Календарь</h2>
               <button
                 onClick={loadCalendars}
-                className="refresh-button"
+                className="refresh-button refresh-cupertino"
                 disabled={calendarLoading}
               >
                 {calendarLoading ? 'Загрузка...' : 'Обновить'}
@@ -577,12 +596,12 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
 
       case 'events':
         return (
-          <div className="events-section">
+          <div className="events-section cupertino-card">
             <div className="section-header">
               <h2>События календаря</h2>
               <button
                 onClick={loadEvents}
-                className="refresh-button"
+                className="refresh-button refresh-cupertino"
                 disabled={eventsLoading}
               >
                 {eventsLoading ? 'Загрузка...' : 'Загрузить события'}
@@ -596,9 +615,14 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
             )}
 
             {eventsLoading && (
-              <div className="calendar-loading">
-                <div className="spinner small"></div>
-                <p>Загружаем события...</p>
+              <div className="events-skeleton-list">
+                {Array.from({length:5}).map((_,i) => (
+                  <div className="skeleton-card" key={i}>
+                    <div className="skeleton-bar w40" />
+                    <div className="skeleton-bar w70" />
+                    <div className="skeleton-bar w55" />
+                  </div>
+                ))}
               </div>
             )}
 
@@ -700,7 +724,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
                           </div>
                           <div className="event-main-info">
                             <div className="event-title-row">
-                              <h4 className="event-title">{event.summary || 'Без названия'}</h4>
+                              <h4 className="event-title">{event.summary || '��ез названия'}</h4>
                               <div className="event-badges">
                                 <RecurrenceBadge event={event} />
                                 <span className={`event-status status-${event.status}`}>
@@ -825,7 +849,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
         setCacheInfo(`Обновлено при возвращении: ${updateResult.events.length} событий`);
       } else {
         console.log('No updates found on focus');
-        // Если изменений нет, всё равно обновляем события из полного ответа
+        // Е��ли изменений нет, всё равно обновляем события из полного ответа
         setEvents(updateResult.events);
         setCacheInfo(`Проверено при возвращении: ${updateResult.events.length} событий (актуальные)`);
       }
@@ -847,7 +871,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     if (activeSection !== 'events' || !initialLoadDone) return;
 
     let debounceTimer: NodeJS.Timeout | null = null;
-    const FOCUS_DEBOUNCE_DELAY = 300; // Увеличиваем задержку для надежности
+    const FOCUS_DEBOUNCE_DELAY = 300; // Увеличиваем ��адержку для надежности
 
     const handleVisibilityChange = () => {
       if (!document.hidden && initialLoadDone) {
@@ -863,7 +887,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
           return;
         }
 
-        // Очищаем предыдущий таймер если есть
+        // ��чи����ем предыдущий таймер если есть
         if (debounceTimer) {
           clearTimeout(debounceTimer);
         }
@@ -910,7 +934,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
       }, FOCUS_DEBOUNCE_DELAY);
     };
 
-    // Добав��аем слушатели событий
+    // Доб���в��аем слушатели событий
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleWindowFocus);
 
@@ -920,7 +944,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
         clearTimeout(debounceTimer);
       }
       
-      // Убираем слушатели при размонтировании или смене секции
+      // Уби��а��м слушатели при размонтировании или смене секции
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleWindowFocus);
     };
@@ -928,7 +952,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
 
   // Функция для проверки актуальности события
   const isEventActive = (event: CalendarEvent): boolean => {
-    // Повторяющиеся события всегда считаем актуальными,
+    // Повт��ряющи��ся события всегда считаем актуальными,
     // так как они продолжаются в будущем
     if (isEventRecurring(event)) {
       return true;
@@ -948,14 +972,14 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     return eventEnd > now;
   };
 
-  // Фильтрация событий
+  // Фильтрация с��бытий
   const getFilteredEvents = (): CalendarEvent[] => {
 
     if (eventsFilter === 'active') {
       return events.filter(isEventActive);
     }
 
-    // eventsFilter === 'week' - показываем события за текущую неделю (воскресенье - суббота)
+    // eventsFilter === 'week' - показываем события за текущую неделю (воскресенье - ��уббота)
     const now = new Date();
 
     // Находим воскресенье текущей недели
@@ -967,18 +991,18 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     // Находим субботу текущей недели
     const saturday = new Date(sunday);
     saturday.setDate(sunday.getDate() + 6);
-    saturday.setHours(23, 59, 59, 999); // Конец суббот��
+    saturday.setHours(23, 59, 59, 999); // Конец суббот����
 
     return events.filter(event => {
       const eventStartDate = event.start.dateTime || event.start.date;
       const eventEndDate = event.end.dateTime || event.end.date;
 
-      // Пр��веряем, что даты существуют
+      // Пр�����еряем, что даты существуют
       if (!eventStartDate || !eventEndDate) {
         return false;
       }
 
-      // Проверяем повторяющиеся события
+      // Пр��веряем повторяющиеся события
       if (event.recurrence && event.recurrence.length > 0) {
         try {
           const rule = RRuleParser.parseRRule(event.recurrence[0]);
@@ -1018,7 +1042,7 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
         }
       }
 
-      // Обычная логика для неповторяющихся событий
+      // Обычна�� логика для неповторяющихся событий
       const eventStart = new Date(eventStartDate);
       const eventEnd = new Date(eventEndDate);
 
@@ -1034,12 +1058,24 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
     return !!(event.recurrence && event.recurrence.length > 0) || !!event.recurringEventId;
   };
 
-
   if (loading) {
+    const progress = ((stepIndex + 1) / loadingSteps.length) * 100;
     return (
-      <div className="profile-loading">
-        <div className="spinner"></div>
-        <p>Загружаем ваш профиль...</p>
+      <div className="profile-progress-root" role="status" aria-live="polite">
+        <div className="bg-orb orb-p1" />
+        <div className="bg-orb orb-p2" />
+        <div className="bg-noise-layer" />
+        <div className="profile-progress-card fade-in">
+          <h1 className="progress-title">AI&nbsp;Calendar</h1>
+          <div className="progress-cluster">
+            <div className="spinner-ring" aria-hidden />
+            <div className="progress-step-text">{loadingSteps[stepIndex]}</div>
+            <div className="progress-bar" aria-label="Прогресс загрузки профиля">
+              <div className="progress-fill" style={{ width: progress + '%' }} />
+            </div>
+            <div className="progress-hint">Оптимизируем интерфейс под ваши цели…</div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -1058,69 +1094,85 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
   }
 
   return (
-    <div className="profile-container">
-      <header className="profile-header">
+    <div className="profile-container profile-modern">
+      {/* Шапка */}
+      <header className="profile-header glass-header">
         <div className="header-left">
-          <button className="toggle-sidebar" onClick={toggleSidebar}>
+          <button className="toggle-sidebar" onClick={toggleSidebar} aria-label="Переключить меню">
             <span className="hamburger-icon">
-              <span></span>
-              <span></span>
-              <span></span>
+              <span></span><span></span><span></span>
             </span>
           </button>
-          <h1>AI Calendar</h1>
+          <h1 className="app-title-gradient">AI&nbsp;Calendar</h1>
         </div>
         <div className="user-info">
           <img src={user.picture} alt={user.name} className="user-avatar" />
-          <span>{user.name}</span>
-          <button onClick={handleLogoutClick} className="logout-button">
-            Выйти
-          </button>
+            <span className="user-name-short">{user.name}</span>
+            <button onClick={handleLogoutClick} className="logout-button ghost-logout">Выйти</button>
         </div>
       </header>
 
-      <div className="profile-layout">
-        {sidebarVisible && (
-          <aside className="profile-sidebar">
-            <nav className="sidebar-nav">
-              <button
-                className={`nav-item ${activeSection === 'calendar' ? 'active' : ''}`}
-                onClick={() => navigate('/profile')}
-              >
-                <span className="nav-icon">📅</span>
-                <span className="nav-text">Календари</span>
-              </button>
-
-              <button
-                className={`nav-item ${activeSection === 'events' ? 'active' : ''}`}
-                onClick={() => navigate('/events')}
-              >
-                <span className="nav-icon">🗓️</span>
-                <span className="nav-text">События</span>
-              </button>
-
-              <button
-                className={`nav-item ${activeSection === 'recommendations' ? 'active' : ''}`}
-                onClick={() => navigate('/recommendations')}
-              >
-                <span className="nav-icon">🤖</span>
-                <span className="nav-text">ИИ Рекомендации</span>
-              </button>
-
-              <button
-                className={`nav-item ${activeSection === 'goals' ? 'active' : ''}`}
-                onClick={() => navigate('/goals')}
-              >
-                <span className="nav-icon">🎯</span>
-                <span className="nav-text">Цели (SMART)</span>
-              </button>
-            </nav>
-          </aside>
+      <div className={`content-shell ${sidebarVisible ? 'has-sidebar' : ''} ${sidebarVisible && isDesktop ? 'has-fixed-sidebar' : ''}`}>
+        {(activeSection === 'calendar' || activeSection === 'events') && (
+          <>
+            <div className="smart-hint-card">
+              <div className="smart-hint-icon">🤖</div>
+              <div className="smart-hint-text">
+                <strong>ИИ совет готовится.</strong> Зайдите во вкладку «ИИ Рекомендации», чтобы получить персональные предложения по оптимизации времени.
+              </div>
+              <button onClick={() => navigate('/recommendations')} className="smart-hint-action">Открыть</button>
+            </div>
+            {/* Метрики временно отключены */}
+          </>
         )}
 
-        <main className="profile-main">
-          {renderSectionContent()}
-        </main>
+        <div className="profile-layout unified-layout">
+          {sidebarVisible && (
+            <aside className="profile-sidebar fixed-desktop-left">
+              <nav className="sidebar-nav">
+                <button
+                  className={`nav-item ${activeSection === 'calendar' ? 'active' : ''}`}
+                  onClick={() => navigate('/profile')}
+                >
+                  <span className="nav-icon">📅</span>
+                  <span className="nav-text">Календари</span>
+                </button>
+
+                <button
+                  className={`nav-item ${activeSection === 'events' ? 'active' : ''}`}
+                  onClick={() => navigate('/events')}
+                >
+                  <span className="nav-icon">🗓️</span>
+                  <span className="nav-text">События</span>
+                </button>
+
+                <button
+                  className={`nav-item ${activeSection === 'recommendations' ? 'active' : ''}`}
+                  onClick={() => navigate('/recommendations')}
+                >
+                  <span className="nav-icon">🤖</span>
+                  <span className="nav-text">ИИ Рекомендации</span>
+                </button>
+
+                <button
+                  className={`nav-item ${activeSection === 'goals' ? 'active' : ''}`}
+                  onClick={() => navigate('/goals')}
+                >
+                  <span className="nav-icon">🎯</span>
+                  <span className="nav-text">Цели (SMART)</span>
+                </button>
+              </nav>
+            </aside>
+          )}
+
+          <main className="profile-main">
+            <div className="section-transition-wrapper">
+              <div key={activeSection} className="section-panel fade-slide-in">
+                {renderSectionContent()}
+              </div>
+            </div>
+          </main>
+        </div>
       </div>
 
       {/* Нижняя навигация для мобильных устройств */}
@@ -1157,7 +1209,6 @@ const Profile: React.FC<ProfileProps> = ({ activeSection: propActiveSection }) =
           <span className="bottom-nav-text">Цели</span>
         </button>
       </nav>
-
       {showLogoutModal && (
         <LogoutModal
           isOpen={showLogoutModal}
