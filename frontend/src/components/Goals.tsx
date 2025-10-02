@@ -44,7 +44,7 @@ const Goals: React.FC = () => {
   const [deletingGoal, setDeletingGoal] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null);
 
-  // Проверяем, з��полнены ли основные поля для получения анализа
+  // Проверяем, заполнены ли основные поля для получения анализа
   const canAnalyze = form.title.trim().length > 0 && form.description.trim().length > 0;
 
   // Загружаем информацию о созданных событиях из localStorage
@@ -122,11 +122,11 @@ const Goals: React.FC = () => {
       // Создаем событие на основе данных цели
       const eventData = {
         summary: `Работа над целью: ${goal.title}`,
-        description: `🎯 Цель: ${goal.description}
+        description: `🎯 ��ель: ${goal.description}
 
 ${goal.smart_analysis ? `
 📊 SMART Анализ (ИИ):
-• Общий ба��л: ${goal.smart_analysis.overall_score || 'N/A'}/100
+• Общий балл: ${goal.smart_analysis.overall_score || 'N/A'}/100
 • Соответствует SMART: ${goal.smart_analysis.is_smart ? 'Да' : 'Нет'}
 
 💡 Рекомендации ИИ:
@@ -151,7 +151,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
       // Исполь��уем прямой API вызов к backend эндпоинту
       const response = await api.post('/calendar/events', eventData);
 
-      setSuccess(`Событие "${goal.title}" создано в календаре`);
+      setSuccess(`Событие "${goal.title}" с��здано в календаре`);
       // Сохраняем созданное событие в localStorage
       saveCreatedEvent(goal.id, response.data.id);
 
@@ -236,7 +236,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
   };
 
   const editGoal = () => {
-    // Возвраща��мся к форме редактирования с текущими данными
+    // Возвращаемся к форме редактирования с текущими данными
     setCurrentStep('input');
     setGoalAnalysis(null);
   };
@@ -318,7 +318,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
 
   const renderInputStep = () => (
     <div className="card">
-      <h3>{editingGoal ? 'Редактирование цели' : 'Создание цели'}</h3>
+      <h3>{editingGoal ? '✏️ Редактиров��ние цели' : '🎯 Создание новой цели'}</h3>
       <p className="muted">
         {editingGoal
           ? 'Измените данные цели. ИИ поможет проверить её на соответствие принципам SMART и предложит улучшения.'
@@ -353,7 +353,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
           value={form.description}
           placeholder="Зачем эта цель важна и какой ожидаемый результат"
           onChange={(e) => handleFieldChange('description', e.target.value)}
-          rows={3}
+          rows={4}
         />
       </div>
 
@@ -371,7 +371,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
           </select>
         </div>
         <div className="form-group">
-          <label>Дедлайн</label>
+          <label>Дедлайн (опционально)</label>
           <div className="deadline-row">
             <input
               type="date"
@@ -397,8 +397,34 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
           onClick={handleAnalyzeGoal}
           disabled={!canAnalyze || analyzing}
         >
-          {analyzing ? 'Анализируем...' : 'Получить анализ от ИИ'}
+          {analyzing ? (
+            <>
+              <div className="spinner" />
+              Анализируем...
+            </>
+          ) : (
+            <>
+              🤖 Получить анализ от ИИ
+            </>
+          )}
         </button>
+
+        {canAnalyze && (
+          <button
+            className="btn secondary"
+            onClick={handleSaveGoal}
+            disabled={saving}
+          >
+            {saving ? (
+              <>
+                <div className="spinner" />
+                Сохраняем...
+              </>
+            ) : (
+              'Сохранить без анализа'
+            )}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -406,75 +432,98 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
   const renderAnalysisStep = () => {
     if (!goalAnalysis) return null;
 
+    const getScoreClass = (score: number) => {
+      if (score >= 80) return 'score-high';
+      if (score >= 50) return 'score-medium';
+      return 'score-low';
+    };
+
     return (
       <div className="card">
-        <h3>Анализ цели от ИИ</h3>
+        <h3>🤖 Анализ цели от ИИ</h3>
 
-        <div className="goal-score">
-          <div className="score-circle">
-            <span className="score-value">{goalAnalysis.score}</span>
-            <span className="score-label">/ 100</span>
-          </div>
-          <div className="score-status">
-            {goalAnalysis.is_smart ? (
-              <span className="status-good">✅ Цель соответствует SMART</span>
-            ) : (
-              <span className="status-warning">⚠️ Цель требует доработки</span>
-            )}
-          </div>
-        </div>
-
-        <div className="analysis-details">
-          <h4>Детальный анализ:</h4>
-          {Object.entries(goalAnalysis.analysis).map(([key, analysis]) => (
-            <div key={key} className="analysis-item">
-              <div className="analysis-header">
-                <span className="analysis-title">{getSmartLabel(key)}</span>
-                <span className={`analysis-score ${analysis.score >= 80 ? 'good' : analysis.score >= 50 ? 'medium' : 'poor'}`}>
-                  {analysis.score}/100
-                </span>
+        <div className="analysis-card">
+          <div className="analysis-score">
+            <div className={`score-circle ${getScoreClass(goalAnalysis.score)}`}>
+              {goalAnalysis.score}
+            </div>
+            <div>
+              <div className="score-status">
+                {goalAnalysis.is_smart ? (
+                  <span className="status-good">✅ Цель соответствует SMART</span>
+                ) : (
+                  <span className="status-warning">⚠️ Цель требует доработки</span>
+                )}
               </div>
-              <p className="analysis-feedback">{analysis.feedback}</p>
+              <div className="score-description">
+                Общий балл: <strong>{goalAnalysis.score}/100</strong>
+              </div>
             </div>
-          ))}
+          </div>
+
+          <div className="analysis-details">
+            <h4>Детальный анализ по критериям SMART:</h4>
+            {Object.entries(goalAnalysis.analysis).map(([key, analysis]) => (
+              <div key={key} className="analysis-item">
+                <div className="analysis-header">
+                  <span className="analysis-title">{getSmartLabel(key)}</span>
+                  <span className={`analysis-score ${getScoreClass(analysis.score)}`}>
+                    {analysis.score}/100
+                  </span>
+                </div>
+                <p className="analysis-feedback">{analysis.feedback}</p>
+              </div>
+            ))}
+          </div>
+
+          {goalAnalysis.suggestions.length > 0 && (
+            <div className="analysis-suggestions">
+              <h4>💡 Рекомендации для улучшения:</h4>
+              <ul>
+                {goalAnalysis.suggestions.map((suggestion, index) => (
+                  <li key={index}>{suggestion}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {goalAnalysis.improved_goal && (
+            <div className="improved-goal">
+              <h4>✨ Предлагаемая улучшенная версия:</h4>
+              <div className="improved-preview">
+                <div className="improved-field">
+                  <strong>Название:</strong> {goalAnalysis.improved_goal.title}
+                </div>
+                <div className="improved-field">
+                  <strong>Описание:</strong> {goalAnalysis.improved_goal.description}
+                </div>
+              </div>
+              <button className="btn secondary" onClick={applyImprovedGoal}>
+                Применить улучшения
+              </button>
+            </div>
+          )}
         </div>
-
-        {goalAnalysis.suggestions.length > 0 && (
-          <div className="suggestions">
-            <h4>Рекомендации для улучшения:</h4>
-            <ul>
-              {goalAnalysis.suggestions.map((suggestion, index) => (
-                <li key={index}>{suggestion}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {goalAnalysis.improved_goal && (
-          <div className="improved-goal">
-            <h4>Предлагаем��я улучшенная версия:</h4>
-            <div className="improved-preview">
-              <p><strong>Название:</strong> {goalAnalysis.improved_goal.title}</p>
-              <p><strong>Описание:</strong> {goalAnalysis.improved_goal.description}</p>
-            </div>
-            <button className="btn secondary" onClick={applyImprovedGoal}>
-              Применить улучшения
-            </button>
-          </div>
-        )}
 
         {error && <div className="alert error">{error}</div>}
 
-        <div className="wizard-actions">
-          <button className="btn secondary" onClick={() => setCurrentStep('input')}>
-            ← Вернуться к редактированию
+        <div className="analysis-actions">
+          <button className="btn secondary" onClick={editGoal}>
+            ← Редактировать цель
           </button>
           <button
-            className="btn primary"
+            className="btn success"
             onClick={handleSaveGoal}
             disabled={saving}
           >
-            {saving ? 'Сохраняем...' : 'Сохранить цель'}
+            {saving ? (
+              <>
+                <div className="spinner" />
+                Сохраняем...
+              </>
+            ) : (
+              '✅ Сохранить цель'
+            )}
           </button>
         </div>
       </div>
@@ -484,16 +533,16 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
   const renderSavedStep = () => (
     <div className="card">
       <div className="success-message">
-        <div className="success-icon">✅</div>
+        <div className="success-icon">🎉</div>
         <h3>Цель успешно сохранена!</h3>
-        <p>Ваш�� SMART-цель добавлена и будет учитываться при анализе календаря.</p>
+        <p className="muted">Ваша SMART-цель добавлена и будет учитываться при анализе календаря.</p>
 
         <div className="wizard-actions">
           <button className="btn secondary" onClick={resetForm}>
-            Создать ещё одну цель
+            ➕ Создать ещё одну цель
           </button>
           <button className="btn primary" onClick={() => navigate('/profile')}>
-            К профилю
+            👤 К профилю
           </button>
         </div>
       </div>
@@ -506,7 +555,7 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
       measurable: 'M — Измеримость',
       achievable: 'A — Достижимость',
       relevant: 'R — Актуальность',
-      time_bound: 'T — Временные р��мки'
+      time_bound: 'T — Временные рамки'
     };
     return labels[key] || key;
   };
@@ -561,22 +610,29 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
   return (
     <div className="goals-page">
       <div className="goals-header">
-        <h2>Мои цели (SMART)</h2>
+        <h2>🎯 Мои цели</h2>
         <div className="goals-header-actions">
-          <button className="link-btn" onClick={() => navigate('/profile')}>К профилю</button>
+          <button className="link-btn" onClick={() => navigate('/profile')}>
+            👤 К профилю
+          </button>
         </div>
       </div>
 
       <div className="goals-layout">
+        {/* Wizard Section */}
         <div className="wizard">
           <div className="steps">
             <div className={`step ${currentStep === 'input' ? 'active' : (currentStep === 'analysis' || currentStep === 'saved') ? 'done' : ''}`}>
               <span className="step-index">1</span>
-              <span className="step-title">Заполнение цели</span>
+              <span className="step-title">Заполнение</span>
             </div>
             <div className={`step ${currentStep === 'analysis' ? 'active' : currentStep === 'saved' ? 'done' : ''}`}>
               <span className="step-index">2</span>
               <span className="step-title">Анализ ИИ</span>
+            </div>
+            <div className={`step ${currentStep === 'saved' ? 'active' : ''}`}>
+              <span className="step-index">3</span>
+              <span className="step-title">Готово</span>
             </div>
           </div>
 
@@ -587,56 +643,80 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
           {success && <div className="alert success">{success}</div>}
         </div>
 
+        {/* Goals List Section */}
         <div className="goals-list">
           <div className="goals-list-header">
-            <h3>Существующие цели</h3>
-            <div className="goals-list-header-actions">
+            <h3>📋 Существующие цели</h3>
+            <div className="filter-toggle">
               <button
-                className={`toggle-btn ${showAllGoals ? 'active' : ''}`}
-                onClick={() => setShowAllGoals(prev => !prev)}
-                title={showAllGoals ? 'Пока��ать только актуальные цели' : 'Показать все (включая просроч��нные) цели'}
+                className={`filter-option ${!showAllGoals ? 'active' : ''}`}
+                onClick={() => setShowAllGoals(false)}
               >
-                {showAllGoals ? 'Показать актуальные цели' : 'Показать все события'}
+                Актуальные
+              </button>
+              <button
+                className={`filter-option ${showAllGoals ? 'active' : ''}`}
+                onClick={() => setShowAllGoals(true)}
+              >
+                Все цели
               </button>
             </div>
           </div>
-          {loadingGoals ? (
-            <p>Загружаем цели...</p>
-          ) : goals.length === 0 ? (
-            <p className="muted">Пока нет сохранённых целей</p>
-          ) : (
-            <div className="goals-grid">
-              {goals.map((goal) => (
-                <div key={goal.id} className="goal-card">
-                  <h4>{goal.title}</h4>
-                  <p className="muted">{goal.description}</p>
-                  <div className="goal-meta">
-                    <span className={`priority priority-${goal.priority}`}>
-                      {priorityOptions.find(p => p.value === goal.priority)?.label}
-                    </span>
-                    {goal.deadline && (
-                      <span className="deadline">
-                        до {new Date(goal.deadline).toLocaleDateString()}
-                      </span>
-                    )}
+
+          <div className="goals-list-content">
+            {loadingGoals ? (
+              <div className="loading-spinner">
+                <div className="spinner" />
+                Загружаем цели...
+              </div>
+            ) : goals.length === 0 ? (
+              <div className="empty-state">
+                <h4>Пока нет сохранённых целей</h4>
+                <p>Создайте первую SMART-цель с помощью формы слева</p>
+              </div>
+            ) : (
+              goals.map((goal) => (
+                <div key={goal.id} className="goal-item">
+                  <div className="goal-header">
+                    <div>
+                      <h4 className="goal-title">{goal.title}</h4>
+                      <div className="goal-meta">
+                        <span className={`priority-badge priority-${goal.priority}`}>
+                          {priorityOptions.find(p => p.value === goal.priority)?.label}
+                        </span>
+                        {goal.deadline && (
+                          <span>
+                            📅 до {new Date(goal.deadline).toLocaleDateString('ru-RU')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
+
+                  <p className="goal-description">{goal.description}</p>
 
                   {/* Показываем результат SMART анализа от ИИ */}
                   {goal.smart_analysis && (
-                    <div className="smart-analysis">
-                      <h4>🤖 SMART Анализ от ИИ:</h4>
+                    <div className="analysis-card">
                       <div className="analysis-score">
-                        <span>Общий балл: <strong>{goal.smart_analysis.overall_score || 'N/A'}/100</strong></span>
-                        <span className={goal.smart_analysis.is_smart ? 'smart-yes' : 'smart-no'}>
-                          {goal.smart_analysis.is_smart ? '✅ SMART' : '❌ Не SMART'}
-                        </span>
+                        <div className={`score-circle ${goal.smart_analysis.overall_score >= 80 ? 'score-high' : goal.smart_analysis.overall_score >= 50 ? 'score-medium' : 'score-low'}`}>
+                          {goal.smart_analysis.overall_score || 'N/A'}
+                        </div>
+                        <div>
+                          <div className="score-status">
+                            {goal.smart_analysis.is_smart ? '✅ SMART' : '❌ Не SMART'}
+                          </div>
+                          <div className="score-description">
+                            Анализ ИИ: {goal.smart_analysis.overall_score || 'N/A'}/100
+                          </div>
+                        </div>
                       </div>
 
                       {goal.smart_analysis.suggestions && goal.smart_analysis.suggestions.length > 0 && (
-                        <div className="suggestions">
-                          <strong>Рекомендации:</strong>
+                        <div className="analysis-suggestions">
+                          <h4>💡 Рекомендации ИИ:</h4>
                           <ul>
-                            {goal.smart_analysis.suggestions.map((suggestion: string, index: number) => (
+                            {goal.smart_analysis.suggestions.slice(0, 3).map((suggestion: string, index: number) => (
                               <li key={index}>{suggestion}</li>
                             ))}
                           </ul>
@@ -646,36 +726,68 @@ ${goal.smart_analysis.suggestions?.map((s: string) => `• ${s}`).join('\n') || 
                   )}
 
                   <div className="goal-actions">
-                    <button className="btn edit" onClick={() => handleEditGoal(goal)}>
+                    <button className="btn secondary" onClick={() => handleEditGoal(goal)}>
                       ✏️ Редактировать
                     </button>
                     <button
-                      className="btn delete"
+                      className="btn primary"
+                      onClick={() => goal.id && createEventForGoal(goal)}
+                      disabled={!goal.id || creatingEvents[goal.id!] || !!createdEvents[goal.id!]}
+                    >
+                      {creatingEvents[goal.id!] ? (
+                        <>
+                          <div className="spinner" />
+                          Создаём...
+                        </>
+                      ) : createdEvents[goal.id!] ? (
+                        '✅ В календаре'
+                      ) : (
+                        '📅 В календарь'
+                      )}
+                    </button>
+                    {createdEvents[goal.id!] && (
+                      <button
+                        className="btn danger"
+                        onClick={() => deleteEventForGoal(goal)}
+                        disabled={creatingEvents[goal.id!]}
+                      >
+                        🗑️ Удалить собы��ие
+                      </button>
+                    )}
+                    <button
+                      className="btn danger"
                       onClick={() => goal.id && handleDeleteGoal(goal.id)}
                       disabled={!goal.id}
                     >
-                      🗑️ Удалить
+                      🗑️ Удалить цель
                     </button>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+              ))
+            )}
+          </div>
         </div>
       </div>
 
       {/* Модальное окно подтверждения удаления цели */}
       {showDeleteConfirm && (
-        <div className="modal">
-          <div className="modal-content">
-            <h3>Подтвержде��ие удаления</h3>
-            <p>Вы уверены, что хотите удалить эту цель? Это действие нельзя будет отменить.</p>
+        <div className="modal-overlay" onClick={handleCancelDelete}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <h3>⚠️ Подтверждение удаления</h3>
+            <p>Вы уверены, ��то хотите удалить эту цель? Это действие нельзя будет отменить.</p>
             <div className="modal-actions">
-              <button className="btn cancel" onClick={handleCancelDelete}>
+              <button className="btn secondary" onClick={handleCancelDelete}>
                 Отмена
               </button>
-              <button className="btn confirm" onClick={handleConfirmDelete} disabled={loadingGoals}>
-                {loadingGoals ? 'Удаляем...' : 'Удалить цель'}
+              <button className="btn danger" onClick={handleConfirmDelete} disabled={loadingGoals}>
+                {loadingGoals ? (
+                  <>
+                    <div className="spinner" />
+                    Удаляем...
+                  </>
+                ) : (
+                  '🗑️ Удалить цель'
+                )}
               </button>
             </div>
             {error && <div className="alert error">{error}</div>}
